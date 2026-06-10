@@ -16,7 +16,7 @@ import { useSubmissionStore } from '@/store/useSubmissionStore';
 import ScoreBadge from '@/components/ScoreBadge';
 import StagePill from '@/components/StagePill';
 import OnchainBadge from '@/components/OnchainBadge';
-import { formatFees } from '@/data/stats';
+import { formatUsd } from '@/data/stats';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
@@ -41,7 +41,7 @@ const SORT_OPTIONS = [
   { key: 'score', label: 'Score' },
   { key: 'submitted_at', label: 'Date submitted' },
   { key: 'project', label: 'Project name' },
-  { key: 'fees_24h', label: '24h fees' },
+  { key: 'vol_24h', label: '24h vol' },
   { key: 'stage', label: 'Stage' },
 ];
 const ROWS_PER_PAGE_OPTIONS = [25, 50, 100];
@@ -483,7 +483,7 @@ const SubmissionGridCard: React.FC<{
         </a>
       )}
 
-      {submission.fees_24h !== null && (
+      {(!!submission.token || !!submission.contract_address) && (
         <div className="mb-2">
           <OnchainBadge />
         </div>
@@ -494,10 +494,10 @@ const SubmissionGridCard: React.FC<{
         style={{
           fontFamily: "'Inter', sans-serif",
           fontSize: '12px',
-          color: submission.fees_24h !== null ? '#10B981' : '#525252',
+          color: submission.vol_24h != null ? '#10B981' : '#525252',
         }}
       >
-        24h: {formatFees(submission.fees_24h)}
+        24h: {formatUsd(submission.vol_24h)}
       </div>
 
       <div className="flex flex-wrap gap-1 mb-3">
@@ -1232,20 +1232,20 @@ const Submissions: React.FC = () => {
                     <th style={{ width: 110, padding: '0 16px', textAlign: 'right' }}>
                       <button
                         className="inline-flex items-center gap-1 ml-auto transition-colors duration-150"
-                        onClick={() => handleSort('fees_24h')}
+                        onClick={() => handleSort('vol_24h')}
                         style={{ cursor: 'pointer' }}
                       >
                         <span style={{
                           fontFamily: "'Inter', sans-serif",
                           fontSize: '11px',
                           fontWeight: 600,
-                          color: sort.key === 'fees_24h' ? '#F5A623' : '#525252',
+                          color: sort.key === 'vol_24h' ? '#F5A623' : '#525252',
                           letterSpacing: '0.04em',
                           textTransform: 'uppercase',
                         }}>
-                          24h Fees
+                          24h Vol
                         </span>
-                        {sort.key === 'fees_24h' && (
+                        {sort.key === 'vol_24h' && (
                           <span style={{ fontSize: '10px', color: '#F5A623' }}>{sort.direction === 'asc' ? '\u2191' : '\u2193'}</span>
                         )}
                       </button>
@@ -1362,7 +1362,7 @@ const Submissions: React.FC = () => {
                         <td style={{ padding: '0 16px' }}>
                           <div className="flex flex-col">
                             <div className="flex items-center gap-2">
-                              {sub.fees_24h !== null && <OnchainBadge />}
+                              {(!!sub.token || !!sub.contract_address) && <OnchainBadge />}
                               <span style={{
                                 fontFamily: "'Inter', sans-serif",
                                 fontSize: '13px',
@@ -1416,16 +1416,16 @@ const Submissions: React.FC = () => {
                           <InlineStageEditor stage={sub.stage} onChange={(s) => updateStage(sub.id, s)} />
                         </td>
 
-                        {/* 24h Fees */}
+                        {/* 24h Volume */}
                         <td style={{ padding: '0 16px', textAlign: 'right' }}>
                           <span style={{
                             fontFamily: "'Inter', sans-serif",
                             fontSize: '13px',
                             fontWeight: 500,
-                            color: sub.fees_24h !== null ? '#10B981' : '#525252',
-                            textShadow: sub.fees_24h !== null ? '0 0 12px rgba(16,185,129,0.2)' : 'none',
+                            color: sub.vol_24h != null ? '#10B981' : '#525252',
+                            textShadow: sub.vol_24h != null ? '0 0 12px rgba(16,185,129,0.2)' : 'none',
                           }}>
-                            {formatFees(sub.fees_24h)}
+                            {formatUsd(sub.vol_24h)}
                           </span>
                         </td>
 

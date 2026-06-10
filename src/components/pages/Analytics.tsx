@@ -168,19 +168,19 @@ const TagTooltip: React.FC<{
 
 const FeeTooltip: React.FC<{
   active?: boolean;
-  payload?: Array<{ payload: { project: string; fees_24h: number } }>;
+  payload?: Array<{ payload: { project: string; vol_24h: number } }>;
 }> = ({ active, payload }) => {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   const subs = useSubmissionStore((st) => st.submissions);
-  const { feeLeaders } = useMemo(() => computeAnalytics(subs), [subs]);
-  const totalFees = feeLeaders.reduce((s, f) => s + f.fees_24h, 0);
-  const pct = totalFees ? ((p.fees_24h / totalFees) * 100).toFixed(1) : '0';
+  const { volumeLeaders } = useMemo(() => computeAnalytics(subs), [subs]);
+  const totalVol = volumeLeaders.reduce((s, f) => s + f.vol_24h, 0);
+  const pct = totalVol ? ((p.vol_24h / totalVol) * 100).toFixed(1) : '0';
   return (
     <div style={ChartTooltipStyle}>
       <div style={{ fontWeight: 600 }}>{p.project}</div>
       <div style={{ color: '#8A8A8A' }}>
-        ${Math.round(p.fees_24h).toLocaleString()} ({pct}% of top 10)
+        ${Math.round(p.vol_24h).toLocaleString()} ({pct}% of top 10)
       </div>
     </div>
   );
@@ -314,12 +314,12 @@ const DonutChart: React.FC = () => {
 // ── Fee Leaders Horizontal Bar ────────────────────────────────────
 const FeeLeadersChart: React.FC = () => {
   const subs = useSubmissionStore((st) => st.submissions);
-  const { feeLeaders } = useMemo(() => computeAnalytics(subs), [subs]);
+  const { volumeLeaders } = useMemo(() => computeAnalytics(subs), [subs]);
   return (
-    <DataCard title="Top Projects by 24h Creator Fees" delay={0.18}>
+    <DataCard title="Top Projects by 24h Volume" delay={0.18}>
       <ResponsiveContainer width="100%" height={280}>
         <BarChart
-          data={feeLeaders}
+          data={volumeLeaders}
           layout="vertical"
           margin={{ top: 4, right: 16, bottom: 4, left: 0 }}
           barCategoryGap="20%"
@@ -347,7 +347,7 @@ const FeeLeadersChart: React.FC = () => {
           />
           <ReTooltip content={<FeeTooltip />} />
           <Bar
-            dataKey="fees_24h"
+            dataKey="vol_24h"
             fill="#10B981"
             radius={[0, 4, 4, 0]}
             animationBegin={400}
@@ -843,8 +843,8 @@ const Analytics: React.FC = () => {
           delay={0.06}
         />
         <AnimatedKPICard
-          label="Total 24h Fees"
-          numericValue={analyticsStats.totalFees24h}
+          label="Total 24h Volume"
+          numericValue={analyticsStats.totalVolume24h}
           prefix="$"
           delay={0.12}
         />

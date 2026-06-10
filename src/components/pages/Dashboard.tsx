@@ -28,7 +28,7 @@ import DataCard from '@/components/DataCard';
 import ScoreBadge from '@/components/ScoreBadge';
 import StagePill from '@/components/StagePill';
 import OnchainBadge from '@/components/OnchainBadge';
-import { scoreColor, formatFees, computeStats } from '@/data/stats';
+import { scoreColor, formatUsd, computeStats } from '@/data/stats';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
@@ -72,7 +72,7 @@ const AnimatedNumber: React.FC<{
 /* ─── KPI Strip ─── */
 const KPIStrip: React.FC = () => {
   const subs = useSubmissionStore((st) => st.submissions);
-  const { totalCount, liveCount, totalFees, averageScore, newThisWeek } = useMemo(() => computeStats(subs), [subs]);
+  const { totalCount, liveCount, totalVolume, totalMarketCap, averageScore, newThisWeek } = useMemo(() => computeStats(subs), [subs]);
   return (
     <div className="grid grid-cols-4 gap-4 mb-6">
       {/* Total Submissions */}
@@ -165,7 +165,7 @@ const KPIStrip: React.FC = () => {
         </div>
       </DataCard>
 
-      {/* 24h Creator Fees */}
+      {/* 24h Volume + Market Cap */}
       <DataCard delay={0.26}>
         <div className="flex items-start justify-between mb-2">
           <div>
@@ -179,11 +179,7 @@ const KPIStrip: React.FC = () => {
                 color: '#F5A623',
               }}
             >
-              <AnimatedNumber
-                value={totalFees}
-                delay={360}
-                prefix="$"
-              />
+              {formatUsd(totalVolume)}
             </div>
             <div
               className="mt-1 uppercase"
@@ -195,7 +191,7 @@ const KPIStrip: React.FC = () => {
                 letterSpacing: '0.04em',
               }}
             >
-              24h Creator Fees
+              24h Volume
             </div>
           </div>
           <TrendingUp size={20} style={{ color: '#F5A623' }} />
@@ -207,7 +203,7 @@ const KPIStrip: React.FC = () => {
             color: '#525252',
           }}
         >
-          Across live cohort
+          Market cap {formatUsd(totalMarketCap)}
         </div>
       </DataCard>
 
@@ -245,7 +241,7 @@ const KPIStrip: React.FC = () => {
         {/* Mini score bar */}
         <div className="flex items-center gap-1 mt-1">
           {[
-            { key: 'fees', color: '#3B82F6' },
+            { key: 'volume', color: '#3B82F6' },
             { key: 'launched', color: '#8B5CF6' },
             { key: 'traction', color: '#F59E0B' },
             { key: 'founder', color: '#10B981' },
@@ -530,7 +526,7 @@ const TopTargetsTable: React.FC = () => {
                 borderBottom: '1px solid rgba(255,255,255,0.1)',
               }}
             >
-              {['Project', 'Score', 'Stage', '24h Fees', 'Needs Help', 'Action'].map(
+              {['Project', 'Score', 'Stage', '24h Vol', 'Needs Help', 'Action'].map(
                 (h) => (
                   <th
                     key={h}
@@ -627,18 +623,18 @@ const TopTargetsTable: React.FC = () => {
                   <StagePill stage={t.stage} />
                 </td>
 
-                {/* 24h Fees */}
+                {/* 24h Volume */}
                 <td style={{ padding: '0 16px' }}>
                   <div className="flex items-center gap-2">
-                    {t.fees_24h !== null && <OnchainBadge />}
+                    {(!!t.token || !!t.contract_address) && <OnchainBadge />}
                     <span
                       style={{
                         fontFamily: "'Inter', sans-serif",
                         fontSize: '13px',
-                        color: t.fees_24h !== null ? '#F0F0F0' : '#525252',
+                        color: t.vol_24h != null ? '#F0F0F0' : '#525252',
                       }}
                     >
-                      {formatFees(t.fees_24h)}
+                      {formatUsd(t.vol_24h)}
                     </span>
                   </div>
                 </td>

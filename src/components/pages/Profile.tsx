@@ -292,7 +292,7 @@ const Profile: React.FC = () => {
     !!submission &&
     (submission.vol_24h != null ||
       submission.market_cap != null ||
-      (submission.fees_24h !== null && !!submission.wallet));
+      !!submission.token || !!submission.contract_address);
 
   const fmtUsd = (v?: number | null) => {
     if (v === null || v === undefined) return '—';
@@ -570,7 +570,7 @@ const Profile: React.FC = () => {
               <span style={{ fontSize: '12px', color: '#525252', fontFamily: "'Inter', sans-serif" }}>
                 Submitted {submission.submitted_at ? formatDistanceToNow(parseISO(submission.submitted_at.split('.')[0].replace(' ', 'T')), { addSuffix: true }) : ''}
               </span>
-              {submission.fees_24h !== null && <OnchainBadge />}
+              {(!!submission.token || !!submission.contract_address) && <OnchainBadge />}
             </div>
 
             {/* Owner + Claim */}

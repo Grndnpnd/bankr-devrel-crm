@@ -188,7 +188,7 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
       filtered = filtered.filter((s) => s.source === state.filters.source);
     }
     if (state.filters.liveOnly) {
-      filtered = filtered.filter((s) => s.fees_24h !== null);
+      filtered = filtered.filter((s) => (!!s.token && s.token.trim() !== '') || !!s.contract_address);
     }
     if (state.filters.hideLowEffort) {
       filtered = filtered.filter((s) => !s.low_effort);

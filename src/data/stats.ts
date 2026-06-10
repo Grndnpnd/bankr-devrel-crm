@@ -13,8 +13,17 @@ export const formatFees = (fees: number | null): string => {
   return `$${Math.round(fees).toLocaleString()}`;
 };
 
+export const formatUsd = (v: number | null | undefined): string => {
+  if (v === null || v === undefined) return '\u2014';
+  if (v >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
+  if (v >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
+  return `$${Math.round(v)}`;
+};
+
 export const breakdownLabels: Record<string, string> = {
-  fees: 'Onchain',
+  fees: 'Volume',
+  volume: 'Volume',
   launched: 'Launched',
   traction: 'Traction',
   founder: 'Founder',
@@ -37,7 +46,8 @@ export const stageColors: Record<string, string> = {
 export interface DashboardStats {
   totalCount: number;
   liveCount: number;
-  totalFees: number;
+  totalVolume: number;
+  totalMarketCap: number;
   averageScore: number;
   newThisWeek: number;
   scoreDistribution: { range: string; label: string; min: number; max: number; count: number }[];
@@ -48,8 +58,9 @@ export interface DashboardStats {
 
 export function computeStats(submissions: Submission[]): DashboardStats {
   const totalCount = submissions.length;
-  const liveCount = submissions.filter((s) => s.fees_24h !== null).length;
-  const totalFees = Math.round(submissions.reduce((sum, s) => sum + (s.fees_24h || 0), 0));
+  const liveCount = submissions.filter((s) => (!!s.token && s.token.trim() !== '') || !!s.contract_address).length;
+  const totalVolume = Math.round(submissions.reduce((sum, s) => sum + (s.vol_24h || 0), 0));
+  const totalMarketCap = Math.round(submissions.reduce((sum, s) => sum + (s.market_cap || 0), 0));
   const averageScore = totalCount
     ? Math.round((submissions.reduce((sum, s) => sum + s.score, 0) / totalCount) * 10) / 10
     : 0;
@@ -90,5 +101,5 @@ export function computeStats(submissions: Submission[]): DashboardStats {
     });
   });
 
-  return { totalCount, liveCount, totalFees, averageScore, newThisWeek, scoreDistribution, pipelineStages, topTargets, needsHelpDistribution };
+  return { totalCount, liveCount, totalVolume, totalMarketCap, averageScore, newThisWeek, scoreDistribution, pipelineStages, topTargets, needsHelpDistribution };
 }

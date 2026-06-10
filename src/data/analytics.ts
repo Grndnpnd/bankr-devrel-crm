@@ -1,7 +1,7 @@
 import type { Submission } from '@/types';
 
 export interface TagDistributionItem { tag: string; count: number; color: string }
-export interface FeeLeader { project: string; fees_24h: number }
+export interface VolumeLeader { project: string; vol_24h: number }
 export interface ScoreBucket { range: string; count: number }
 export interface TimelinePoint { date: string; displayDate: string; count: number; cumulative: number }
 
@@ -54,11 +54,11 @@ function formatDateLabel(dateStr: string): string {
 
 export interface AnalyticsBundle {
   tagDistribution: TagDistributionItem[];
-  feeLeaders: FeeLeader[];
+  volumeLeaders: VolumeLeader[];
   scoreBuckets: ScoreBucket[];
   submissionTimeline: TimelinePoint[];
   outreachActivity: OutreachActivity[];
-  analyticsStats: { totalSubmissions: number; liveProjects: number; totalFees24h: number; avgScore: number };
+  analyticsStats: { totalSubmissions: number; liveProjects: number; totalVolume24h: number; avgScore: number };
 }
 
 export function computeAnalytics(submissions: Submission[]): AnalyticsBundle {
@@ -68,11 +68,11 @@ export function computeAnalytics(submissions: Submission[]): AnalyticsBundle {
     .map(([tag, count]) => ({ tag, count, color: TAG_COLORS[tag] || '#6B7280' }))
     .sort((a, b) => b.count - a.count);
 
-  const feeLeaders = submissions
-    .filter((s) => s.fees_24h !== null)
-    .sort((a, b) => (b.fees_24h || 0) - (a.fees_24h || 0))
+  const volumeLeaders = submissions
+    .filter((s) => s.vol_24h != null)
+    .sort((a, b) => (b.vol_24h || 0) - (a.vol_24h || 0))
     .slice(0, 10)
-    .map((s) => ({ project: s.project, fees_24h: s.fees_24h || 0 }));
+    .map((s) => ({ project: s.project, vol_24h: s.vol_24h || 0 }));
 
   const scoreBuckets: ScoreBucket[] = [
     { range: '0–20', count: 0 }, { range: '21–40', count: 0 }, { range: '41–60', count: 0 },
@@ -132,12 +132,12 @@ export function computeAnalytics(submissions: Submission[]): AnalyticsBundle {
 
   const analyticsStats = {
     totalSubmissions: submissions.length,
-    liveProjects: submissions.filter((s) => s.fees_24h !== null).length,
-    totalFees24h: Math.round(submissions.reduce((sum, s) => sum + (s.fees_24h || 0), 0)),
+    liveProjects: submissions.filter((s) => (!!s.token && s.token.trim() !== '') || !!s.contract_address).length,
+    totalVolume24h: Math.round(submissions.reduce((sum, s) => sum + (s.vol_24h || 0), 0)),
     avgScore: submissions.length
       ? Math.round((submissions.reduce((sum, s) => sum + s.score, 0) / submissions.length) * 10) / 10
       : 0,
   };
 
-  return { tagDistribution, feeLeaders, scoreBuckets, submissionTimeline, outreachActivity, analyticsStats };
+  return { tagDistribution, volumeLeaders, scoreBuckets, submissionTimeline, outreachActivity, analyticsStats };
 }

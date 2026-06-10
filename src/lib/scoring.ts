@@ -55,7 +55,7 @@ export function score(
   // Onchain signal: prefer live 24h volume (from discover); fall back to legacy fees so
   // seeded rows keep their score until they're enriched with a contract address.
   const f = s.vol24h ?? s.fees24h ?? 0;
-  const fees = f > 0 ? Math.min(w.fees, Math.round(12 * Math.log10(f + 1))) : 0;
+  const volume = f > 0 ? Math.min(w.fees, Math.round(12 * Math.log10(f + 1))) : 0;
 
   const launched = s.token ? w.launched : 0;
 
@@ -79,7 +79,7 @@ export function score(
     Math.round((filled / COMPLETENESS_FIELDS.length) * 8) + Math.min(7, Math.floor(textLen / 400))
   );
 
-  const breakdown: ScoreBreakdown = { fees, launched, traction, founder, completeness };
-  const total = Math.min(100, fees + launched + traction + founder + completeness);
+  const breakdown: ScoreBreakdown = { volume, launched, traction, founder, completeness };
+  const total = Math.min(100, volume + launched + traction + founder + completeness);
   return { score: total, breakdown };
 }

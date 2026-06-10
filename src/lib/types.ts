@@ -7,7 +7,7 @@ export interface Founder {
 }
 
 export interface ScoreBreakdown {
-  fees: number;
+  volume: number;
   launched: number;
   traction: number;
   founder: number;

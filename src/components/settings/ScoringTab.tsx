@@ -41,8 +41,8 @@ interface ScoreComponent {
 const components: ScoreComponent[] = [
   {
     key: 'onchain',
-    label: 'Onchain Fees',
-    description: 'log-scaled 24h creator fees',
+    label: 'Onchain Volume',
+    description: 'log-scaled 24h trading volume',
     defaultValue: 40,
     maxSlider: 60,
     color: '#F5A623',
