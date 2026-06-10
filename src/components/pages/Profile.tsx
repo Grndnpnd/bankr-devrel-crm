@@ -12,8 +12,10 @@ import {
   MessageSquare,
   Phone,
   Send,
+  Trash2,
 } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
+import { toast } from 'sonner';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import ScoreBadge from '@/components/ScoreBadge';
 import StagePill from '@/components/StagePill';
@@ -237,7 +239,7 @@ const TimelineEntry: React.FC<{ activity: Activity }> = ({ activity }) => {
 const Profile: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { getSubmissionById, updateStage, updateOwner, addActivity } = useSubmissionStore();
+  const { getSubmissionById, updateStage, updateOwner, addActivity, setContractAddress, deleteSubmission, me } = useSubmissionStore();
 
   const submission = useMemo(() => (id ? getSubmissionById(id) : undefined), [id, getSubmissionById]);
 
@@ -277,6 +279,48 @@ const Profile: React.FC = () => {
     addActivity(submission.id, activity);
     setNoteText('');
   }, [submission, noteText, activityType, addActivity]);
+
+  // ── Token enrichment + delete ──
+  const [caInput, setCaInput] = useState('');
+  const [enriching, setEnriching] = useState(false);
+
+  useEffect(() => {
+    if (submission?.contract_address) setCaInput(submission.contract_address);
+  }, [submission?.contract_address]);
+
+  const hasOnchain =
+    !!submission &&
+    (submission.vol_24h != null ||
+      submission.market_cap != null ||
+      (submission.fees_24h !== null && !!submission.wallet));
+
+  const fmtUsd = (v?: number | null) => {
+    if (v === null || v === undefined) return '—';
+    if (v >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
+    if (v >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
+    return `$${Math.round(v)}`;
+  };
+
+  const handleEnrich = useCallback(async () => {
+    if (!submission || !caInput.trim()) return;
+    setEnriching(true);
+    const r = await setContractAddress(submission.id, caInput.trim());
+    setEnriching(false);
+    if (r.ok) toast.success('Token data pulled', { description: 'Live volume, market cap, and price updated.' });
+    else toast.error('Could not fetch token', { description: r.error });
+  }, [submission, caInput, setContractAddress]);
+
+  const handleDelete = useCallback(async () => {
+    if (!submission) return;
+    if (!window.confirm(`Delete "${submission.project}"? This removes the submission, its token match, and all activity. This cannot be undone.`)) return;
+    const ok = await deleteSubmission(submission.id);
+    if (ok) {
+      toast.success('Submission deleted');
+      router.push('/submissions');
+    } else {
+      toast.error('Delete failed');
+    }
+  }, [submission, deleteSubmission, router]);
 
   // Keyboard: Escape closes panel
   useEffect(() => {
@@ -384,6 +428,19 @@ const Profile: React.FC = () => {
               {submission.id}
             </span>
           </div>
+
+          {me?.role === 'ADMIN' && (
+            <button
+              onClick={handleDelete}
+              className="inline-flex items-center justify-center rounded-full transition-colors duration-150 mr-1"
+              style={{ width: 32, height: 32 }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.12)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+              title="Delete submission"
+            >
+              <Trash2 size={18} style={{ color: '#EF4444' }} />
+            </button>
+          )}
 
           <button
             onClick={() => router.push('/submissions')}
@@ -621,73 +678,116 @@ const Profile: React.FC = () => {
             </div>
           </motion.div>
 
-          {/* ── Section 2: Onchain Signal (conditional) ── */}
-          {submission.fees_24h !== null && submission.wallet && (
-            <motion.div
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.4, delay: 0.1, ease: EASE }}
-              style={{
-                marginBottom: 24,
-                padding: 20,
-                backgroundColor: '#1A1A1A',
-                borderRadius: 12,
-                border: '1px solid rgba(16,185,129,0.2)',
-                backgroundImage: 'linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%)',
-                boxShadow: '0 0 12px rgba(16,185,129,0.2)',
-              }}
-            >
-              <div className="flex items-center gap-2 mb-4">
-                <OnchainBadge />
-                <span style={{ fontSize: '12px', fontWeight: 600, color: '#10B981', fontFamily: "'Inter', sans-serif" }}>
-                  Onchain Signal
-                </span>
+          {/* ── Section 2: Onchain Signal + token enrichment ── */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.4, delay: 0.1, ease: EASE }}
+            style={{
+              marginBottom: 24,
+              padding: 20,
+              backgroundColor: '#1A1A1A',
+              borderRadius: 12,
+              border: hasOnchain ? '1px solid rgba(16,185,129,0.2)' : '1px solid rgba(255,255,255,0.06)',
+              backgroundImage: hasOnchain ? 'linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%)' : 'none',
+              boxShadow: hasOnchain ? '0 0 12px rgba(16,185,129,0.2)' : 'none',
+            }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <OnchainBadge />
+              <span style={{ fontSize: '12px', fontWeight: 600, color: '#10B981', fontFamily: "'Inter', sans-serif" }}>
+                Onchain Signal
+              </span>
+            </div>
+
+            {/* Contract address input → pulls live data from discover */}
+            <div className="mb-4">
+              <label style={{ fontSize: '11px', fontWeight: 600, color: '#525252', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                Token Contract Address
+              </label>
+              <div className="flex items-center gap-2 mt-1.5">
+                <input
+                  value={caInput}
+                  onChange={(e) => setCaInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleEnrich(); }}
+                  placeholder="0x…"
+                  spellCheck={false}
+                  className="flex-1 rounded-md outline-none"
+                  style={{ height: 36, backgroundColor: '#141414', border: '1px solid rgba(255,255,255,0.1)', color: '#F0F0F0', fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', padding: '0 12px' }}
+                />
+                <button
+                  onClick={handleEnrich}
+                  disabled={enriching || !caInput.trim()}
+                  className="inline-flex items-center gap-1.5 px-3 rounded-md transition-all duration-150"
+                  style={{ height: 36, backgroundColor: '#10B981', color: '#06231A', fontSize: '13px', fontWeight: 600, opacity: enriching || !caInput.trim() ? 0.5 : 1, cursor: enriching || !caInput.trim() ? 'not-allowed' : 'pointer' }}
+                >
+                  {enriching ? 'Fetching…' : 'Fetch'}
+                </button>
               </div>
-              <div className="grid grid-cols-3 gap-4">
-                {submission.token && (
-                  <div>
-                    <div style={{
-                      fontFamily: "'JetBrains Mono', monospace",
-                      fontSize: '16px',
-                      fontWeight: 600,
-                      color: '#10B981',
-                    }}>
-                      ${submission.token}
+            </div>
+
+            {hasOnchain ? (
+              <>
+                <div className="grid grid-cols-3 gap-4">
+                  {submission.token && (
+                    <div>
+                      <div className="flex items-center gap-2">
+                        {submission.token_image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={submission.token_image} alt="" width={20} height={20} style={{ borderRadius: '50%' }} />
+                        ) : null}
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '16px', fontWeight: 600, color: '#10B981' }}>
+                          ${submission.token}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#525252', marginTop: 4 }}>{submission.token_name || 'Token'}</div>
                     </div>
-                    <div style={{ fontSize: '11px', color: '#525252', marginTop: 4 }}>Token</div>
+                  )}
+                  <div>
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: '20px', fontWeight: 700, color: '#10B981' }}>
+                      {fmtUsd(submission.market_cap)}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#525252', marginTop: 4 }}>Market Cap</div>
+                  </div>
+                  <div>
+                    <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: '20px', fontWeight: 700, color: '#10B981' }}>
+                      {submission.vol_24h != null ? fmtUsd(submission.vol_24h) : formatFees(submission.fees_24h)}
+                    </div>
+                    <div style={{ fontSize: '11px', color: '#525252', marginTop: 4 }}>{submission.vol_24h != null ? '24h Volume' : '24h Fees'}</div>
+                  </div>
+                </div>
+
+                {(submission.price_change_24h != null || submission.wallet) && (
+                  <div className="grid grid-cols-3 gap-4 mt-4">
+                    {submission.price_change_24h != null && (
+                      <div>
+                        <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: '16px', fontWeight: 600, color: submission.price_change_24h >= 0 ? '#10B981' : '#EF4444' }}>
+                          {submission.price_change_24h >= 0 ? '+' : ''}{submission.price_change_24h.toFixed(1)}%
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#525252', marginTop: 4 }}>24h Price</div>
+                      </div>
+                    )}
+                    {submission.wallet && (
+                      <div>
+                        <CopyButton text={submission.wallet} />
+                        <div style={{ fontSize: '11px', color: '#525252', marginTop: 4 }}>Fee Recipient</div>
+                      </div>
+                    )}
                   </div>
                 )}
-                <div>
-                  {submission.wallet && (
-                    <>
-                      <div className="flex items-center gap-2">
-                        <CopyButton text={submission.wallet} />
-                      </div>
-                      <div style={{ fontSize: '11px', color: '#525252', marginTop: 4 }}>Wallet</div>
-                    </>
-                  )}
-                </div>
-                <div>
-                  <div style={{
-                    fontFamily: "'Manrope', sans-serif",
-                    fontSize: '20px',
-                    fontWeight: 700,
-                    color: '#10B981',
-                  }}>
-                    {formatFees(submission.fees_24h)}
+
+                {submission.matched_via && (
+                  <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    <span style={{ fontSize: '12px', color: '#8A8A8A' }}>Matched via: {submission.matched_via}</span>
                   </div>
-                  <div style={{ fontSize: '11px', color: '#525252', marginTop: 4 }}>24h Creator Fees</div>
-                </div>
-              </div>
-              {submission.matched_via && (
-                <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                  <span style={{ fontSize: '12px', color: '#8A8A8A' }}>
-                    Matched via: {submission.matched_via}
-                  </span>
-                </div>
-              )}
-            </motion.div>
-          )}
+                )}
+              </>
+            ) : (
+              <p style={{ fontSize: '12px', color: '#525252' }}>
+                Enter a contract address to pull live volume, market cap, and price data from Bankr.
+              </p>
+            )}
+          </motion.div>
 
           {/* ── Section 3: Submission Content ── */}
           <motion.div
