@@ -39,6 +39,7 @@ export interface CanonicalSubmission {
   token: string;
   matchedVia: string;
   fees24h: number | null;
+  vol24h: number | null;
   lowEffort: boolean;
 }
 

@@ -46,6 +46,12 @@ export interface Submission {
   token: string;
   matched_via: string;
   fees_24h: number | null;
+  contract_address?: string;
+  token_name?: string;
+  vol_24h?: number | null;
+  market_cap?: number | null;
+  price_change_24h?: number | null;
+  token_image?: string;
   score: number;
   score_breakdown: ScoreBreakdown;
   low_effort: boolean;

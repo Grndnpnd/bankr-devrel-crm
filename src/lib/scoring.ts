@@ -52,7 +52,9 @@ export function score(
   s: CanonicalSubmission,
   w: ScoreWeights = DEFAULT_WEIGHTS
 ): { score: number; breakdown: ScoreBreakdown } {
-  const f = s.fees24h ?? 0;
+  // Onchain signal: prefer live 24h volume (from discover); fall back to legacy fees so
+  // seeded rows keep their score until they're enriched with a contract address.
+  const f = s.vol24h ?? s.fees24h ?? 0;
   const fees = f > 0 ? Math.min(w.fees, Math.round(12 * Math.log10(f + 1))) : 0;
 
   const launched = s.token ? w.launched : 0;

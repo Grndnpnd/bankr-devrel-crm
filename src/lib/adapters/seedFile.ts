@@ -45,6 +45,7 @@ export class SeedFileAdapter implements SourceAdapter {
         token: r.token ?? "",
         matchedVia: r.matched_via ?? "",
         fees24h: r.fees_24h ?? null,
+        vol24h: null,
         lowEffort: !!r.low_effort,
       };
     });

@@ -45,7 +45,7 @@ type ScoringRow = {
   whyBankr: string | null;
   links: string | null;
   notesField: string | null;
-  tokenMatch: { token: string | null; fees24h: number | null } | null;
+  tokenMatch: { token: string | null; fees24h: number | null; vol24h: number | null } | null;
 };
 
 const SCORING_SELECT = {
@@ -62,7 +62,7 @@ const SCORING_SELECT = {
   whyBankr: true,
   links: true,
   notesField: true,
-  tokenMatch: { select: { token: true, fees24h: true } },
+  tokenMatch: { select: { token: true, fees24h: true, vol24h: true } },
 } as const;
 
 function toCanonical(r: ScoringRow): CanonicalSubmission {
@@ -79,6 +79,7 @@ function toCanonical(r: ScoringRow): CanonicalSubmission {
     notesField: r.notesField ?? "",
     token: r.tokenMatch?.token ?? null,
     fees24h: r.tokenMatch?.fees24h ?? null,
+    vol24h: r.tokenMatch?.vol24h ?? null,
   } as CanonicalSubmission;
 }
 

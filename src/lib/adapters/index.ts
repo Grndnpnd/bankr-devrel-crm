@@ -36,7 +36,7 @@ export async function runImport(adapter: SourceAdapter, since?: Date): Promise<I
       where: { source_externalId: { source: s.source, externalId: s.externalId } },
       select: {
         id: true,
-        tokenMatch: { select: { token: true, fees24h: true } },
+        tokenMatch: { select: { token: true, fees24h: true, vol24h: true } },
       },
     });
 
@@ -45,7 +45,8 @@ export async function runImport(adapter: SourceAdapter, since?: Date): Promise<I
     // already stored so a form re-import never tanks an onchain-scored project.
     const token = s.token || existing?.tokenMatch?.token || "";
     const fees24h = s.fees24h ?? existing?.tokenMatch?.fees24h ?? null;
-    const { score: sc, breakdown } = score({ ...s, token, fees24h }, weights);
+    const vol24h = existing?.tokenMatch?.vol24h ?? null;
+    const { score: sc, breakdown } = score({ ...s, token, fees24h, vol24h }, weights);
 
     const base = {
       submittedAt: new Date(s.submittedAt),

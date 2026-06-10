@@ -52,3 +52,17 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   });
   return NextResponse.json(serialize(row));
 }
+
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const session = await getSession();
+  if (session?.role !== "ADMIN") {
+    return NextResponse.json({ error: "admin only" }, { status: 403 });
+  }
+  try {
+    // TokenMatch + OutreachActivity cascade automatically (onDelete: Cascade).
+    await prisma.submission.delete({ where: { id: params.id } });
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? "delete failed" }, { status: 400 });
+  }
+}

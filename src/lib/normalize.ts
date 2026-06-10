@@ -145,6 +145,7 @@ export function normalizeFormRow(
     token: str(g(FORM_COLS.token)),
     matchedVia: str(g(FORM_COLS.via)),
     fees24h: parseFees(g(FORM_COLS.fees)),
+    vol24h: null,
     lowEffort: textLen < 200,
   };
 }
