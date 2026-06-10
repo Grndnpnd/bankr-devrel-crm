@@ -2,15 +2,16 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Search, Download, LogOut } from 'lucide-react';
+import { Search, Download, LogOut, RefreshCw } from 'lucide-react';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 
 interface TopBarProps { title: string }
 
 const TopBar: React.FC<TopBarProps> = ({ title }) => {
   const router = useRouter();
-  const { searchQuery, setSearch, me, importNow } = useSubmissionStore();
+  const { searchQuery, setSearch, me, importNow, refreshOnchain } = useSubmissionStore();
   const [importing, setImporting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const initials = (me?.name || me?.email || 'BK').slice(0, 2).toUpperCase();
 
@@ -29,6 +30,19 @@ const TopBar: React.FC<TopBarProps> = ({ title }) => {
       toast.error('Import failed', { description: e?.message ?? 'unexpected error' });
     } finally {
       setImporting(false);
+    }
+  };
+
+  const doRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const r = await refreshOnchain();
+      if (r?.error) toast.error('Refresh failed', { description: r.error });
+      else toast.success('Onchain refreshed', { description: `${r?.enriched ?? 0} tokens updated${r?.failed ? ` · ${r.failed} failed` : ''}` });
+    } catch (e: any) {
+      toast.error('Refresh failed', { description: e?.message ?? 'unexpected error' });
+    } finally {
+      setRefreshing(false);
     }
   };
 
@@ -79,6 +93,20 @@ const TopBar: React.FC<TopBarProps> = ({ title }) => {
       </div>
 
       <div className="flex items-center gap-2">
+        {me?.role === 'ADMIN' && (
+          <button
+            onClick={doRefresh}
+            disabled={refreshing}
+            className="inline-flex items-center gap-1.5 rounded-md transition-all duration-150"
+            style={{ height: 30, padding: '0 10px', backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#8A8A8A', fontSize: 12, fontFamily: "'Inter', sans-serif", cursor: refreshing ? 'default' : 'pointer' }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#222'; e.currentTarget.style.color = '#F0F0F0'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#8A8A8A'; }}
+            title="Refresh live onchain data for all submissions with a contract address"
+          >
+            <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+            {refreshing ? 'Refreshing…' : 'Refresh Onchain'}
+          </button>
+        )}
         {me?.role === 'ADMIN' && (
           <button
             onClick={doImport}

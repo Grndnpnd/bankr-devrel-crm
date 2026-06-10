@@ -18,6 +18,7 @@ interface SubmissionStore {
   load: () => Promise<void>;
   loadUsers: () => Promise<void>;
   importNow: (source?: string) => Promise<any>;
+  refreshOnchain: () => Promise<any>;
 
   setSearch: (query: string) => void;
   setFilters: (filters: Partial<FilterState>) => void;
@@ -26,6 +27,8 @@ interface SubmissionStore {
   updateStage: (id: string, stage: string) => Promise<void>;
   updateOwner: (id: string, owner: string) => Promise<void>;
   addActivity: (id: string, activity: Activity) => Promise<void>;
+  setContractAddress: (id: string, contractAddress: string) => Promise<{ ok: boolean; error?: string }>;
+  deleteSubmission: (id: string) => Promise<boolean>;
 
   filteredSubmissions: () => Submission[];
   getSubmissionById: (id: string) => Submission | undefined;
@@ -95,6 +98,13 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
     return result;
   },
 
+  refreshOnchain: async () => {
+    const res = await fetch('/api/enrich', { method: 'POST' });
+    const result = await res.json().catch(() => ({}));
+    await get().load();
+    return result;
+  },
+
   setSearch: (query) => set({ searchQuery: query }),
   setFilters: (partial) => set((state) => ({ filters: { ...state.filters, ...partial } })),
   setSort: (sort) => set({ sort }),
@@ -124,6 +134,28 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
       body: JSON.stringify({ body: activity.content, kind: activity.type }),
     });
     if (res.ok) replaceRow(set)(await res.json());
+  },
+
+  setContractAddress: async (id, contractAddress) => {
+    const res = await fetch(`/api/submissions/${id}/enrich`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contractAddress }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      replaceRow(set)(data);
+      return { ok: true };
+    }
+    return { ok: false, error: data?.error || `HTTP ${res.status}` };
+  },
+
+  deleteSubmission: async (id) => {
+    const res = await fetch(`/api/submissions/${id}`, { method: 'DELETE' });
+    if (res.ok) {
+      set((state) => ({ submissions: state.submissions.filter((s) => s.id !== id) }));
+    }
+    return res.ok;
   },
 
   getSubmissionById: (id) => get().submissions.find((s) => s.id === id),
