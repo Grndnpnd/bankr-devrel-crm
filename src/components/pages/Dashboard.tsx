@@ -161,7 +161,7 @@ const KPIStrip: React.FC = () => {
             color: '#525252',
           }}
         >
-          {((liveCount / totalCount) * 100).toFixed(1)}% of submissions
+          {totalCount ? ((liveCount / totalCount) * 100).toFixed(1) : '0'}% of submissions
         </div>
       </DataCard>
 
@@ -386,7 +386,7 @@ const PipelineFunnel: React.FC = () => {
                 color: '#F0F0F0',
               }}
               formatter={(value: number, name: string) => {
-                const pct = ((value / total) * 100).toFixed(1);
+                const pct = total ? ((value / total) * 100).toFixed(1) : '0';
                 return [`${value} (${pct}%)`, name];
               }}
             />

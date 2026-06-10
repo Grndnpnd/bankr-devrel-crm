@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   CheckCircle2,
@@ -136,13 +136,42 @@ const typeBadgeStyles: Record<ImportType, { bg: string; text: string }> = {
 const ImportLogTab: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<'All' | 'Successful' | 'Failed'>('All');
   const [filterOpen, setFilterOpen] = useState(false);
+  const [logs, setLogs] = useState<ImportLogEntry[]>([]);
+
+  useEffect(() => {
+    fetch('/api/import/log')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: any[]) => {
+        setLogs(
+          rows.map((r): ImportLogEntry => {
+            const source: ImportSource =
+              r.source === 'google' ? 'Google Sheets' : r.source === 'plain' ? 'Plain' : 'Manual';
+            return {
+              id: r.id,
+              date: new Date(r.at).toLocaleString(undefined, {
+                month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit',
+              }),
+              source,
+              type: source === 'Google Sheets' ? 'Full sync' : 'Manual add',
+              recordsImported: r.pulled ?? 0,
+              newRecords: r.created ?? 0,
+              updatedRecords: r.updated ?? 0,
+              errors: r.ok ? 0 : 1,
+              duration: '—',
+              status: r.ok ? 'Success' : 'Failed',
+              details: r.message || (r.by ? `Triggered by ${r.by}` : `${source} import`),
+            };
+          })
+        );
+      })
+      .catch(() => {});
+  }, []);
 
   const filteredData = useMemo(() => {
-    if (filterStatus === 'All') return importLogData;
-    if (filterStatus === 'Successful') return importLogData.filter((d) => d.status === 'Success');
-    if (filterStatus === 'Failed') return importLogData.filter((d) => d.status === 'Failed');
-    return importLogData;
-  }, [filterStatus]);
+    if (filterStatus === 'Successful') return logs.filter((d) => d.status === 'Success');
+    if (filterStatus === 'Failed') return logs.filter((d) => d.status === 'Failed');
+    return logs;
+  }, [filterStatus, logs]);
 
   const handleExport = () => {
     const csv = [

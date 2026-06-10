@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect } from 'react';
 import { usePathname } from 'next/navigation';
+import { Toaster } from 'sonner';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
@@ -31,6 +32,7 @@ export default function AppShell({ me, children }: { me: SessionUser; children: 
       <main style={{ marginLeft: '220px', paddingTop: '48px', minHeight: '100vh' }}>
         <div className="p-8">{children}</div>
       </main>
+      <Toaster theme="dark" position="bottom-right" richColors />
     </div>
   );
 }

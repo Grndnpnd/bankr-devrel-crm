@@ -1,227 +1,139 @@
 'use client';
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import { toast } from 'sonner';
 import {
-  FormInput,
-  PlusCircle,
-  RefreshCw,
-  TestTube2,
-  Settings2,
-  Unlink,
-  Clock,
-  ExternalLink,
-  Upload,
-  Download,
-  FileSpreadsheet,
+  FormInput, RefreshCw, TestTube2, Unlink, Clock, ExternalLink,
+  Upload, FileSpreadsheet, Settings2, History,
 } from 'lucide-react';
 import DataCard from '@/components/DataCard';
+import { useSubmissionStore } from '@/store/useSubmissionStore';
 
-/* ------------------------------------------------------------------ */
-/*  Google Sheets Card                                                 */
-/* ------------------------------------------------------------------ */
-const GoogleSheetsCard: React.FC = () => {
+interface ImportLogRow {
+  id: string; at: string; source: string; pulled: number; created: number;
+  updated: number; ok: boolean; message: string | null; by: string | null;
+}
+interface Status {
+  google: { configured: boolean; sheetIdMasked: string; range: string };
+  rowCount: number;
+  lastSync: { at: string; source: string; pulled: number; created: number; updated: number; ok: boolean; message: string | null } | null;
+}
+
+const fmtDate = (iso?: string) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+};
+const sourceLabel = (s: string) =>
+  s === 'google' ? 'Google Sheets' : s === 'plain' ? 'Plain' : s === 'seed' ? 'Seed file' : 'Manual';
+
+/* ── Google Sheets ── */
+const GoogleSheetsCard: React.FC<{ status: Status | null; refresh: () => void }> = ({ status, refresh }) => {
+  const reloadSubs = useSubmissionStore((s) => s.load);
   const [syncing, setSyncing] = useState(false);
-  const [sheetId, setSheetId] = useState('1A2B3C4D5E6F7G8H9I0J');
-  const [syncFreq, setSyncFreq] = useState('15min');
+  const [testing, setTesting] = useState(false);
 
-  const handleSync = useCallback(() => {
+  const configured = status?.google.configured;
+  const last = status?.lastSync;
+
+  const handleSync = useCallback(async () => {
     setSyncing(true);
-    setTimeout(() => setSyncing(false), 2500);
+    try {
+      const res = await fetch('/api/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source: 'google' }) });
+      const r = await res.json().catch(() => ({}));
+      if (!res.ok || r.error) toast.error('Sync failed', { description: r.error || `HTTP ${res.status}` });
+      else toast.success('Sync complete', { description: `Pulled ${r.pulled} · ${r.created} new · ${r.updated} updated` });
+    } catch (e: any) {
+      toast.error('Sync failed', { description: e?.message ?? 'network error' });
+    } finally {
+      setSyncing(false);
+      await reloadSubs();
+      refresh();
+    }
+  }, [reloadSubs, refresh]);
+
+  const handleTest = useCallback(async () => {
+    setTesting(true);
+    try {
+      const res = await fetch('/api/import/test', { method: 'POST' });
+      const r = await res.json().catch(() => ({}));
+      if (r.ok) toast.success('Connection OK', { description: `${r.rows} data rows visible in the sheet` });
+      else toast.error('Connection failed', { description: r.error || `HTTP ${res.status}` });
+    } catch (e: any) {
+      toast.error('Connection failed', { description: e?.message ?? 'network error' });
+    } finally {
+      setTesting(false);
+    }
   }, []);
 
   return (
     <DataCard delay={0}>
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div
-            className="flex items-center justify-center rounded-lg"
-            style={{
-              width: '40px',
-              height: '40px',
-              backgroundColor: 'rgba(16,185,129,0.12)',
-            }}
-          >
+          <div className="flex items-center justify-center rounded-lg" style={{ width: 40, height: 40, backgroundColor: 'rgba(16,185,129,0.12)' }}>
             <FileSpreadsheet size={24} style={{ color: '#10B981' }} />
           </div>
           <div>
-            <h3
-              style={{
-                fontFamily: "'Manrope', sans-serif",
-                fontSize: '16px',
-                fontWeight: 600,
-                color: '#F0F0F0',
-              }}
-            >
-              Google Sheets
-            </h3>
-            <p style={{ fontSize: '13px', color: '#8A8A8A', marginTop: '2px' }}>
-              Primary data source. Imports submissions from connected spreadsheet.
-            </p>
+            <h3 style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: '#F0F0F0' }}>Google Sheets</h3>
+            <p style={{ fontSize: 13, color: '#8A8A8A', marginTop: 2 }}>Primary data source. Imports submissions from the connected responses sheet.</p>
           </div>
         </div>
-        {/* Status badge */}
-        <div
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full"
-          style={{ backgroundColor: 'rgba(16,185,129,0.12)' }}
-        >
-          <span
-            className="block rounded-full"
-            style={{
-              width: '8px',
-              height: '8px',
-              backgroundColor: '#10B981',
-              boxShadow: '0 0 8px rgba(16,185,129,0.4)',
-            }}
-          />
-          <span style={{ fontSize: '11px', fontWeight: 600, color: '#10B981' }}>Connected</span>
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ backgroundColor: configured ? 'rgba(16,185,129,0.12)' : 'rgba(138,138,138,0.12)' }}>
+          <span className="block rounded-full" style={{ width: 8, height: 8, backgroundColor: configured ? '#10B981' : '#8A8A8A', boxShadow: configured ? '0 0 8px rgba(16,185,129,0.4)' : 'none' }} />
+          <span style={{ fontSize: 11, fontWeight: 600, color: configured ? '#10B981' : '#8A8A8A' }}>{configured ? 'Connected' : 'Not configured'}</span>
         </div>
       </div>
 
-      {/* Connection details */}
-      <div
-        className="rounded-md p-4 mb-4"
-        style={{ backgroundColor: '#141414', border: '1px solid rgba(255,255,255,0.06)' }}
-      >
+      <div className="rounded-md p-4 mb-4" style={{ backgroundColor: '#141414', border: '1px solid rgba(255,255,255,0.06)' }}>
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
-            <span style={{ fontSize: '12px', color: '#525252' }}>Spreadsheet</span>
-            <span style={{ fontSize: '13px', color: '#F0F0F0', fontWeight: 500 }}>Bankr DevRel Intake</span>
+            <span style={{ fontSize: 12, color: '#525252' }}>Sheet tab</span>
+            <span style={{ fontSize: 13, color: '#F0F0F0', fontWeight: 500 }}>{status?.google.range || '—'}</span>
           </div>
           <div className="flex items-center justify-between">
-            <span style={{ fontSize: '12px', color: '#525252' }}>Last synced</span>
-            <span style={{ fontSize: '12px', color: '#525252' }}>Jun 8, 2026 at 3:42 PM</span>
+            <span style={{ fontSize: 12, color: '#525252' }}>Last import</span>
+            <span style={{ fontSize: 12, color: last?.ok === false ? '#EF4444' : '#525252' }}>
+              {last ? `${fmtDate(last.at)} · ${sourceLabel(last.source)}${last.ok ? '' : ' (failed)'}` : 'never'}
+            </span>
           </div>
           <div className="flex items-center justify-between">
-            <span style={{ fontSize: '12px', color: '#525252' }}>Rows imported</span>
-            <span style={{ fontSize: '13px', color: '#8A8A8A' }}>81 submissions</span>
+            <span style={{ fontSize: 12, color: '#525252' }}>Submissions in DB</span>
+            <span style={{ fontSize: 13, color: '#8A8A8A' }}>{status?.rowCount ?? '—'}</span>
           </div>
         </div>
       </div>
 
-      {/* Sheet ID input */}
       <div className="mb-4">
-        <label style={{ fontSize: '11px', fontWeight: 600, color: '#525252', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-          Sheet ID
-        </label>
+        <label style={{ fontSize: 11, fontWeight: 600, color: '#525252', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Sheet ID</label>
         <input
-          type="text"
-          value={sheetId}
-          onChange={(e) => setSheetId(e.target.value)}
-          className="w-full mt-1.5 rounded-md outline-none transition-all duration-150"
-          style={{
-            height: '36px',
-            backgroundColor: '#141414',
-            border: '1px solid rgba(255,255,255,0.1)',
-            color: '#F0F0F0',
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: '12px',
-            padding: '0 12px',
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = '#F5A623';
-            e.currentTarget.style.boxShadow = '0 0 0 3px rgba(245,166,35,0.15)';
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
+          type="text" readOnly value={status?.google.sheetIdMasked || 'not set'}
+          className="w-full mt-1.5 rounded-md outline-none"
+          style={{ height: 36, backgroundColor: '#141414', border: '1px solid rgba(255,255,255,0.1)', color: '#8A8A8A', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, padding: '0 12px' }}
         />
+        <p style={{ fontSize: 11, color: '#525252', marginTop: 6 }}>Managed via the <code style={{ color: '#8A8A8A' }}>GOOGLE_SHEET_ID</code> server variable.</p>
       </div>
 
-      {/* Sync frequency */}
-      <div className="mb-4">
-        <label style={{ fontSize: '11px', fontWeight: 600, color: '#525252', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-          Sync Frequency
-        </label>
-        <select
-          value={syncFreq}
-          onChange={(e) => setSyncFreq(e.target.value)}
-          className="w-full mt-1.5 rounded-md outline-none transition-all duration-150"
-          style={{
-            height: '36px',
-            backgroundColor: '#141414',
-            border: '1px solid rgba(255,255,255,0.1)',
-            color: '#F0F0F0',
-            fontFamily: "'Inter', sans-serif",
-            fontSize: '13px',
-            padding: '0 12px',
-            appearance: 'none',
-          }}
-        >
-          <option value="15min">Every 15 minutes</option>
-          <option value="1hour">Every hour</option>
-          <option value="manual">Manual only</option>
-        </select>
+      <div className="mb-4 flex items-center gap-2 rounded-md p-3" style={{ backgroundColor: '#141414', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <Clock size={14} style={{ color: '#525252' }} />
+        <span style={{ fontSize: 12, color: '#8A8A8A' }}>Manual sync. Scheduled auto-sync is not enabled yet.</span>
       </div>
 
-      {/* Actions */}
       <div className="flex items-center gap-2">
-        <button
-          onClick={handleSync}
-          disabled={syncing}
+        <button onClick={handleSync} disabled={syncing || !configured}
           className="inline-flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150"
-          style={{
-            backgroundColor: '#F5A623',
-            color: '#0D0D0D',
-            fontFamily: "'Inter', sans-serif",
-            fontSize: '13px',
-            fontWeight: 600,
-            opacity: syncing ? 0.7 : 1,
-            cursor: syncing ? 'wait' : 'pointer',
-          }}
-          onMouseEnter={(e) => {
-            if (!syncing) {
-              e.currentTarget.style.backgroundColor = '#E8941A';
-              e.currentTarget.style.boxShadow = '0 0 20px rgba(245,166,35,0.15)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = '#F5A623';
-            e.currentTarget.style.boxShadow = 'none';
-          }}
-        >
+          style={{ backgroundColor: '#F5A623', color: '#0D0D0D', fontSize: 13, fontWeight: 600, opacity: syncing || !configured ? 0.5 : 1, cursor: syncing || !configured ? 'not-allowed' : 'pointer' }}>
           <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} />
-          {syncing ? 'Syncing...' : 'Sync Now'}
+          {syncing ? 'Syncing…' : 'Sync Now'}
         </button>
-        <button
+        <button onClick={handleTest} disabled={testing || !configured}
           className="inline-flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150"
-          style={{
-            backgroundColor: 'transparent',
-            color: '#8A8A8A',
-            border: '1px solid rgba(255,255,255,0.1)',
-            fontFamily: "'Inter', sans-serif",
-            fontSize: '13px',
-            fontWeight: 600,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#222222';
-            e.currentTarget.style.color = '#F0F0F0';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = '#8A8A8A';
-          }}
-        >
+          style={{ backgroundColor: 'transparent', color: '#8A8A8A', border: '1px solid rgba(255,255,255,0.1)', fontSize: 13, fontWeight: 600, opacity: testing || !configured ? 0.5 : 1, cursor: testing || !configured ? 'not-allowed' : 'pointer' }}>
           <TestTube2 size={14} />
-          Test Connection
+          {testing ? 'Testing…' : 'Test Connection'}
         </button>
-        <button
+        <button onClick={() => toast.info('Managed on the server', { description: 'The connection is configured via environment variables; edit them in Railway to disconnect.' })}
           className="inline-flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150 ml-auto"
-          style={{
-            backgroundColor: 'transparent',
-            color: '#EF4444',
-            border: '1px solid rgba(239,68,68,0.3)',
-            fontFamily: "'Inter', sans-serif",
-            fontSize: '13px',
-            fontWeight: 600,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.1)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-          }}
-        >
+          style={{ backgroundColor: 'transparent', color: '#8A8A8A', border: '1px solid rgba(255,255,255,0.1)', fontSize: 13, fontWeight: 600 }}>
           <Unlink size={14} />
           Disconnect
         </button>
@@ -230,296 +142,89 @@ const GoogleSheetsCard: React.FC = () => {
   );
 };
 
-/* ------------------------------------------------------------------ */
-/*  Plain Card                                                         */
-/* ------------------------------------------------------------------ */
-const PlainCard: React.FC = () => {
-  return (
-    <DataCard delay={0.08}>
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div
-            className="flex items-center justify-center rounded-lg"
-            style={{
-              width: '40px',
-              height: '40px',
-              backgroundColor: 'rgba(245,158,11,0.12)',
-            }}
-          >
-            <FormInput size={24} style={{ color: '#F59E0B' }} />
-          </div>
-          <div>
-            <h3
-              style={{
-                fontFamily: "'Manrope', sans-serif",
-                fontSize: '16px',
-                fontWeight: 600,
-                color: '#F0F0F0',
-              }}
-            >
-              Plain
-            </h3>
-            <p style={{ fontSize: '13px', color: '#8A8A8A', marginTop: '2px' }}>
-              Form submission API integration.
-            </p>
-          </div>
+/* ── Plain (genuinely not live yet) ── */
+const PlainCard: React.FC = () => (
+  <DataCard delay={0.08}>
+    <div className="flex items-start justify-between mb-4">
+      <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center rounded-lg" style={{ width: 40, height: 40, backgroundColor: 'rgba(245,158,11,0.12)' }}>
+          <FormInput size={24} style={{ color: '#F59E0B' }} />
         </div>
-        {/* Coming soon badge */}
-        <span
-          className="px-2.5 py-1 rounded-full"
-          style={{
-            backgroundColor: 'rgba(245,166,35,0.15)',
-            color: '#F5A623',
-            fontSize: '11px',
-            fontWeight: 600,
-          }}
-        >
-          Coming Soon
-        </span>
-      </div>
-
-      {/* Status banner */}
-      <motion.div
-        animate={{ opacity: [0.3, 0.6, 0.3] }}
-        transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
-        className="flex items-start gap-3 rounded-md p-4 mb-4"
-        style={{
-          backgroundColor: '#222222',
-          border: '1px solid rgba(255,255,255,0.06)',
-        }}
-      >
-        <Clock size={18} style={{ color: '#8A8A8A', flexShrink: 0, marginTop: '1px' }} />
         <div>
-          <p style={{ fontSize: '13px', color: '#8A8A8A', lineHeight: 1.5 }}>
-            Plain form expansion is in progress. This integration will be available once multi-form support is released.
-          </p>
-          <p style={{ fontSize: '12px', color: '#525252', marginTop: '4px' }}>
-            Currently limited to single-form support on Plain&apos;s end.
-          </p>
+          <h3 style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: '#F0F0F0' }}>Plain</h3>
+          <p style={{ fontSize: 13, color: '#8A8A8A', marginTop: 2 }}>Form submission API integration.</p>
         </div>
-      </motion.div>
-
-      {/* API Key input (masked) */}
-      <div className="mb-4">
-        <label style={{ fontSize: '11px', fontWeight: 600, color: '#525252', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-          API Key
-        </label>
-        <input
-          type="password"
-          placeholder="Enter Plain API key..."
-          disabled
-          className="w-full mt-1.5 rounded-md outline-none transition-all duration-150"
-          style={{
-            height: '36px',
-            backgroundColor: '#141414',
-            border: '1px solid rgba(255,255,255,0.1)',
-            color: '#525252',
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: '12px',
-            padding: '0 12px',
-            cursor: 'not-allowed',
-            opacity: 0.6,
-          }}
-        />
       </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-2">
-        <button
-          disabled
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150"
-          style={{
-            backgroundColor: 'transparent',
-            color: '#525252',
-            border: '1px solid rgba(255,255,255,0.1)',
-            fontFamily: "'Inter', sans-serif",
-            fontSize: '13px',
-            fontWeight: 600,
-            cursor: 'not-allowed',
-            opacity: 0.5,
-          }}
-          title="Multi-form support coming soon"
-        >
-          <Settings2 size={14} />
-          Set Up
-        </button>
-        <a
-          href="https://www.plain.com/docs"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150"
-          style={{
-            backgroundColor: 'transparent',
-            color: '#8A8A8A',
-            fontFamily: "'Inter', sans-serif",
-            fontSize: '13px',
-            fontWeight: 600,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = '#222222';
-            e.currentTarget.style.color = '#F0F0F0';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = 'transparent';
-            e.currentTarget.style.color = '#8A8A8A';
-          }}
-        >
-          <ExternalLink size={14} />
-          View API Docs
+      <span className="px-2.5 py-1 rounded-full" style={{ backgroundColor: 'rgba(245,166,35,0.15)', color: '#F5A623', fontSize: 11, fontWeight: 600 }}>Coming Soon</span>
+    </div>
+    <motion.div animate={{ opacity: [0.4, 0.7, 0.4] }} transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut' }}
+      className="flex items-start gap-3 rounded-md p-4" style={{ backgroundColor: '#222', border: '1px solid rgba(255,255,255,0.06)' }}>
+      <Clock size={18} style={{ color: '#8A8A8A', flexShrink: 0, marginTop: 1 }} />
+      <div>
+        <p style={{ fontSize: 13, color: '#8A8A8A', lineHeight: 1.5 }}>The Plain adapter is stubbed and will be enabled once multi-form support ships on Plain&apos;s end.</p>
+        <a href="https://www.plain.com/docs" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 mt-2" style={{ fontSize: 12, color: '#F5A623', fontWeight: 500 }}>
+          <ExternalLink size={12} /> View API Docs
         </a>
       </div>
-    </DataCard>
-  );
-};
+    </motion.div>
+  </DataCard>
+);
 
-/* ------------------------------------------------------------------ */
-/*  Manual Entry Card                                                  */
-/* ------------------------------------------------------------------ */
-const ManualEntryCard: React.FC = () => {
-  const [isDragOver, setIsDragOver] = useState(false);
-  const [recentImports] = useState([
-    { filename: 'submissions_batch_12.csv', date: 'Jun 7, 2026', count: 8 },
-    { filename: 'devrel_intake.json', date: 'Jun 5, 2026', count: 3 },
-    { filename: 'hackathon_projects.csv', date: 'Jun 1, 2026', count: 15 },
-  ]);
-
-  return (
-    <DataCard delay={0.16}>
-      <div className="flex items-start gap-3 mb-4">
-        <div
-          className="flex items-center justify-center rounded-lg"
-          style={{
-            width: '40px',
-            height: '40px',
-            backgroundColor: 'rgba(245,166,35,0.12)',
-          }}
-        >
-          <PlusCircle size={24} style={{ color: '#F5A623' }} />
-        </div>
-        <div className="flex-1">
-          <div className="flex items-center justify-between">
-            <h3
-              style={{
-                fontFamily: "'Manrope', sans-serif",
-                fontSize: '16px',
-                fontWeight: 600,
-                color: '#F0F0F0',
-              }}
-            >
-              Manual Import
-            </h3>
-            <div
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full"
-              style={{ backgroundColor: 'rgba(16,185,129,0.12)' }}
-            >
-              <span className="block rounded-full" style={{ width: '8px', height: '8px', backgroundColor: '#10B981' }} />
-              <span style={{ fontSize: '11px', fontWeight: 600, color: '#10B981' }}>Enabled</span>
+/* ── Recent imports (real log) ── */
+const RecentImportsCard: React.FC<{ log: ImportLogRow[] }> = ({ log }) => (
+  <DataCard delay={0.16}>
+    <div className="flex items-start gap-3 mb-4">
+      <div className="flex items-center justify-center rounded-lg" style={{ width: 40, height: 40, backgroundColor: 'rgba(245,166,35,0.12)' }}>
+        <History size={24} style={{ color: '#F5A623' }} />
+      </div>
+      <div className="flex-1">
+        <h3 style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: '#F0F0F0' }}>Recent Imports</h3>
+        <p style={{ fontSize: 13, color: '#8A8A8A', marginTop: 2 }}>The latest sync runs and their results.</p>
+      </div>
+    </div>
+    {log.length === 0 ? (
+      <div className="flex flex-col items-center justify-center gap-2 rounded-lg" style={{ padding: '28px 16px', backgroundColor: '#141414', border: '1px dashed rgba(255,255,255,0.1)' }}>
+        <Upload size={22} style={{ color: '#525252' }} />
+        <p style={{ fontSize: 13, color: '#8A8A8A' }}>No imports yet — run a sync to get started.</p>
+      </div>
+    ) : (
+      <div className="flex flex-col gap-1">
+        {log.slice(0, 6).map((r) => (
+          <div key={r.id} className="flex items-center justify-between py-2 px-3 rounded-md" style={{ backgroundColor: '#141414' }}>
+            <div className="flex items-center gap-2">
+              <span className="block rounded-full" style={{ width: 7, height: 7, backgroundColor: r.ok ? '#10B981' : '#EF4444' }} />
+              <span style={{ fontSize: 12, color: '#8A8A8A' }}>{sourceLabel(r.source)}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span style={{ fontSize: 11, color: '#525252' }}>{r.ok ? `${r.created} new · ${r.updated} upd` : (r.message || 'failed')}</span>
+              <span style={{ fontSize: 11, color: '#525252' }}>{fmtDate(r.at)}</span>
             </div>
           </div>
-          <p style={{ fontSize: '13px', color: '#8A8A8A', marginTop: '2px' }}>
-            Upload CSV or JSON files to import submissions in bulk.
-          </p>
-        </div>
+        ))}
       </div>
+    )}
+  </DataCard>
+);
 
-      {/* Dropzone */}
-      <div
-        className="flex flex-col items-center justify-center gap-3 rounded-lg mb-4 transition-all duration-200"
-        style={{
-          padding: '28px 16px',
-          backgroundColor: isDragOver ? '#222222' : '#141414',
-          border: isDragOver ? '2px dashed #F5A623' : '2px dashed rgba(255,255,255,0.1)',
-          cursor: 'pointer',
-        }}
-        onDragEnter={() => setIsDragOver(true)}
-        onDragLeave={() => setIsDragOver(false)}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setIsDragOver(true);
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          setIsDragOver(false);
-        }}
-      >
-        <Upload size={24} style={{ color: isDragOver ? '#F5A623' : '#525252' }} />
-        <div className="text-center">
-          <p style={{ fontSize: '13px', color: '#8A8A8A' }}>
-            <span style={{ color: '#F5A623', fontWeight: 500 }}>Click to upload</span> or drag and drop
-          </p>
-          <p style={{ fontSize: '11px', color: '#525252', marginTop: '4px' }}>CSV, JSON — Max 10MB</p>
-        </div>
-      </div>
-
-      {/* Download template link */}
-      <div className="flex items-center gap-2 mb-4">
-        <a
-          href="#"
-          className="inline-flex items-center gap-1.5 transition-colors duration-150"
-          style={{ fontSize: '12px', color: '#F5A623', fontWeight: 500 }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.textDecoration = 'underline';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.textDecoration = 'none';
-          }}
-        >
-          <Download size={12} />
-          Download Template
-        </a>
-      </div>
-
-      {/* Recent imports */}
-      {recentImports.length > 0 && (
-        <div>
-          <h4
-            className="mb-2"
-            style={{
-              fontFamily: "'Inter', sans-serif",
-              fontSize: '11px',
-              fontWeight: 600,
-              color: '#525252',
-              letterSpacing: '0.06em',
-              textTransform: 'uppercase',
-            }}
-          >
-            Recent Imports
-          </h4>
-          <div className="flex flex-col gap-1">
-            {recentImports.map((imp) => (
-              <div
-                key={imp.filename}
-                className="flex items-center justify-between py-2 px-3 rounded-md"
-                style={{ backgroundColor: '#141414' }}
-              >
-                <div className="flex items-center gap-2">
-                  <FileSpreadsheet size={14} style={{ color: '#525252' }} />
-                  <span style={{ fontSize: '12px', color: '#8A8A8A' }}>{imp.filename}</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span style={{ fontSize: '11px', color: '#525252' }}>{imp.count} rows</span>
-                  <span style={{ fontSize: '11px', color: '#525252' }}>{imp.date}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </DataCard>
-  );
-};
-
-/* ------------------------------------------------------------------ */
-/*  Sources Tab                                                        */
-/* ------------------------------------------------------------------ */
+/* ── Sources Tab ── */
 const SourcesTab: React.FC = () => {
+  const [status, setStatus] = useState<Status | null>(null);
+  const [log, setLog] = useState<ImportLogRow[]>([]);
+
+  const refresh = useCallback(() => {
+    fetch('/api/import/status').then((r) => (r.ok ? r.json() : null)).then(setStatus).catch(() => {});
+    fetch('/api/import/log').then((r) => (r.ok ? r.json() : [])).then(setLog).catch(() => {});
+  }, []);
+
+  useEffect(() => { refresh(); }, [refresh]);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       <div className="lg:col-span-2">
-        <GoogleSheetsCard />
+        <GoogleSheetsCard status={status} refresh={refresh} />
       </div>
       <PlainCard />
-      <ManualEntryCard />
+      <RecentImportsCard log={log} />
     </div>
   );
 };

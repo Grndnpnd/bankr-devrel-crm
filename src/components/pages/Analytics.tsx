@@ -155,7 +155,7 @@ const TagTooltip: React.FC<{
   const subs = useSubmissionStore((st) => st.submissions);
   const { tagDistribution } = useMemo(() => computeAnalytics(subs), [subs]);
   const total = tagDistribution.reduce((s, t) => s + t.count, 0);
-  const pct = ((p.count / total) * 100).toFixed(1);
+  const pct = total ? ((p.count / total) * 100).toFixed(1) : '0';
   return (
     <div style={ChartTooltipStyle}>
       <div style={{ fontWeight: 600 }}>{p.tag}</div>
@@ -175,7 +175,7 @@ const FeeTooltip: React.FC<{
   const subs = useSubmissionStore((st) => st.submissions);
   const { feeLeaders } = useMemo(() => computeAnalytics(subs), [subs]);
   const totalFees = feeLeaders.reduce((s, f) => s + f.fees_24h, 0);
-  const pct = ((p.fees_24h / totalFees) * 100).toFixed(1);
+  const pct = totalFees ? ((p.fees_24h / totalFees) * 100).toFixed(1) : '0';
   return (
     <div style={ChartTooltipStyle}>
       <div style={{ fontWeight: 600 }}>{p.project}</div>

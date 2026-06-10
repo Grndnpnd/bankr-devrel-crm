@@ -1,6 +1,7 @@
 'use client';
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { Search, Download, LogOut } from 'lucide-react';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 
@@ -15,7 +16,20 @@ const TopBar: React.FC<TopBarProps> = ({ title }) => {
 
   const doImport = async () => {
     setImporting(true);
-    try { await importNow(); } finally { setImporting(false); }
+    try {
+      const r = await importNow();
+      if (r?.error) {
+        toast.error('Import failed', { description: r.error });
+      } else {
+        toast.success('Import complete', {
+          description: `Pulled ${r?.pulled ?? 0} · ${r?.created ?? 0} new · ${r?.updated ?? 0} updated`,
+        });
+      }
+    } catch (e: any) {
+      toast.error('Import failed', { description: e?.message ?? 'unexpected error' });
+    } finally {
+      setImporting(false);
+    }
   };
 
   const logout = async () => {

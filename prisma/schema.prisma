@@ -110,3 +110,18 @@ model ScoreConfig {
   updatedAt    DateTime @updatedAt
   updatedBy    String?
 }
+
+/// Audit row written after each import run (powers Sources status + Import Log).
+model ImportLog {
+  id        String   @id @default(cuid())
+  source    String   // "google" | "seed" | "plain" | "manual"
+  pulled    Int      @default(0)
+  created   Int      @default(0)
+  updated   Int      @default(0)
+  ok        Boolean  @default(true)
+  message   String?
+  by        String?  // email of the admin who triggered it
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { runImport } from "@/lib/adapters";
 import { SeedFileAdapter } from "@/lib/adapters/seedFile";
@@ -8,8 +9,9 @@ import { PlainAdapter } from "@/lib/adapters/plain";
 export const dynamic = "force-dynamic";
 
 /**
- * Trigger an import. Body: { source: "seed" | "google" | "plain" }.
- * Defaults to "google" in production, "seed" otherwise.
+ * Trigger an import. Body: { source?: "seed" | "google" | "plain" }.
+ * Defaults to Google when configured, else the bundled seed file.
+ * Every run is recorded in ImportLog (success or failure).
  */
 export async function POST(req: Request) {
   const session = await getSession();
@@ -17,9 +19,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "admin only" }, { status: 403 });
   }
   const { source } = await req.json().catch(() => ({}));
-  // Prefer the live Google Sheet whenever it's configured (works in local dev too);
-  // otherwise fall back to the bundled seed file. An explicit `source` always wins.
-  const which = source || (process.env.GOOGLE_SHEET_ID && process.env.GOOGLE_SERVICE_ACCOUNT ? "google" : "seed");
+  const which =
+    source ||
+    (process.env.GOOGLE_SHEET_ID && process.env.GOOGLE_SERVICE_ACCOUNT ? "google" : "seed");
 
   try {
     const adapter =
@@ -27,8 +29,22 @@ export async function POST(req: Request) {
       : which === "plain" ? new PlainAdapter()
       : new SeedFileAdapter();
     const result = await runImport(adapter);
+    await prisma.importLog.create({
+      data: {
+        source: which,
+        pulled: result.pulled,
+        created: result.created,
+        updated: result.updated,
+        ok: true,
+        by: session.email,
+      },
+    });
     return NextResponse.json(result);
   } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? "import failed" }, { status: 500 });
+    const message = e?.message ?? "import failed";
+    await prisma.importLog
+      .create({ data: { source: which, ok: false, message, by: session.email } })
+      .catch(() => {});
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
