@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { serialize, INCLUDE } from "@/lib/serialize";
 import { LABEL_TO_STAGE, STAGE_TO_LABEL } from "@/lib/labels";
+import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     });
   }
 
-  const row = await prisma.submission.update({ where: { id: params.id }, data, include: INCLUDE });
+  const row = await prisma.submission.update({
+    where: { id: params.id },
+    data: data as unknown as Prisma.SubmissionUpdateInput,
+    include: INCLUDE,
+  });
   return NextResponse.json(serialize(row));
 }

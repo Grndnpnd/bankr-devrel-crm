@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { score, DEFAULT_WEIGHTS, type ScoreWeights } from "./scoring";
+import type { Prisma } from "@prisma/client";
 import type { CanonicalSubmission } from "./types";
 
 const CONFIG_ID = "default";
@@ -96,7 +97,7 @@ export interface PreviewResult {
 
 /** Compute scores under proposed weights without persisting. */
 export async function previewWeights(weights: ScoreWeights): Promise<PreviewResult> {
-  const rows = (await prisma.submission.findMany({ select: SCORING_SELECT })) as ScoringRow[];
+  const rows = (await prisma.submission.findMany({ select: SCORING_SELECT })) as unknown as ScoringRow[];
   const out: PreviewRow[] = rows.map((r) => {
     const next = score(toCanonical(r), weights).score;
     return { id: r.id, project: r.project, current: r.score, next, delta: next - r.score };
@@ -127,7 +128,7 @@ export async function applyWeights(weights: ScoreWeights, updatedBy?: string) {
     create: { id: CONFIG_ID, ...weights, updatedBy: updatedBy ?? null },
   });
 
-  const rows = (await prisma.submission.findMany({ select: SCORING_SELECT })) as ScoringRow[];
+  const rows = (await prisma.submission.findMany({ select: SCORING_SELECT })) as unknown as ScoringRow[];
   let changed = 0;
   await prisma.$transaction(
     rows.map((r) => {
@@ -135,7 +136,7 @@ export async function applyWeights(weights: ScoreWeights, updatedBy?: string) {
       if (sc !== r.score) changed++;
       return prisma.submission.update({
         where: { id: r.id },
-        data: { score: sc, scoreBreakdown: breakdown },
+        data: { score: sc, scoreBreakdown: breakdown as unknown as Prisma.InputJsonValue },
       });
     })
   );

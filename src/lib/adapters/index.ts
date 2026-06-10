@@ -1,6 +1,7 @@
 import { prisma } from "../prisma";
 import { score } from "../scoring";
 import { getWeights } from "../scoreConfig";
+import type { Prisma } from "@prisma/client";
 import type { CanonicalSubmission, SourceKind } from "../types";
 
 /**
@@ -63,9 +64,9 @@ export async function runImport(adapter: SourceAdapter, since?: Date): Promise<I
       notesField: s.notesField || null,
       location: s.location || null,
       needsHelp: s.needsHelp,
-      founders: s.founders,
+      founders: s.founders as unknown as Prisma.InputJsonValue,
       score: sc,
-      scoreBreakdown: breakdown,
+      scoreBreakdown: breakdown as unknown as Prisma.InputJsonValue,
       lowEffort: s.lowEffort,
     };
 
