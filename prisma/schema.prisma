@@ -76,14 +76,20 @@ model Submission {
 }
 
 model TokenMatch {
-  id           String     @id @default(cuid())
-  submissionId String     @unique
-  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  token        String
-  wallet       String?
-  matchedVia   String?
-  fees24h      Float?
-  refreshedAt  DateTime   @default(now())
+  id              String     @id @default(cuid())
+  submissionId    String     @unique
+  submission      Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  token           String
+  wallet          String?
+  matchedVia      String?
+  fees24h         Float?
+  contractAddress String?
+  name            String?
+  vol24h          Float?
+  marketCapUsd    Float?
+  priceChange24h  Float?
+  imageUri        String?
+  refreshedAt     DateTime   @default(now())
 }
 
 model OutreachActivity {
