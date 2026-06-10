@@ -675,16 +675,15 @@ const Submissions: React.FC = () => {
     <div>
       {/* Filter Bar */}
       <div
-        className="sticky flex items-center gap-2 overflow-x-auto"
+        className="sticky flex items-center gap-2 flex-wrap"
         style={{
           top: 48,
           zIndex: 10,
-          height: 48,
+          minHeight: 48,
           backgroundColor: '#141414',
           borderBottom: '1px solid rgba(255,255,255,0.06)',
-          padding: '0 32px',
+          padding: '8px 32px',
           margin: '0 -32px 16px -32px',
-          scrollbarWidth: 'none',
         }}
       >
         {/* Stage Dropdown */}
