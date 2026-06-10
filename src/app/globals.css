@@ -1,0 +1,121 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 5%;
+    --foreground: 0 0% 94%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 94%;
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 94%;
+    --primary: 37 91% 55%;
+    --primary-foreground: 0 0% 5%;
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 94%;
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 54%;
+    --accent: 37 91% 55%;
+    --accent-foreground: 0 0% 5%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 100% / 0.06;
+    --input: 0 0% 100% / 0.1;
+    --ring: 37 91% 55%;
+    --radius: 0.5rem;
+    --sidebar-background: 0 0% 10%;
+    --sidebar-foreground: 0 0% 54%;
+    --sidebar-primary: 37 91% 55%;
+    --sidebar-primary-foreground: 0 0% 5%;
+    --sidebar-accent: 0 0% 13%;
+    --sidebar-accent-foreground: 0 0% 94%;
+    --sidebar-border: 0 0% 100% / 0.06;
+    --sidebar-ring: 37 91% 55%;
+
+    /* Bankr Design Tokens */
+    --surface-deep: #0D0D0D;
+    --surface-base: #141414;
+    --surface-elevated: #1A1A1A;
+    --surface-hovered: #222222;
+    --surface-active: #2A2A2A;
+    --border-subtle: rgba(255,255,255,0.06);
+    --border-medium: rgba(255,255,255,0.1);
+    --border-strong: rgba(255,255,255,0.14);
+    --text-primary: #F0F0F0;
+    --text-secondary: #8A8A8A;
+    --text-tertiary: #525252;
+    --text-inverse: #0D0D0D;
+    --accent-400: #F5A623;
+    --accent-500: #E8941A;
+    --accent-600: #C97A10;
+    --accent-glow: rgba(245,166,35,0.15);
+    --score-low: #EF4444;
+    --score-mid: #F59E0B;
+    --score-high: #10B981;
+    --score-elite: #34D399;
+    --success: #10B981;
+    --warning: #F59E0B;
+    --error: #EF4444;
+    --info: #3B82F6;
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.3), 0 0 1px rgba(255,255,255,0.04);
+    --shadow-elevated: 0 4px 16px rgba(0,0,0,0.4), 0 0 1px rgba(255,255,255,0.06);
+    --shadow-modal: 0 8px 32px rgba(0,0,0,0.5), 0 0 1px rgba(255,255,255,0.08);
+    --glow-accent: 0 0 20px rgba(245,166,35,0.15);
+    --glow-success: 0 0 12px rgba(16,185,129,0.2);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    background-color: #0D0D0D;
+    color: #F0F0F0;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Dark scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(255,255,255,0.1);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(255,255,255,0.2);
+  }
+
+  /* Firefox scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
+  }
+}
+
+@layer components {
+  /* Recharts tooltip overrides */
+  .recharts-default-tooltip {
+    background-color: #1A1A1A !important;
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4) !important;
+  }
+}

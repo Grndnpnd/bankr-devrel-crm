@@ -1,0 +1,101 @@
+/* ------------------------------------------------------------------ */
+/*  Custom Range Slider Styles                                         */
+/* ------------------------------------------------------------------ */
+
+.scoring-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 9999px;
+  outline: none;
+  cursor: pointer;
+  background: transparent;
+}
+
+/* Track (WebKit) */
+.scoring-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    var(--fill-color, #F5A623) 0%,
+    var(--fill-color, #F5A623) var(--fill-percent, 50%),
+    var(--track-color, #222222) var(--fill-percent, 50%),
+    var(--track-color, #222222) 100%
+  );
+}
+
+/* Track (Firefox) */
+.scoring-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--track-color, #222222);
+  border: none;
+}
+
+/* Fill (Firefox) */
+.scoring-slider::-moz-range-progress {
+  height: 6px;
+  border-radius: 9999px;
+  background: var(--fill-color, #F5A623);
+}
+
+/* Thumb (WebKit) */
+.scoring-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--surface-elevated, #1A1A1A);
+  border: 2px solid var(--thumb-border, rgba(255,255,255,0.14));
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  margin-top: -5px;
+  cursor: grab;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.scoring-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 8px rgba(0,0,0,0.4);
+}
+
+.scoring-slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.2);
+}
+
+/* Thumb (Firefox) */
+.scoring-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--surface-elevated, #1A1A1A);
+  border: 2px solid var(--thumb-border, rgba(255,255,255,0.14));
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  cursor: grab;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.scoring-slider::-moz-range-thumb:hover {
+  transform: scale(1.15);
+}
+
+.scoring-slider::-moz-range-thumb:active {
+  cursor: grabbing;
+}
+
+/* Disabled state */
+.scoring-slider:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.scoring-slider:disabled::-webkit-slider-thumb {
+  cursor: not-allowed;
+}
+
+.scoring-slider:disabled::-moz-range-thumb {
+  cursor: not-allowed;
+}

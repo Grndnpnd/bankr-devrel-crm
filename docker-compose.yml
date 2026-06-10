@@ -1,0 +1,15 @@
+# Local Postgres only — run the Next app with `npm run dev` against it.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: bankr
+      POSTGRES_PASSWORD: bankr
+      POSTGRES_DB: bankr_crm
+    ports:
+      - "5433:5432"
+    volumes:
+      - bankr_pg:/var/lib/postgresql/data
+volumes:
+  bankr_pg:

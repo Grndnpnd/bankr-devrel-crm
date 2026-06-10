@@ -1,0 +1,112 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Source {
+  GOOGLE_FORM
+  PLAIN
+}
+
+enum Stage {
+  NEW
+  REVIEWING
+  CONTACTED
+  IN_CONVO
+  ONBOARDING
+  WON
+  PASSED
+}
+
+enum Role {
+  ADMIN
+  DEVREL
+  VIEWER
+}
+
+model User {
+  id           String             @id @default(cuid())
+  email        String             @unique
+  name         String?
+  role         Role               @default(DEVREL)
+  passwordHash String
+  activities   OutreachActivity[]
+  createdAt    DateTime           @default(now())
+}
+
+model Submission {
+  id              String             @id @default(cuid())
+  source          Source
+  externalId      String
+  submittedAt     DateTime
+  project         String
+  projectX        String?
+  website         String?
+  oneLiner        String?
+  problem         String?            @db.Text
+  solution        String?            @db.Text
+  traction        String?            @db.Text
+  funding         String?            @db.Text
+  plan            String?            @db.Text
+  whyBankr        String?            @db.Text
+  accomplishments String?            @db.Text
+  links           String?            @db.Text
+  notesField      String?            @db.Text
+  location        String?
+  needsHelp       String[]
+  founders        Json
+  score           Int                @default(0)
+  scoreBreakdown  Json
+  lowEffort       Boolean            @default(false)
+  stage           Stage              @default(NEW)
+  owner           String?
+  tokenMatch      TokenMatch?
+  activities      OutreachActivity[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@unique([source, externalId])
+  @@index([score])
+  @@index([stage])
+}
+
+model TokenMatch {
+  id           String     @id @default(cuid())
+  submissionId String     @unique
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  token        String
+  wallet       String?
+  matchedVia   String?
+  fees24h      Float?
+  refreshedAt  DateTime   @default(now())
+}
+
+model OutreachActivity {
+  id           String     @id @default(cuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  authorId     String
+  author       User       @relation(fields: [authorId], references: [id])
+  body         String     @db.Text
+  kind         String     @default("note")
+  createdAt    DateTime   @default(now())
+
+  @@index([submissionId])
+}
+
+/// Tunable scoring weights (singleton row, id = "default").
+model ScoreConfig {
+  id           String   @id @default("default")
+  fees         Int      @default(40)
+  launched     Int      @default(15)
+  traction     Int      @default(15)
+  founder      Int      @default(15)
+  completeness Int      @default(15)
+  updatedAt    DateTime @updatedAt
+  updatedBy    String?
+}
