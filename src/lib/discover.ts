@@ -93,3 +93,17 @@ export function pickLaunch(results: LaunchResult[], query: string): LaunchResult
   });
   return pool[0]?.tokenAddress ? pool[0] : null;
 }
+
+/** Compact view of a launch result for diagnostics. */
+export function launchSummary(r: LaunchResult) {
+  return {
+    symbol: r.tokenSymbol ?? null,
+    name: r.tokenName ?? null,
+    status: r.status ?? null,
+    tokenAddress: r.tokenAddress ?? null,
+    deployerX: r.deployer?.xUsername ?? null,
+    deployerWallet: r.deployer?.walletAddress ?? null,
+    feeX: r.feeRecipient?.xUsername ?? null,
+    feeWallet: r.feeRecipient?.walletAddress ?? null,
+  };
+}

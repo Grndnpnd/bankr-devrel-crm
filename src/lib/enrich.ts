@@ -83,7 +83,7 @@ export async function enrichAll(): Promise<{ enriched: number; failed: number }>
 }
 
 /* ── CA backfill via token-launches search ── */
-import { searchTokenLaunches, pickLaunch } from "./discover";
+import { searchTokenLaunches, pickLaunch, launchSummary } from "./discover";
 
 /** Identity candidates to search, in priority order: founder X, project X, known wallet. */
 function identityCandidates(row: {
@@ -99,10 +99,15 @@ function identityCandidates(row: {
   return Array.from(new Set(out.map((s) => s.trim()).filter(Boolean)));
 }
 
-/** Try to find a submission's token CA by founder/project X handle or wallet. */
-export async function findContractAddress(
+export interface FindTrace {
+  candidates: string[];
+  steps: { q: string; count: number; error?: string; results: ReturnType<typeof launchSummary>[] }[];
+}
+
+/** Try to find a submission's token CA by founder/project X handle or wallet, with a trace of what was searched. */
+export async function findContractAddressDebug(
   submissionId: string
-): Promise<{ ca: string; via: string } | null> {
+): Promise<{ found: { ca: string; via: string } | null; trace: FindTrace }> {
   const row: any = await prisma.submission.findUnique({
     where: { id: submissionId },
     select: {
@@ -111,16 +116,28 @@ export async function findContractAddress(
       tokenMatch: { select: { wallet: true, contractAddress: true } },
     },
   });
-  if (!row) return null;
-  for (const q of identityCandidates(row)) {
+  const candidates = row ? identityCandidates(row) : [];
+  const trace: FindTrace = { candidates, steps: [] };
+  if (!row) return { found: null, trace };
+
+  for (const q of candidates) {
     try {
-      const hit = pickLaunch(await searchTokenLaunches(q), q);
-      if (hit?.tokenAddress) return { ca: hit.tokenAddress, via: q };
-    } catch {
-      /* try the next candidate */
+      const results = await searchTokenLaunches(q);
+      trace.steps.push({ q, count: results.length, results: results.slice(0, 8).map(launchSummary) });
+      const hit = pickLaunch(results, q);
+      if (hit?.tokenAddress) return { found: { ca: hit.tokenAddress, via: q }, trace };
+    } catch (e: any) {
+      trace.steps.push({ q, count: 0, error: e?.message ?? "search error", results: [] });
     }
   }
-  return null;
+  return { found: null, trace };
+}
+
+/** Convenience wrapper used by the bulk pass. */
+export async function findContractAddress(
+  submissionId: string
+): Promise<{ ca: string; via: string } | null> {
+  return (await findContractAddressDebug(submissionId)).found;
 }
 
 /**

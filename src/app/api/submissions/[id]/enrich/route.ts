@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { enrichSubmission, findContractAddress } from "@/lib/enrich";
+import { enrichSubmission, findContractAddressDebug } from "@/lib/enrich";
 import { serialize, INCLUDE } from "@/lib/serialize";
 
 export const dynamic = "force-dynamic";
@@ -22,10 +22,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     let ca = body?.contractAddress ? String(body.contractAddress).trim() : "";
     let via: string | null = null;
     if (!ca && body?.auto) {
-      const found = await findContractAddress(params.id);
+      const { found, trace } = await findContractAddressDebug(params.id);
       if (!found) {
         return NextResponse.json(
-          { error: "No token found for this project's founder X, project X, or wallet." },
+          { error: "No token found for this project's founder X, project X, or wallet.", trace },
           { status: 404 }
         );
       }
