@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 import { COOKIE } from "./lib/constants";
 
-const PUBLIC = ["/login", "/api/auth/login"];
+const PUBLIC = ["/login", "/api/auth/login", "/api/auth/google"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
