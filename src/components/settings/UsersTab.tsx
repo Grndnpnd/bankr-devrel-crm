@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { Mail, UserPlus, X, ChevronDown, UserX, Shield } from 'lucide-react';
 import DataCard from '@/components/DataCard';
@@ -79,6 +80,8 @@ const InviteModal: React.FC<InviteModalProps> = ({ open, onClose, onInvite }) =>
   const [role, setRole] = useState<UserRole>('DevRel');
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   const handleSubmit = useCallback(async () => {
     if (!email.trim() || password.length < 8 || busy) return;
@@ -93,7 +96,8 @@ const InviteModal: React.FC<InviteModalProps> = ({ open, onClose, onInvite }) =>
     onClose();
   }, [email, name, password, role, busy, onInvite, onClose]);
 
-  return (
+  if (!mounted) return null;
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -371,7 +375,8 @@ const InviteModal: React.FC<InviteModalProps> = ({ open, onClose, onInvite }) =>
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 };
 

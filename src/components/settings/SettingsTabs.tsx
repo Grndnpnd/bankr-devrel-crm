@@ -1,10 +1,11 @@
 'use client';
 import React from 'react';
-import { SlidersHorizontal, Database, Users, History } from 'lucide-react';
+import { SlidersHorizontal, Database, Users, History, UserCircle } from 'lucide-react';
 
-export type SettingsTab = 'scoring' | 'sources' | 'users' | 'import-log';
+export type SettingsTab = 'account' | 'scoring' | 'sources' | 'users' | 'import-log';
 
 const tabs: { id: SettingsTab; label: string; icon: React.ElementType }[] = [
+  { id: 'account', label: 'Account', icon: UserCircle },
   { id: 'scoring', label: 'Scoring', icon: SlidersHorizontal },
   { id: 'sources', label: 'Sources', icon: Database },
   { id: 'users', label: 'Users', icon: Users },

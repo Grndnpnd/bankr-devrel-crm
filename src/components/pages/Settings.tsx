@@ -3,6 +3,7 @@ import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import '@/components/settings/settings.css';
 import SettingsTabs from '@/components/settings/SettingsTabs';
+import AccountTab from '@/components/settings/AccountTab';
 import ScoringTab from '@/components/settings/ScoringTab';
 import SourcesTab from '@/components/settings/SourcesTab';
 import UsersTab from '@/components/settings/UsersTab';
@@ -63,6 +64,7 @@ const Settings: React.FC = () => {
         animate={{ opacity: 1 }}
         transition={{ duration: 0.15 }}
       >
+        {activeTab === 'account' && <AccountTab />}
         {activeTab === 'scoring' && <ScoringTab onUnsavedChange={scoringUnsaved} />}
         {activeTab === 'sources' && <SourcesTab />}
         {activeTab === 'users' && <UsersTab />}

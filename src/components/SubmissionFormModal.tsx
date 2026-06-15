@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Submission } from '@/types';
@@ -58,6 +59,8 @@ interface Props {
 const SubmissionFormModal: React.FC<Props> = ({ open, mode, initial, onClose, onSubmit }) => {
   const [v, setV] = useState<SubmissionFormValues>(initial ?? emptyValues);
   const [busy, setBusy] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     if (open) setV(initial ?? emptyValues);
@@ -79,7 +82,8 @@ const SubmissionFormModal: React.FC<Props> = ({ open, mode, initial, onClose, on
     onClose();
   }, [v, valid, busy, mode, onSubmit, onClose]);
 
-  return (
+  if (!mounted) return null;
+  return createPortal(
     <AnimatePresence>
       {open && (
         <>
@@ -191,7 +195,8 @@ const SubmissionFormModal: React.FC<Props> = ({ open, mode, initial, onClose, on
           </motion.div>
         </>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 };
 
