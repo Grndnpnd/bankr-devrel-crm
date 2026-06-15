@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import SubmissionFormModal, { valuesFromSubmission, type SubmissionFormValues } from '@/components/SubmissionFormModal';
+import type { TokenCandidate } from '@/store/useSubmissionStore';
 import { toast } from 'sonner';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import ScoreBadge from '@/components/ScoreBadge';
@@ -288,15 +289,33 @@ const Profile: React.FC = () => {
   const [enriching, setEnriching] = useState(false);
   const [finding, setFinding] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [candidates, setCandidates] = useState<TokenCandidate[]>([]);
 
   const handleFindToken = useCallback(async () => {
     if (!submission || finding) return;
     setFinding(true);
+    setCandidates([]);
     const r = await findToken(submission.id);
     setFinding(false);
-    if (r.ok) toast.success('Token found', { description: r.via ? `Matched via ${r.via}` : 'Live token data pulled.' });
-    else toast.error('No token found', { description: r.error });
+    if (r.ok) {
+      toast.success('Token found', { description: r.via ? `Matched via ${r.via}` : 'Live token data pulled.' });
+    } else if (r.ambiguous && r.candidates?.length) {
+      setCandidates(r.candidates);
+      toast('Multiple tokens match this name', { description: 'Pick the right one below.' });
+    } else {
+      toast.error('No token found', { description: r.error });
+    }
   }, [submission, finding, findToken]);
+
+  const handlePickCandidate = useCallback(async (ca: string) => {
+    if (!submission) return;
+    setCandidates([]);
+    setEnriching(true);
+    const r = await setContractAddress(submission.id, ca);
+    setEnriching(false);
+    if (r.ok) toast.success('Token data pulled');
+    else toast.error('Could not fetch token', { description: r.error });
+  }, [submission, setContractAddress]);
 
   const handleEdit = useCallback(async (v: SubmissionFormValues): Promise<string | null> => {
     if (!submission) return 'no submission';
@@ -768,6 +787,40 @@ const Profile: React.FC = () => {
                   {enriching ? 'Fetching…' : 'Fetch'}
                 </button>
               </div>
+
+              {candidates.length > 0 && (
+                <div className="mt-3 rounded-md" style={{ border: '1px solid rgba(245,166,35,0.25)', backgroundColor: 'rgba(245,166,35,0.04)', padding: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#F5A623', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 8 }}>
+                    {candidates.length} tokens match this name — choose one
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    {candidates.map((c) => (
+                      <div key={c.tokenAddress} className="flex items-center gap-3" style={{ backgroundColor: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '8px 10px' }}>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span style={{ fontSize: 13, fontWeight: 600, color: '#F0F0F0' }}>${c.symbol || c.name || '—'}</span>
+                            {c.bankrDeployed && (
+                              <span style={{ fontSize: 10, fontWeight: 600, color: '#10B981', backgroundColor: 'rgba(16,185,129,0.12)', borderRadius: 4, padding: '1px 6px' }}>Bankr-deployed</span>
+                            )}
+                            {c.status && <span style={{ fontSize: 10, color: '#525252' }}>{c.status}</span>}
+                          </div>
+                          <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 2 }}>
+                            deployer: {c.deployerX ? `@${c.deployerX}` : '—'} · <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{c.tokenAddress.slice(0, 8)}…{c.tokenAddress.slice(-4)}</span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handlePickCandidate(c.tokenAddress)}
+                          className="rounded-md"
+                          style={{ height: 30, padding: '0 12px', fontSize: 12, fontWeight: 600, backgroundColor: '#10B981', color: '#06231A', flexShrink: 0, cursor: 'pointer' }}
+                        >
+                          Use
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={() => setCandidates([])} style={{ fontSize: 11, color: '#525252', marginTop: 8 }}>Dismiss</button>
+                </div>
+              )}
             </div>
 
             {hasOnchain ? (

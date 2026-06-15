@@ -1,8 +1,8 @@
 'use client';
 import React, { useState, useCallback, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useDragControls } from 'framer-motion';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { X, GripHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Submission } from '@/types';
 
@@ -61,6 +61,7 @@ const SubmissionFormModal: React.FC<Props> = ({ open, mode, initial, onClose, on
   const [busy, setBusy] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+  const dragControls = useDragControls();
 
   useEffect(() => {
     if (open) setV(initial ?? emptyValues);
@@ -89,24 +90,37 @@ const SubmissionFormModal: React.FC<Props> = ({ open, mode, initial, onClose, on
         <>
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}
             className="fixed inset-0 z-40" style={{ backgroundColor: 'rgba(0,0,0,0.55)' }} onClick={onClose} />
-          <motion.div initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.97 }}
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ pointerEvents: 'none' }}>
+          <motion.div
+            drag dragListener={false} dragControls={dragControls} dragMomentum={false} dragElastic={0}
+            initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.97 }}
             transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] as [number, number, number, number] }}
-            className="fixed z-50" role="dialog" aria-modal
+            role="dialog" aria-modal
             style={{
-              top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: '100%', maxWidth: 720,
-              maxHeight: '85vh', overflowY: 'auto', backgroundColor: '#1A1A1A',
+              pointerEvents: 'auto', width: '100%', maxWidth: 720, maxHeight: '85vh',
+              display: 'flex', flexDirection: 'column', backgroundColor: '#1A1A1A',
               border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.5)', padding: 24,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
             }}>
-            <div className="flex items-center justify-between mb-5">
-              <h3 style={{ fontFamily: "'Manrope', sans-serif", fontSize: 18, fontWeight: 700, color: '#F0F0F0' }}>
-                {mode === 'create' ? 'Add Submission' : 'Edit Submission'}
-              </h3>
-              <button onClick={onClose} className="flex items-center justify-center w-8 h-8 rounded-md" style={{ color: '#525252' }}>
+            {/* Drag handle */}
+            <div
+              onPointerDown={(e) => dragControls.start(e)}
+              className="flex items-center justify-between"
+              style={{ cursor: 'grab', padding: '18px 24px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0, touchAction: 'none', userSelect: 'none' }}
+            >
+              <div className="flex items-center gap-2">
+                <GripHorizontal size={16} style={{ color: '#525252' }} />
+                <h3 style={{ fontFamily: "'Manrope', sans-serif", fontSize: 18, fontWeight: 700, color: '#F0F0F0' }}>
+                  {mode === 'create' ? 'Add Submission' : 'Edit Submission'}
+                </h3>
+              </div>
+              <button onClick={onClose} onPointerDown={(e) => e.stopPropagation()} className="flex items-center justify-center w-8 h-8 rounded-md" style={{ color: '#525252', cursor: 'pointer' }}>
                 <X size={18} />
               </button>
             </div>
 
+            {/* Scrollable body */}
+            <div style={{ overflowY: 'auto', padding: '20px 24px' }}>
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2 md:col-span-1">
                 <label style={labelStyle}>Project *</label>
@@ -192,7 +206,9 @@ const SubmissionFormModal: React.FC<Props> = ({ open, mode, initial, onClose, on
                 {busy ? 'Saving…' : mode === 'create' ? 'Add Submission' : 'Save Changes'}
               </button>
             </div>
+            </div>
           </motion.div>
+          </div>
         </>
       )}
     </AnimatePresence>,

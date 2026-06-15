@@ -107,3 +107,48 @@ export function launchSummary(r: LaunchResult) {
     feeWallet: r.feeRecipient?.walletAddress ?? null,
   };
 }
+
+/* ── candidate ranking for the disambiguation picker ── */
+export interface RankedCandidate {
+  tokenAddress: string;
+  symbol: string | null;
+  name: string | null;
+  status: string | null;
+  deployerX: string | null;
+  feeX: string | null;
+  identityMatch: boolean;   // deployer/fee handle or wallet equals one of the queried identities
+  bankrDeployed: boolean;   // launched via Bankr (deployer = bankrlabs)
+}
+
+/** Dedupe + rank launch results against the set of identities we searched. */
+export function rankCandidates(results: LaunchResult[], identities: string[]): RankedCandidate[] {
+  const qset = new Set(identities.map(norm).filter(Boolean));
+  const seen = new Set<string>();
+  const out: RankedCandidate[] = [];
+  for (const r of results) {
+    const ca = r.tokenAddress;
+    if (!ca || seen.has(ca)) continue;
+    seen.add(ca);
+    const ids = [
+      r.deployer?.xUsername, r.feeRecipient?.xUsername,
+      r.deployer?.walletAddress, r.feeRecipient?.walletAddress,
+    ].map(norm);
+    const identityMatch = ids.some((id) => !!id && qset.has(id));
+    out.push({
+      tokenAddress: ca,
+      symbol: r.tokenSymbol ?? null,
+      name: r.tokenName ?? null,
+      status: r.status ?? null,
+      deployerX: r.deployer?.xUsername ?? null,
+      feeX: r.feeRecipient?.xUsername ?? null,
+      identityMatch,
+      bankrDeployed: norm(r.deployer?.xUsername) === "bankrlabs",
+    });
+  }
+  out.sort((a, b) =>
+    Number(b.identityMatch) - Number(a.identityMatch) ||
+    Number(b.status === "deployed") - Number(a.status === "deployed") ||
+    Number(b.bankrDeployed) - Number(a.bankrDeployed)
+  );
+  return out;
+}

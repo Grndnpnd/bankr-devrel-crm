@@ -83,7 +83,7 @@ export async function enrichAll(): Promise<{ enriched: number; failed: number }>
 }
 
 /* ── CA backfill via token-launches search ── */
-import { searchTokenLaunches, pickLaunch, launchSummary } from "./discover";
+import { searchTokenLaunches, pickLaunch, launchSummary, rankCandidates, type RankedCandidate } from "./discover";
 
 /** Identity candidates to search, in priority order: founder X, project X, known wallet. */
 function identityCandidates(row: {
@@ -107,7 +107,11 @@ export interface FindTrace {
 /** Try to find a submission's token CA by founder/project X handle or wallet, with a trace of what was searched. */
 export async function findContractAddressDebug(
   submissionId: string
-): Promise<{ found: { ca: string; via: string } | null; trace: FindTrace }> {
+): Promise<{
+  found: { ca: string; via: string } | null;
+  candidates: RankedCandidate[];
+  trace: FindTrace;
+}> {
   const row: any = await prisma.submission.findUnique({
     where: { id: submissionId },
     select: {
@@ -116,21 +120,30 @@ export async function findContractAddressDebug(
       tokenMatch: { select: { wallet: true, contractAddress: true } },
     },
   });
-  const candidates = row ? identityCandidates(row) : [];
-  const trace: FindTrace = { candidates, steps: [] };
-  if (!row) return { found: null, trace };
+  const identities = row ? identityCandidates(row) : [];
+  const trace: FindTrace = { candidates: identities, steps: [] };
+  if (!row) return { found: null, candidates: [], trace };
 
-  for (const q of candidates) {
+  // 1) Confident path: an exact identity match on any single query wins immediately.
+  const all: import("./discover").LaunchResult[] = [];
+  for (const q of identities) {
     try {
       const results = await searchTokenLaunches(q);
       trace.steps.push({ q, count: results.length, results: results.slice(0, 8).map(launchSummary) });
+      all.push(...results);
       const hit = pickLaunch(results, q);
-      if (hit?.tokenAddress) return { found: { ca: hit.tokenAddress, via: q }, trace };
+      if (hit?.tokenAddress) return { found: { ca: hit.tokenAddress, via: q }, candidates: [], trace };
     } catch (e: any) {
       trace.steps.push({ q, count: 0, error: e?.message ?? "search error", results: [] });
     }
   }
-  return { found: null, trace };
+
+  // 2) No confident identity match. Rank every result we saw so the user can disambiguate.
+  const ranked = rankCandidates(all, identities);
+  const confident = ranked.find((c) => c.identityMatch);
+  if (confident) return { found: { ca: confident.tokenAddress, via: "identity match" }, candidates: [], trace };
+
+  return { found: null, candidates: ranked.slice(0, 6), trace };
 }
 
 /** Convenience wrapper used by the bulk pass. */

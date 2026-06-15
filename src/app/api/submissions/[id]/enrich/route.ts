@@ -22,8 +22,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     let ca = body?.contractAddress ? String(body.contractAddress).trim() : "";
     let via: string | null = null;
     if (!ca && body?.auto) {
-      const { found, trace } = await findContractAddressDebug(params.id);
+      const { found, candidates, trace } = await findContractAddressDebug(params.id);
       if (!found) {
+        if (candidates.length) {
+          // Name-matches with no confident identity match — let the user choose.
+          return NextResponse.json({ ambiguous: true, candidates, trace });
+        }
         return NextResponse.json(
           { error: "No token found for this project's founder X, project X, or wallet.", trace },
           { status: 404 }

@@ -3,6 +3,7 @@ import type { Submission, FilterState, SortConfig, Activity } from '@/types';
 
 interface TeamUser { email: string; name: string | null; role: string }
 interface Me { email: string; name: string | null; role: string }
+export interface TokenCandidate { tokenAddress: string; symbol: string | null; name: string | null; status: string | null; deployerX: string | null; feeX: string | null; identityMatch: boolean; bankrDeployed: boolean }
 
 interface SubmissionStore {
   submissions: Submission[];
@@ -28,7 +29,7 @@ interface SubmissionStore {
   updateOwner: (id: string, owner: string) => Promise<void>;
   addActivity: (id: string, activity: Activity) => Promise<void>;
   setContractAddress: (id: string, contractAddress: string) => Promise<{ ok: boolean; error?: string }>;
-  findToken: (id: string) => Promise<{ ok: boolean; error?: string; via?: string }>;
+  findToken: (id: string) => Promise<{ ok: boolean; error?: string; via?: string; ambiguous?: boolean; candidates?: TokenCandidate[] }>;
   deleteSubmission: (id: string) => Promise<boolean>;
   createSubmission: (payload: Record<string, unknown>) => Promise<{ ok: boolean; error?: string; id?: string }>;
   updateSubmissionFields: (id: string, fields: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
@@ -160,6 +161,9 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
       body: JSON.stringify({ auto: true }),
     });
     const data = await res.json().catch(() => ({}));
+    if (res.ok && data?.ambiguous) {
+      return { ok: false, ambiguous: true, candidates: data.candidates ?? [] };
+    }
     if (res.ok) {
       const { _found_via, ...row } = data;
       replaceRow(set)(row);
