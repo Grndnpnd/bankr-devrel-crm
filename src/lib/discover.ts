@@ -65,7 +65,24 @@ export async function searchTokenLaunches(q: string): Promise<LaunchResult[]> {
   );
   if (!res.ok) throw new Error(`Token search error (HTTP ${res.status}).`);
   const data = await res.json().catch(() => null);
-  return (data?.groups?.tokens?.results ?? []) as LaunchResult[];
+  const groups = data?.groups ?? {};
+  // The endpoint splits matches across groups: `tokens` (name/symbol), `byDeployer`,
+  // and `byFeeRecipient`. Identity matches (our seeded wallet/handle) live in the
+  // latter two, so merge all groups, then dedupe by token address.
+  const merged: LaunchResult[] = [
+    ...(groups.byFeeRecipient?.results ?? []),
+    ...(groups.byDeployer?.results ?? []),
+    ...(groups.tokens?.results ?? []),
+  ];
+  const seen = new Set<string>();
+  const out: LaunchResult[] = [];
+  for (const r of merged as LaunchResult[]) {
+    const ca = r?.tokenAddress;
+    if (!ca || seen.has(ca)) continue;
+    seen.add(ca);
+    out.push(r);
+  }
+  return out;
 }
 
 const norm = (v?: string | null) => (v ?? "").trim().replace(/^@/, "").toLowerCase();
@@ -117,12 +134,25 @@ export interface RankedCandidate {
   deployerX: string | null;
   feeX: string | null;
   identityMatch: boolean;   // deployer/fee handle or wallet equals one of the queried identities
+  projectMatch: boolean;    // token name/symbol equals the project name or X handle
   bankrDeployed: boolean;   // launched via Bankr (deployer = bankrlabs)
+  vol24h?: number | null;       // live volume, filled in for the picker so the active token is obvious
+  marketCapUsd?: number | null;
 }
 
-/** Dedupe + rank launch results against the set of identities we searched. */
-export function rankCandidates(results: LaunchResult[], identities: string[]): RankedCandidate[] {
+/**
+ * Dedupe + rank launch results.
+ *  - identityMatch: deployer/fee handle or wallet equals one of the queried identities
+ *  - projectMatch: token name/symbol equals the project name or project X handle
+ * A single token that matches BOTH is a confident auto-pick; multiple → user disambiguates.
+ */
+export function rankCandidates(
+  results: LaunchResult[],
+  identities: string[],
+  projectNames: string[] = []
+): RankedCandidate[] {
   const qset = new Set(identities.map(norm).filter(Boolean));
+  const pset = new Set(projectNames.map(norm).filter(Boolean));
   const seen = new Set<string>();
   const out: RankedCandidate[] = [];
   for (const r of results) {
@@ -134,6 +164,8 @@ export function rankCandidates(results: LaunchResult[], identities: string[]): R
       r.deployer?.walletAddress, r.feeRecipient?.walletAddress,
     ].map(norm);
     const identityMatch = ids.some((id) => !!id && qset.has(id));
+    const nameTokens = [r.tokenSymbol, r.tokenName].map(norm);
+    const projectMatch = nameTokens.some((n) => !!n && pset.has(n));
     out.push({
       tokenAddress: ca,
       symbol: r.tokenSymbol ?? null,
@@ -142,11 +174,14 @@ export function rankCandidates(results: LaunchResult[], identities: string[]): R
       deployerX: r.deployer?.xUsername ?? null,
       feeX: r.feeRecipient?.xUsername ?? null,
       identityMatch,
+      projectMatch,
       bankrDeployed: norm(r.deployer?.xUsername) === "bankrlabs",
     });
   }
   out.sort((a, b) =>
+    Number(b.identityMatch && b.projectMatch) - Number(a.identityMatch && a.projectMatch) ||
     Number(b.identityMatch) - Number(a.identityMatch) ||
+    Number(b.projectMatch) - Number(a.projectMatch) ||
     Number(b.status === "deployed") - Number(a.status === "deployed") ||
     Number(b.bankrDeployed) - Number(a.bankrDeployed)
   );

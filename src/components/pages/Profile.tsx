@@ -19,6 +19,7 @@ import {
 import { formatDistanceToNow, parseISO } from 'date-fns';
 import SubmissionFormModal, { valuesFromSubmission, type SubmissionFormValues } from '@/components/SubmissionFormModal';
 import type { TokenCandidate } from '@/store/useSubmissionStore';
+import { formatUsd } from '@/data/stats';
 import { toast } from 'sonner';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import ScoreBadge from '@/components/ScoreBadge';
@@ -807,18 +808,27 @@ const Profile: React.FC = () => {
                     {candidates.length} tokens match this name — choose one
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    {candidates.map((c) => (
+                    {candidates.map((c, i) => (
                       <div key={c.tokenAddress} className="flex items-center gap-3" style={{ backgroundColor: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6, padding: '8px 10px' }}>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span style={{ fontSize: 13, fontWeight: 600, color: '#F0F0F0' }}>${c.symbol || c.name || '—'}</span>
-                            {c.bankrDeployed && (
-                              <span style={{ fontSize: 10, fontWeight: 600, color: '#10B981', backgroundColor: 'rgba(16,185,129,0.12)', borderRadius: 4, padding: '1px 6px' }}>Bankr-deployed</span>
+                            {(c.vol24h ?? 0) > 0 && i === 0 && (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: '#10B981', backgroundColor: 'rgba(16,185,129,0.15)', borderRadius: 4, padding: '1px 6px' }}>● Live</span>
                             )}
-                            {c.status && <span style={{ fontSize: 10, color: '#525252' }}>{c.status}</span>}
+                            {c.bankrDeployed && (
+                              <span style={{ fontSize: 10, fontWeight: 600, color: '#F5A623', backgroundColor: 'rgba(245,166,35,0.12)', borderRadius: 4, padding: '1px 6px' }}>Bankr</span>
+                            )}
                           </div>
                           <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 2 }}>
-                            deployer: {c.deployerX ? `@${c.deployerX}` : '—'} · <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{c.tokenAddress.slice(0, 8)}…{c.tokenAddress.slice(-4)}</span>
+                            {(c.vol24h ?? 0) > 0 || (c.marketCapUsd ?? 0) > 0 ? (
+                              <span style={{ color: '#10B981' }}>
+                                {formatUsd(c.vol24h ?? 0)} vol · {formatUsd(c.marketCapUsd ?? 0)} mcap · {' '}
+                              </span>
+                            ) : (
+                              <span style={{ color: '#525252' }}>no volume · </span>
+                            )}
+                            <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{c.tokenAddress.slice(0, 8)}…{c.tokenAddress.slice(-4)}</span>
                           </div>
                         </div>
                         <button

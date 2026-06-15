@@ -83,7 +83,7 @@ export async function enrichAll(): Promise<{ enriched: number; failed: number }>
 }
 
 /* ── CA backfill via token-launches search ── */
-import { searchTokenLaunches, pickLaunch, launchSummary, rankCandidates, type RankedCandidate } from "./discover";
+import { searchTokenLaunches, launchSummary, rankCandidates, type RankedCandidate } from "./discover";
 
 /** Identity candidates to search, in priority order: founder X, project X, known wallet. */
 function identityCandidates(row: {
@@ -105,8 +105,26 @@ export interface FindTrace {
 }
 
 /** Try to find a submission's token CA by founder/project X handle or wallet, with a trace of what was searched. */
+/** Attach live volume / market cap to candidates so the picker shows the active token. */
+async function withLiveStats(candidates: RankedCandidate[]): Promise<RankedCandidate[]> {
+  const enriched = await Promise.all(
+    candidates.map(async (c) => {
+      try {
+        const t = await fetchTokenData(c.tokenAddress);
+        return { ...c, vol24h: t?.vol24h ?? null, marketCapUsd: t?.marketCapUsd ?? null };
+      } catch {
+        return { ...c, vol24h: null, marketCapUsd: null };
+      }
+    })
+  );
+  // Surface the actively-trading token first; ties keep their prior order.
+  enriched.sort((a, b) => (b.vol24h ?? -1) - (a.vol24h ?? -1));
+  return enriched;
+}
+
 export async function findContractAddressDebug(
-  submissionId: string
+  submissionId: string,
+  enrichCandidates = false
 ): Promise<{
   found: { ca: string; via: string } | null;
   candidates: RankedCandidate[];
@@ -115,6 +133,7 @@ export async function findContractAddressDebug(
   const row: any = await prisma.submission.findUnique({
     where: { id: submissionId },
     select: {
+      project: true,
       projectX: true,
       founders: true,
       tokenMatch: { select: { wallet: true, contractAddress: true } },
@@ -124,26 +143,50 @@ export async function findContractAddressDebug(
   const trace: FindTrace = { candidates: identities, steps: [] };
   if (!row) return { found: null, candidates: [], trace };
 
-  // 1) Confident path: an exact identity match on any single query wins immediately.
+  const projectNames = [row.project, row.projectX].filter(Boolean) as string[];
+
+  // Gather every result across all identity queries (search splits matches across
+  // name / deployer / fee-recipient groups, all merged inside searchTokenLaunches).
   const all: import("./discover").LaunchResult[] = [];
   for (const q of identities) {
     try {
       const results = await searchTokenLaunches(q);
       trace.steps.push({ q, count: results.length, results: results.slice(0, 8).map(launchSummary) });
       all.push(...results);
-      const hit = pickLaunch(results, q);
-      if (hit?.tokenAddress) return { found: { ca: hit.tokenAddress, via: q }, candidates: [], trace };
     } catch (e: any) {
       trace.steps.push({ q, count: 0, error: e?.message ?? "search error", results: [] });
     }
   }
 
-  // 2) No confident identity match. Rank every result we saw so the user can disambiguate.
-  const ranked = rankCandidates(all, identities);
-  const confident = ranked.find((c) => c.identityMatch);
-  if (confident) return { found: { ca: confident.tokenAddress, via: "identity match" }, candidates: [], trace };
+  const ranked = rankCandidates(all, identities, projectNames);
 
-  return { found: null, candidates: ranked.slice(0, 6), trace };
+  // Confident = identity AND project name both match. One such token → auto-pick.
+  const confident = ranked.filter((c) => c.identityMatch && c.projectMatch);
+  if (confident.length === 1) {
+    return { found: { ca: confident[0].tokenAddress, via: "identity + project match" }, candidates: [], trace };
+  }
+  if (confident.length > 1) {
+    const cands = confident.slice(0, 6);
+    return { found: null, candidates: enrichCandidates ? await withLiveStats(cands) : cands, trace };
+  }
+
+  // Fallback: identity matches only. A single one is very likely correct (the
+  // founder's fee-recipient wallet funded exactly one token); multiple → disambiguate.
+  const idOnly = ranked.filter((c) => c.identityMatch);
+  if (idOnly.length === 1) {
+    return { found: { ca: idOnly[0].tokenAddress, via: "identity match" }, candidates: [], trace };
+  }
+  if (idOnly.length > 1) {
+    const cands = idOnly.slice(0, 6);
+    return { found: null, candidates: enrichCandidates ? await withLiveStats(cands) : cands, trace };
+  }
+
+  // Last resort: name/symbol matches with no identity tie — let the user choose.
+  if (ranked.length) {
+    const cands = ranked.slice(0, 6);
+    return { found: null, candidates: enrichCandidates ? await withLiveStats(cands) : cands, trace };
+  }
+  return { found: null, candidates: [], trace };
 }
 
 /** Convenience wrapper used by the bulk pass. */

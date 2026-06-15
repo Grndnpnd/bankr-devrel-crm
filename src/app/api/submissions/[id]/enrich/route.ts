@@ -22,7 +22,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     let ca = body?.contractAddress ? String(body.contractAddress).trim() : "";
     let via: string | null = null;
     if (!ca && body?.auto) {
-      const { found, candidates, trace } = await findContractAddressDebug(params.id);
+      const { found, candidates, trace } = await findContractAddressDebug(params.id, true);
       if (!found) {
         if (candidates.length) {
           // Name-matches with no confident identity match — let the user choose.
