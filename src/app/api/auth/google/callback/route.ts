@@ -43,7 +43,11 @@ export async function GET(req: Request) {
   }
   const tokens = tokenBody;
   const accessToken = tokens?.access_token;
-  if (!accessToken) return loginError(base, "oauth_exchange");
+  if (!accessToken) {
+    // Exchange returned JSON but no access_token — surface what came back.
+    const detail = tokens?.error_description || tokens?.error || `keys_${Object.keys(tokens || {}).join("|") || "none"}`;
+    return loginError(base, `oauth_token:${detail}`);
+  }
 
   // 2) Fetch the verified profile.
   const profRes = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
