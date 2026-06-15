@@ -13,8 +13,11 @@ import {
   Phone,
   Send,
   Trash2,
+  Pencil,
+  Sparkles,
 } from 'lucide-react';
 import { formatDistanceToNow, parseISO } from 'date-fns';
+import SubmissionFormModal, { valuesFromSubmission, type SubmissionFormValues } from '@/components/SubmissionFormModal';
 import { toast } from 'sonner';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import ScoreBadge from '@/components/ScoreBadge';
@@ -239,7 +242,7 @@ const TimelineEntry: React.FC<{ activity: Activity }> = ({ activity }) => {
 const Profile: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { getSubmissionById, updateStage, updateOwner, addActivity, setContractAddress, deleteSubmission, me } = useSubmissionStore();
+  const { getSubmissionById, updateStage, updateOwner, addActivity, setContractAddress, findToken, deleteSubmission, updateSubmissionFields, me } = useSubmissionStore();
 
   const submission = useMemo(() => (id ? getSubmissionById(id) : undefined), [id, getSubmissionById]);
 
@@ -283,6 +286,25 @@ const Profile: React.FC = () => {
   // ── Token enrichment + delete ──
   const [caInput, setCaInput] = useState('');
   const [enriching, setEnriching] = useState(false);
+  const [finding, setFinding] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+
+  const handleFindToken = useCallback(async () => {
+    if (!submission || finding) return;
+    setFinding(true);
+    const r = await findToken(submission.id);
+    setFinding(false);
+    if (r.ok) toast.success('Token found', { description: r.via ? `Matched via ${r.via}` : 'Live token data pulled.' });
+    else toast.error('No token found', { description: r.error });
+  }, [submission, finding, findToken]);
+
+  const handleEdit = useCallback(async (v: SubmissionFormValues): Promise<string | null> => {
+    if (!submission) return 'no submission';
+    const { founderName, founderEmail, founderX, ...fields } = v;
+    const r = await updateSubmissionFields(submission.id, fields as unknown as Record<string, unknown>);
+    if (r.ok) toast.success('Submission updated', { description: 'Score recomputed.' });
+    return r.ok ? null : (r.error || 'failed');
+  }, [submission, updateSubmissionFields]);
 
   useEffect(() => {
     if (submission?.contract_address) setCaInput(submission.contract_address);
@@ -429,6 +451,18 @@ const Profile: React.FC = () => {
             </span>
           </div>
 
+          {me && me.role !== 'VIEWER' && (
+            <button
+              onClick={() => setEditOpen(true)}
+              className="inline-flex items-center justify-center rounded-full transition-colors duration-150 mr-1"
+              style={{ width: 32, height: 32 }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#222'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+              title="Edit submission"
+            >
+              <Pencil size={16} style={{ color: '#8A8A8A' }} />
+            </button>
+          )}
           {me?.role === 'ADMIN' && (
             <button
               onClick={handleDelete}
@@ -715,6 +749,16 @@ const Profile: React.FC = () => {
                   className="flex-1 rounded-md outline-none"
                   style={{ height: 36, backgroundColor: '#141414', border: '1px solid rgba(255,255,255,0.1)', color: '#F0F0F0', fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', padding: '0 12px' }}
                 />
+                <button
+                  onClick={handleFindToken}
+                  disabled={finding}
+                  className="inline-flex items-center gap-1.5 px-3 rounded-md transition-all duration-150"
+                  title="Search Bankr token launches by founder X, project X, or wallet"
+                  style={{ height: 36, backgroundColor: 'transparent', border: '1px solid rgba(16,185,129,0.4)', color: '#10B981', fontSize: '13px', fontWeight: 600, opacity: finding ? 0.5 : 1, cursor: finding ? 'wait' : 'pointer', flexShrink: 0 }}
+                >
+                  <Sparkles size={14} />
+                  {finding ? 'Searching…' : 'Find'}
+                </button>
                 <button
                   onClick={handleEnrich}
                   disabled={enriching || !caInput.trim()}
@@ -1157,6 +1201,13 @@ const Profile: React.FC = () => {
           </motion.div>
         </div>
       </motion.div>
+      <SubmissionFormModal
+        open={editOpen}
+        mode="edit"
+        initial={submission ? valuesFromSubmission(submission) : undefined}
+        onClose={() => setEditOpen(false)}
+        onSubmit={handleEdit}
+      />
     </div>
   );
 };

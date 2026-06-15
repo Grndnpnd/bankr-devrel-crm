@@ -1,6 +1,7 @@
 'use client';
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { toast } from 'sonner';
 import { Mail, UserPlus, X, ChevronDown, UserX, Shield } from 'lucide-react';
 import DataCard from '@/components/DataCard';
 
@@ -22,40 +23,27 @@ interface TeamUser {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Mock Data                                                          */
+/*  API mapping                                                        */
 /* ------------------------------------------------------------------ */
-const initialUsers: TeamUser[] = [
-  {
-    id: '1',
-    name: 'James Chen',
-    email: 'james@bankr.io',
-    role: 'Admin',
-    status: 'Active',
-    lastActive: 'Just now',
-    initials: 'JC',
-    color: '#F5A623',
-  },
-  {
-    id: '2',
-    name: 'Sarah Miller',
-    email: 'sarah@bankr.io',
-    role: 'DevRel',
-    status: 'Active',
-    lastActive: '2 hours ago',
-    initials: 'SM',
-    color: '#3B82F6',
-  },
-  {
-    id: '3',
-    name: 'Mike Johnson',
-    email: 'mike@bankr.io',
-    role: 'DevRel',
-    status: 'Active',
-    lastActive: '1 day ago',
-    initials: 'MJ',
-    color: '#10B981',
-  },
-];
+const ROLE_TO_UI: Record<string, UserRole> = { ADMIN: 'Admin', DEVREL: 'DevRel', VIEWER: 'Viewer' };
+const ROLE_TO_API: Record<UserRole, string> = { Admin: 'ADMIN', DevRel: 'DEVREL', Viewer: 'VIEWER' };
+const PALETTE = ['#F5A623', '#3B82F6', '#10B981', '#8B5CF6', '#14B8A6', '#EC4899'];
+
+const apiToTeamUser = (u: any): TeamUser => {
+  const name = u.name || u.email.split('@')[0];
+  const initials = name.split(/\s+/).map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
+  const color = PALETTE[(u.email || '').split('').reduce((a: number, c: string) => a + c.charCodeAt(0), 0) % PALETTE.length];
+  return {
+    id: u.id,
+    name,
+    email: u.email,
+    role: ROLE_TO_UI[u.role] || 'DevRel',
+    status: u.active === false ? 'Inactive' : 'Active',
+    lastActive: '\u2014',
+    initials,
+    color,
+  };
+};
 
 const roleDescriptions: Record<UserRole, string> = {
   Admin: 'Full access — manage users, scoring, sources',
@@ -81,21 +69,29 @@ const statusDotColor: Record<UserStatus, string> = {
 interface InviteModalProps {
   open: boolean;
   onClose: () => void;
-  onInvite: (email: string, role: UserRole) => void;
+  onInvite: (payload: { email: string; name: string; role: UserRole; password: string }) => Promise<string | null>;
 }
 
 const InviteModal: React.FC<InviteModalProps> = ({ open, onClose, onInvite }) => {
   const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [password, setPassword] = useState('');
   const [role, setRole] = useState<UserRole>('DevRel');
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
 
-  const handleSubmit = useCallback(() => {
-    if (!email.trim()) return;
-    onInvite(email.trim(), role);
-    setEmail('');
-    setRole('DevRel');
+  const handleSubmit = useCallback(async () => {
+    if (!email.trim() || password.length < 8 || busy) return;
+    setBusy(true);
+    const err = await onInvite({ email: email.trim(), name: name.trim(), role, password });
+    setBusy(false);
+    if (err) {
+      toast.error('Could not add user', { description: err });
+      return;
+    }
+    setEmail(''); setName(''); setPassword(''); setRole('DevRel');
     onClose();
-  }, [email, role, onInvite, onClose]);
+  }, [email, name, password, role, busy, onInvite, onClose]);
 
   return (
     <AnimatePresence>
@@ -194,6 +190,43 @@ const InviteModal: React.FC<InviteModalProps> = ({ open, onClose, onInvite }) =>
                     }}
                   />
                 </div>
+              </div>
+
+              {/* Name input */}
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: '#525252', letterSpacing: '0.04em', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>
+                  Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="Full name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full rounded-md outline-none transition-all duration-150"
+                  style={{ height: '36px', backgroundColor: '#141414', border: '1px solid rgba(255,255,255,0.1)', color: '#F0F0F0', fontFamily: "'Inter', sans-serif", fontSize: '13px', padding: '0 12px' }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#F5A623'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(245,166,35,0.15)'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                />
+              </div>
+
+              {/* Temp password */}
+              <div>
+                <label style={{ fontSize: '11px', fontWeight: 600, color: '#525252', letterSpacing: '0.04em', textTransform: 'uppercase', display: 'block', marginBottom: '6px' }}>
+                  Temporary Password
+                </label>
+                <input
+                  type="text"
+                  placeholder="At least 8 characters \u2014 share it with them securely"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full rounded-md outline-none transition-all duration-150"
+                  style={{ height: '36px', backgroundColor: '#141414', border: '1px solid rgba(255,255,255,0.1)', color: '#F0F0F0', fontFamily: "'JetBrains Mono', monospace", fontSize: '12px', padding: '0 12px' }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#F5A623'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(245,166,35,0.15)'; }}
+                  onBlur={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.boxShadow = 'none'; }}
+                />
+                {password.length > 0 && password.length < 8 && (
+                  <p style={{ fontSize: '11px', color: '#EF4444', marginTop: 4 }}>Minimum 8 characters.</p>
+                )}
               </div>
 
               {/* Role select */}
@@ -307,16 +340,16 @@ const InviteModal: React.FC<InviteModalProps> = ({ open, onClose, onInvite }) =>
                 </button>
                 <button
                   onClick={handleSubmit}
-                  disabled={!email.trim()}
+                  disabled={!email.trim() || password.length < 8 || busy}
                   className="px-4 py-2 rounded-md transition-all duration-150"
                   style={{
-                    backgroundColor: email.trim() ? '#F5A623' : '#2A2A2A',
-                    color: email.trim() ? '#0D0D0D' : '#525252',
+                    backgroundColor: email.trim() && password.length >= 8 ? '#F5A623' : '#2A2A2A',
+                    color: email.trim() && password.length >= 8 ? '#0D0D0D' : '#525252',
                     fontFamily: "'Inter', sans-serif",
                     fontSize: '13px',
                     fontWeight: 600,
-                    cursor: email.trim() ? 'pointer' : 'not-allowed',
-                    opacity: email.trim() ? 1 : 0.5,
+                    cursor: email.trim() && password.length >= 8 ? 'pointer' : 'not-allowed',
+                    opacity: email.trim() && password.length >= 8 ? 1 : 0.5,
                   }}
                   onMouseEnter={(e) => {
                     if (email.trim()) {
@@ -346,36 +379,56 @@ const InviteModal: React.FC<InviteModalProps> = ({ open, onClose, onInvite }) =>
 /*  Users Tab                                                          */
 /* ------------------------------------------------------------------ */
 const UsersTab: React.FC = () => {
-  const [users, setUsers] = useState<TeamUser[]>(initialUsers);
+  const [users, setUsers] = useState<TeamUser[]>([]);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [editingRole, setEditingRole] = useState<string | null>(null);
 
-  const handleRoleChange = useCallback((userId: string, newRole: UserRole) => {
-    setUsers((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, role: newRole } : u))
-    );
+  const reload = useCallback(() => {
+    fetch('/api/users')
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: any[]) => setUsers(rows.map(apiToTeamUser)))
+      .catch(() => {});
+  }, []);
+  useEffect(() => { reload(); }, [reload]);
+
+  const handleRoleChange = useCallback(async (userId: string, newRole: UserRole) => {
     setEditingRole(null);
-  }, []);
+    const res = await fetch(`/api/users/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role: ROLE_TO_API[newRole] }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) toast.error('Role change failed', { description: data?.error });
+    else { toast.success(`Role updated to ${newRole}`); }
+    reload();
+  }, [reload]);
 
-  const handleRemove = useCallback((userId: string) => {
-    setUsers((prev) => prev.filter((u) => u.id !== userId));
-  }, []);
+  const handleToggleActive = useCallback(async (user: TeamUser) => {
+    const deactivating = user.status === 'Active';
+    const res = await fetch(`/api/users/${user.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ active: !deactivating ? true : false }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) toast.error(deactivating ? 'Deactivation failed' : 'Reactivation failed', { description: data?.error });
+    else toast.success(deactivating ? `${user.name} deactivated` : `${user.name} reactivated`);
+    reload();
+  }, [reload]);
 
-  const handleInvite = useCallback((email: string, role: UserRole) => {
-    const name = email.split('@')[0];
-    const initials = name.slice(0, 2).toUpperCase();
-    const newUser: TeamUser = {
-      id: Date.now().toString(),
-      name: name.charAt(0).toUpperCase() + name.slice(1),
-      email,
-      role,
-      status: 'Invited',
-      lastActive: '-',
-      initials,
-      color: '#8A8A8A',
-    };
-    setUsers((prev) => [...prev, newUser]);
-  }, []);
+  const handleInvite = useCallback(async (payload: { email: string; name: string; role: UserRole; password: string }): Promise<string | null> => {
+    const res = await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: payload.email, name: payload.name, role: ROLE_TO_API[payload.role], password: payload.password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return data?.error || `HTTP ${res.status}`;
+    toast.success(`${payload.email} added`, { description: 'Share the temporary password with them securely.' });
+    reload();
+    return null;
+  }, [reload]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -545,24 +598,24 @@ const UsersTab: React.FC = () => {
                   {/* Actions */}
                   <td className="py-3 px-3">
                     <button
-                      onClick={() => handleRemove(user.id)}
+                      onClick={() => handleToggleActive(user)}
                       className="inline-flex items-center gap-1 px-2 py-1 rounded-md transition-all duration-150"
                       style={{
                         backgroundColor: 'transparent',
-                        color: '#EF4444',
-                        border: '1px solid rgba(239,68,68,0.2)',
+                        color: user.status === 'Active' ? '#EF4444' : '#10B981',
+                        border: user.status === 'Active' ? '1px solid rgba(239,68,68,0.2)' : '1px solid rgba(16,185,129,0.2)',
                         fontSize: '11px',
                         fontWeight: 500,
                       }}
                       onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.1)';
+                        e.currentTarget.style.backgroundColor = user.status === 'Active' ? 'rgba(239,68,68,0.1)' : 'rgba(16,185,129,0.1)';
                       }}
                       onMouseLeave={(e) => {
                         e.currentTarget.style.backgroundColor = 'transparent';
                       }}
                     >
                       <UserX size={12} />
-                      Remove
+                      {user.status === 'Active' ? 'Deactivate' : 'Reactivate'}
                     </button>
                   </td>
                 </motion.tr>

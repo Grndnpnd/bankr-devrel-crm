@@ -11,8 +11,11 @@ import {
   List,
   Check,
   ExternalLink,
+  Plus,
 } from 'lucide-react';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
+import SubmissionFormModal, { type SubmissionFormValues } from '@/components/SubmissionFormModal';
+import { toast } from 'sonner';
 import ScoreBadge from '@/components/ScoreBadge';
 import StagePill from '@/components/StagePill';
 import OnchainBadge from '@/components/OnchainBadge';
@@ -552,7 +555,16 @@ const Submissions: React.FC = () => {
     updateStage,
     updateOwner,
     filteredSubmissions,
+    me,
+    createSubmission,
   } = useSubmissionStore();
+
+  const [addOpen, setAddOpen] = useState(false);
+  const handleCreate = useCallback(async (v: SubmissionFormValues): Promise<string | null> => {
+    const r = await createSubmission(v as unknown as Record<string, unknown>);
+    if (r.ok) toast.success('Submission added', { description: v.project });
+    return r.ok ? null : (r.error || 'failed');
+  }, [createSubmission]);
 
   const results = useMemo(() => filteredSubmissions(), [allSubs, filters, sort, filteredSubmissions]);
 
@@ -686,6 +698,18 @@ const Submissions: React.FC = () => {
           margin: '0 -32px 16px -32px',
         }}
       >
+        {me && me.role !== 'VIEWER' && (
+          <button
+            onClick={() => setAddOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 rounded-md transition-all duration-150"
+            style={{ height: 32, backgroundColor: '#F5A623', color: '#0D0D0D', fontSize: 12, fontWeight: 600, flexShrink: 0 }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#E8941A'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#F5A623'; }}
+          >
+            <Plus size={14} />
+            Add
+          </button>
+        )}
         {/* Stage Dropdown */}
         <Dropdown
           open={openDropdown === 'stage'}
@@ -1726,6 +1750,7 @@ const Submissions: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+      <SubmissionFormModal open={addOpen} mode="create" onClose={() => setAddOpen(false)} onSubmit={handleCreate} />
     </div>
   );
 };

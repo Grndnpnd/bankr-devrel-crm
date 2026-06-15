@@ -34,6 +34,24 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     data.owner = body.owner ? String(body.owner) : null;
   }
 
+  // Editable content fields (admin/devrel). Triggers a rescore.
+  const EDITABLE = [
+    "project", "projectX", "website", "location", "oneLiner", "problem", "solution",
+    "traction", "funding", "plan", "whyBankr", "accomplishments", "links", "notesField",
+  ] as const;
+  let contentChanged = false;
+  for (const f of EDITABLE) {
+    if (f in body) {
+      const v = body[f] === null ? null : String(body[f]).trim();
+      data[f] = v || null;
+      contentChanged = true;
+    }
+  }
+  if ("needsHelp" in body && Array.isArray(body.needsHelp)) {
+    data.needsHelp = body.needsHelp.map((t: unknown) => String(t).trim()).filter(Boolean);
+    contentChanged = true;
+  }
+
   if (stageChangedTo) {
     await prisma.outreachActivity.create({
       data: {
@@ -45,11 +63,17 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     });
   }
 
-  const row = await prisma.submission.update({
+  let row = await prisma.submission.update({
     where: { id: params.id },
     data: data as unknown as Prisma.SubmissionUpdateInput,
     include: INCLUDE,
   });
+
+  if (contentChanged) {
+    const { rescoreSubmission } = await import("@/lib/enrich");
+    await rescoreSubmission(params.id);
+    row = (await prisma.submission.findUnique({ where: { id: params.id }, include: INCLUDE }))!;
+  }
   return NextResponse.json(serialize(row));
 }
 

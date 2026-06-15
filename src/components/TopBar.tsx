@@ -38,7 +38,13 @@ const TopBar: React.FC<TopBarProps> = ({ title }) => {
     try {
       const r = await refreshOnchain();
       if (r?.error) toast.error('Refresh failed', { description: r.error });
-      else toast.success('Onchain refreshed', { description: `${r?.enriched ?? 0} tokens updated${r?.failed ? ` · ${r.failed} failed` : ''}` });
+      else {
+        const parts = [`${r?.refreshed ?? 0} refreshed`];
+        if (r?.backfilled) parts.push(`${r.backfilled} newly matched`);
+        if (r?.noMatch) parts.push(`${r.noMatch} no match`);
+        if (r?.failed) parts.push(`${r.failed} failed`);
+        toast.success('Onchain refresh complete', { description: parts.join(' \u00b7 ') });
+      }
     } catch (e: any) {
       toast.error('Refresh failed', { description: e?.message ?? 'unexpected error' });
     } finally {

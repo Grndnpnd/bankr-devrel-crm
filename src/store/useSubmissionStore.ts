@@ -28,7 +28,10 @@ interface SubmissionStore {
   updateOwner: (id: string, owner: string) => Promise<void>;
   addActivity: (id: string, activity: Activity) => Promise<void>;
   setContractAddress: (id: string, contractAddress: string) => Promise<{ ok: boolean; error?: string }>;
+  findToken: (id: string) => Promise<{ ok: boolean; error?: string; via?: string }>;
   deleteSubmission: (id: string) => Promise<boolean>;
+  createSubmission: (payload: Record<string, unknown>) => Promise<{ ok: boolean; error?: string; id?: string }>;
+  updateSubmissionFields: (id: string, fields: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
 
   filteredSubmissions: () => Submission[];
   getSubmissionById: (id: string) => Submission | undefined;
@@ -147,6 +150,46 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
       replaceRow(set)(data);
       return { ok: true };
     }
+    return { ok: false, error: data?.error || `HTTP ${res.status}` };
+  },
+
+  findToken: async (id) => {
+    const res = await fetch(`/api/submissions/${id}/enrich`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ auto: true }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      const { _found_via, ...row } = data;
+      replaceRow(set)(row);
+      return { ok: true, via: _found_via || undefined };
+    }
+    return { ok: false, error: data?.error || `HTTP ${res.status}` };
+  },
+
+  createSubmission: async (payload) => {
+    const res = await fetch('/api/submissions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      set((state) => ({ submissions: [data, ...state.submissions] }));
+      return { ok: true, id: data.id };
+    }
+    return { ok: false, error: data?.error || `HTTP ${res.status}` };
+  },
+
+  updateSubmissionFields: async (id, fields) => {
+    const res = await fetch(`/api/submissions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) { replaceRow(set)(data); return { ok: true }; }
     return { ok: false, error: data?.error || `HTTP ${res.status}` };
   },
 

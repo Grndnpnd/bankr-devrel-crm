@@ -5,7 +5,8 @@ export interface Founder {
 }
 
 export interface ScoreBreakdown {
-  fees: number;
+  volume?: number;
+  fees?: number; // legacy rows scored before the volume rename
   launched: number;
   traction: number;
   founder: number;
@@ -24,7 +25,7 @@ export interface Activity {
 
 export interface Submission {
   id: string;
-  source: 'google_form' | 'plain';
+  source: 'google_form' | 'plain' | 'manual';
   submitted_at: string;
   project: string;
   project_x: string;

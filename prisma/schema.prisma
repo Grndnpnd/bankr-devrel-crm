@@ -11,6 +11,7 @@ datasource db {
 enum Source {
   GOOGLE_FORM
   PLAIN
+  MANUAL
 }
 
 enum Stage {
@@ -34,6 +35,7 @@ model User {
   email        String             @unique
   name         String?
   role         Role               @default(DEVREL)
+  active       Boolean            @default(true)
   passwordHash String
   activities   OutreachActivity[]
   createdAt    DateTime           @default(now())

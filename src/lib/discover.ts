@@ -42,3 +42,54 @@ export async function fetchTokenData(ca: string): Promise<DiscoverToken | null> 
   if (!t || !t.tokenAddress) return null;
   return t as DiscoverToken;
 }
+
+/* ── token-launches search: resolve a CA from an X username or wallet ── */
+export interface LaunchResult {
+  status?: string | null;
+  tokenName?: string | null;
+  tokenSymbol?: string | null;
+  chain?: string | null;
+  tokenAddress?: string | null;
+  timestamp?: number | null;
+  deployer?: { walletAddress?: string | null; xUsername?: string | null } | null;
+  feeRecipient?: { walletAddress?: string | null; xUsername?: string | null } | null;
+}
+
+/** GET /token-launches/search?q=... — q can be an X username (no @) or a wallet address. */
+export async function searchTokenLaunches(q: string): Promise<LaunchResult[]> {
+  const query = q.trim().replace(/^@/, "");
+  if (!query) return [];
+  const res = await fetch(
+    `https://api.bankr.bot/token-launches/search?q=${encodeURIComponent(query)}`,
+    { headers: { accept: "application/json" }, cache: "no-store" }
+  );
+  if (!res.ok) throw new Error(`Token search error (HTTP ${res.status}).`);
+  const data = await res.json().catch(() => null);
+  return (data?.groups?.tokens?.results ?? []) as LaunchResult[];
+}
+
+const norm = (v?: string | null) => (v ?? "").trim().replace(/^@/, "").toLowerCase();
+
+/**
+ * Pick the launch that actually belongs to the queried identity: deployer or
+ * feeRecipient must match the handle/wallet. Prefers deployed + most recent.
+ */
+export function pickLaunch(results: LaunchResult[], query: string): LaunchResult | null {
+  const q = norm(query);
+  if (!q) return null;
+  const owned = results.filter((r) => {
+    const ids = [
+      r.deployer?.xUsername, r.feeRecipient?.xUsername,
+      r.deployer?.walletAddress, r.feeRecipient?.walletAddress,
+    ].map(norm);
+    return ids.includes(q);
+  });
+  const pool = owned.length ? owned : [];
+  if (!pool.length) return null;
+  pool.sort((a, b) => {
+    const dep = Number(b.status === "deployed") - Number(a.status === "deployed");
+    if (dep) return dep;
+    return (b.timestamp ?? 0) - (a.timestamp ?? 0);
+  });
+  return pool[0]?.tokenAddress ? pool[0] : null;
+}

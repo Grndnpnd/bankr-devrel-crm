@@ -12,7 +12,7 @@ const RESCORE_SELECT = {
 } as const;
 
 /** Recompute and persist the score for a single submission using current weights. */
-async function rescoreOne(id: string) {
+export async function rescoreSubmission(id: string) {
   const r: any = await prisma.submission.findUnique({ where: { id }, select: RESCORE_SELECT });
   if (!r) return;
   const canonical = {
@@ -61,7 +61,7 @@ export async function enrichSubmission(id: string, contractAddress: string) {
     create: { submissionId: id, ...fields },
   });
 
-  await rescoreOne(id);
+  await rescoreSubmission(id);
 }
 
 /** Re-fetch live data for EVERY submission that already has a contract address. */
@@ -80,4 +80,76 @@ export async function enrichAll(): Promise<{ enriched: number; failed: number }>
     }
   }
   return { enriched, failed };
+}
+
+/* ── CA backfill via token-launches search ── */
+import { searchTokenLaunches, pickLaunch } from "./discover";
+
+/** Identity candidates to search, in priority order: founder X, project X, known wallet. */
+function identityCandidates(row: {
+  projectX: string | null;
+  founders: unknown;
+  tokenMatch: { wallet: string | null; contractAddress: string | null } | null;
+}): string[] {
+  const out: string[] = [];
+  const founders = Array.isArray(row.founders) ? (row.founders as any[]) : [];
+  for (const f of founders) if (f?.x) out.push(String(f.x));
+  if (row.projectX) out.push(row.projectX);
+  if (row.tokenMatch?.wallet) out.push(row.tokenMatch.wallet);
+  return Array.from(new Set(out.map((s) => s.trim()).filter(Boolean)));
+}
+
+/** Try to find a submission's token CA by founder/project X handle or wallet. */
+export async function findContractAddress(
+  submissionId: string
+): Promise<{ ca: string; via: string } | null> {
+  const row: any = await prisma.submission.findUnique({
+    where: { id: submissionId },
+    select: {
+      projectX: true,
+      founders: true,
+      tokenMatch: { select: { wallet: true, contractAddress: true } },
+    },
+  });
+  if (!row) return null;
+  for (const q of identityCandidates(row)) {
+    try {
+      const hit = pickLaunch(await searchTokenLaunches(q), q);
+      if (hit?.tokenAddress) return { ca: hit.tokenAddress, via: q };
+    } catch {
+      /* try the next candidate */
+    }
+  }
+  return null;
+}
+
+/**
+ * Full onchain pass:
+ *  - rows WITH a CA: refresh live discover data
+ *  - rows WITHOUT a CA: attempt backfill via token-launches search, then enrich
+ */
+export async function enrichAndBackfillAll(): Promise<{
+  refreshed: number; backfilled: number; failed: number; noMatch: number;
+}> {
+  const all: any[] = await prisma.submission.findMany({
+    select: { id: true, tokenMatch: { select: { contractAddress: true } } },
+  });
+  let refreshed = 0, backfilled = 0, failed = 0, noMatch = 0;
+  for (const r of all) {
+    const existingCa = r.tokenMatch?.contractAddress;
+    try {
+      if (existingCa) {
+        await enrichSubmission(r.id, existingCa);
+        refreshed++;
+      } else {
+        const found = await findContractAddress(r.id);
+        if (!found) { noMatch++; continue; }
+        await enrichSubmission(r.id, found.ca);
+        backfilled++;
+      }
+    } catch {
+      failed++;
+    }
+  }
+  return { refreshed, backfilled, failed, noMatch };
 }
