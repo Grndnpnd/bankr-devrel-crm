@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { create } from 'zustand';
 import type { Submission, FilterState, SortConfig, Activity } from '@/types';
 
@@ -275,7 +276,13 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
 }));
 
 /** Owner display names derived from the real team list (name, falling back to email). */
-export const useOwnerNames = (): string[] =>
-  useSubmissionStore((state) =>
-    state.users.map((u) => (u.name && u.name.trim()) || u.email).filter(Boolean)
+export const useOwnerNames = (): string[] => {
+  // Select the stable `users` reference (changes only when the list reloads),
+  // then derive names via useMemo. Returning a fresh array straight from the
+  // selector would loop renders under zustand's Object.is equality (React #185).
+  const users = useSubmissionStore((state) => state.users);
+  return useMemo(
+    () => users.map((u) => (u.name && u.name.trim()) || u.email).filter(Boolean),
+    [users]
   );
+};
