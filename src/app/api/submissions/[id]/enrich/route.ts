@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
 import { enrichSubmission, findContractAddressDebug, clearTokenMatch } from "@/lib/enrich";
 import { serialize, INCLUDE } from "@/lib/serialize";
@@ -38,6 +39,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     }
     if (!ca) return NextResponse.json({ error: "contractAddress or auto required" }, { status: 400 });
     await enrichSubmission(params.id, ca);
+    // Picking/entering a CA resolves any pending review.
+    await prisma.submission.update({
+      where: { id: params.id },
+      data: { needsReview: false, reviewCandidates: Prisma.DbNull },
+    }).catch(() => {});
     const row = await prisma.submission.findUnique({ where: { id: params.id }, include: INCLUDE });
     return NextResponse.json({ ...(row ? serialize(row) : {}), _found_via: via });
   } catch (e: any) {

@@ -3,7 +3,7 @@ import { fetchTokenData } from "./discover";
 import { score } from "./scoring";
 import { getWeights } from "./scoreConfig";
 import type { CanonicalSubmission } from "./types";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 const RESCORE_SELECT = {
   oneLiner: true, accomplishments: true, problem: true, solution: true, traction: true,
@@ -91,12 +91,20 @@ function identityCandidates(row: {
   founders: unknown;
   tokenMatch: { wallet: string | null; contractAddress: string | null } | null;
 }): string[] {
-  const out: string[] = [];
+  const raw: string[] = [];
   const founders = Array.isArray(row.founders) ? (row.founders as any[]) : [];
-  for (const f of founders) if (f?.x) out.push(String(f.x));
-  if (row.projectX) out.push(row.projectX);
-  if (row.tokenMatch?.wallet) out.push(row.tokenMatch.wallet);
-  return Array.from(new Set(out.map((s) => s.trim()).filter(Boolean)));
+  for (const f of founders) if (f?.x) raw.push(String(f.x));
+  if (row.projectX) raw.push(row.projectX);
+  if (row.tokenMatch?.wallet) raw.push(row.tokenMatch.wallet);
+  // A single field may hold several handles ("@a & @b", "@a, @b") — split them out.
+  const out: string[] = [];
+  for (const item of raw) {
+    for (const piece of String(item).split(/[&,/\s]+/)) {
+      const t = piece.trim();
+      if (t) out.push(t);
+    }
+  }
+  return Array.from(new Set(out.filter(Boolean)));
 }
 
 export interface FindTrace {
@@ -202,33 +210,54 @@ export async function findContractAddress(
  *  - rows WITHOUT a CA: attempt backfill via token-launches search, then enrich
  */
 export async function enrichAndBackfillAll(): Promise<{
-  refreshed: number; backfilled: number; failed: number; noMatch: number;
+  refreshed: number; backfilled: number; failed: number; noMatch: number; review: number;
 }> {
   const all: any[] = await prisma.submission.findMany({
     select: { id: true, tokenMatch: { select: { contractAddress: true } } },
   });
-  let refreshed = 0, backfilled = 0, failed = 0, noMatch = 0;
+  let refreshed = 0, backfilled = 0, failed = 0, noMatch = 0, review = 0;
   for (const r of all) {
     const existingCa = r.tokenMatch?.contractAddress;
     try {
       if (existingCa) {
         await enrichSubmission(r.id, existingCa);
         refreshed++;
-      } else {
-        const found = await findContractAddress(r.id);
-        if (!found) { noMatch++; continue; }
+        continue;
+      }
+      // No CA yet — try to discover one. Enrich candidates so the review queue has volume.
+      const { found, candidates } = await findContractAddressDebug(r.id, true);
+      if (found) {
         await enrichSubmission(r.id, found.ca);
+        await prisma.submission.update({
+          where: { id: r.id },
+          data: { needsReview: false, reviewCandidates: Prisma.DbNull },
+        });
         backfilled++;
+      } else if (candidates.length) {
+        await prisma.submission.update({
+          where: { id: r.id },
+          data: {
+            needsReview: true,
+            reviewCandidates: candidates as unknown as Prisma.InputJsonValue,
+          },
+        });
+        review++;
+      } else {
+        noMatch++;
       }
     } catch {
       failed++;
     }
   }
-  return { refreshed, backfilled, failed, noMatch };
+  return { refreshed, backfilled, failed, noMatch, review };
 }
 
 /** Remove a submission's token match (clear the CA) and rescore without onchain signal. */
 export async function clearTokenMatch(id: string) {
   await prisma.tokenMatch.deleteMany({ where: { submissionId: id } });
+  await prisma.submission.update({
+    where: { id },
+    data: { needsReview: false, reviewCandidates: Prisma.DbNull },
+  }).catch(() => {});
   await rescoreSubmission(id);
 }

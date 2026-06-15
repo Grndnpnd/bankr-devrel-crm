@@ -65,6 +65,8 @@ model Submission {
   score           Int                @default(0)
   scoreBreakdown  Json
   lowEffort       Boolean            @default(false)
+  needsReview     Boolean            @default(false)
+  reviewCandidates Json?
   stage           Stage              @default(NEW)
   owner           String?
   tokenMatch      TokenMatch?

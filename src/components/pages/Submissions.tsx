@@ -12,6 +12,7 @@ import {
   Check,
   ExternalLink,
   Plus,
+  AlertTriangle,
 } from 'lucide-react';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import SubmissionFormModal, { type SubmissionFormValues } from '@/components/SubmissionFormModal';
@@ -492,16 +493,21 @@ const SubmissionGridCard: React.FC<{
         </div>
       )}
 
-      <div
-        className="mb-3"
-        style={{
-          fontFamily: "'Inter', sans-serif",
-          fontSize: '12px',
-          color: submission.vol_24h != null ? '#10B981' : '#525252',
-        }}
-      >
-        24h: {formatUsd(submission.vol_24h)}
-      </div>
+      {submission.needs_review ? (
+        <div className="mb-3 inline-flex items-center gap-1.5" style={{ backgroundColor: 'rgba(245,166,35,0.12)', border: '1px solid rgba(245,166,35,0.3)', borderRadius: 6, padding: '3px 8px' }}>
+          <AlertTriangle size={12} style={{ color: '#F5A623' }} />
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#F5A623' }}>
+            Needs review · {(submission.review_candidates?.length ?? 0)} tokens
+          </span>
+        </div>
+      ) : (
+        <div
+          className="mb-3"
+          style={{ fontFamily: "'Inter', sans-serif", fontSize: '12px', color: submission.vol_24h != null ? '#10B981' : '#525252' }}
+        >
+          24h: {formatUsd(submission.vol_24h)}
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-1 mb-3">
         {submission.needs_help.slice(0, 2).map((tag) => (
@@ -621,6 +627,7 @@ const Submissions: React.FC = () => {
     if (filters.owner) count++;
     if (filters.source) count++;
     if (filters.liveOnly) count++;
+    if (filters.reviewOnly) count++;
     if (filters.hideLowEffort) count++;
     if ((filters.scoreMin ?? 0) > 0 || (filters.scoreMax ?? 100) < 100) count++;
     return count;
@@ -635,6 +642,7 @@ const Submissions: React.FC = () => {
       owner: null,
       source: null,
       liveOnly: false,
+      reviewOnly: false,
       hideLowEffort: false,
       scoreMin: 0,
       scoreMax: 100,
@@ -981,6 +989,13 @@ const Submissions: React.FC = () => {
             checked={filters.liveOnly}
             onChange={() => setFilters({ liveOnly: !filters.liveOnly })}
             label="Live only"
+          />
+        </div>
+        <div className="shrink-0">
+          <Toggle
+            checked={filters.reviewOnly}
+            onChange={() => setFilters({ reviewOnly: !filters.reviewOnly })}
+            label="Needs review"
           />
         </div>
         <div className="shrink-0">
@@ -1440,17 +1455,21 @@ const Submissions: React.FC = () => {
                           <InlineStageEditor stage={sub.stage} onChange={(s) => updateStage(sub.id, s)} />
                         </td>
 
-                        {/* 24h Volume */}
+                        {/* 24h Volume / review flag */}
                         <td style={{ padding: '0 16px', textAlign: 'right' }}>
-                          <span style={{
-                            fontFamily: "'Inter', sans-serif",
-                            fontSize: '13px',
-                            fontWeight: 500,
-                            color: sub.vol_24h != null ? '#10B981' : '#525252',
-                            textShadow: sub.vol_24h != null ? '0 0 12px rgba(16,185,129,0.2)' : 'none',
-                          }}>
-                            {formatUsd(sub.vol_24h)}
-                          </span>
+                          {sub.needs_review ? (
+                            <span className="inline-flex items-center gap-1" style={{ backgroundColor: 'rgba(245,166,35,0.12)', border: '1px solid rgba(245,166,35,0.3)', borderRadius: 5, padding: '2px 7px', fontSize: 11, fontWeight: 600, color: '#F5A623', whiteSpace: 'nowrap' }} title={`${sub.review_candidates?.length ?? 0} candidate tokens — open to choose`}>
+                              <AlertTriangle size={11} /> Review
+                            </span>
+                          ) : (
+                            <span style={{
+                              fontFamily: "'Inter', sans-serif", fontSize: '13px', fontWeight: 500,
+                              color: sub.vol_24h != null ? '#10B981' : '#525252',
+                              textShadow: sub.vol_24h != null ? '0 0 12px rgba(16,185,129,0.2)' : 'none',
+                            }}>
+                              {formatUsd(sub.vol_24h)}
+                            </span>
+                          )}
                         </td>
 
                         {/* Needs Help */}

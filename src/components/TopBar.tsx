@@ -41,6 +41,7 @@ const TopBar: React.FC<TopBarProps> = ({ title }) => {
       else {
         const parts = [`${r?.refreshed ?? 0} refreshed`];
         if (r?.backfilled) parts.push(`${r.backfilled} newly matched`);
+        if (r?.review) parts.push(`${r.review} need review`);
         if (r?.noMatch) parts.push(`${r.noMatch} no match`);
         if (r?.failed) parts.push(`${r.failed} failed`);
         toast.success('Onchain refresh complete', { description: parts.join(' \u00b7 ') });

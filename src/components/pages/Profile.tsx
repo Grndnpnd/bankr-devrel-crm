@@ -292,6 +292,13 @@ const Profile: React.FC = () => {
   const [editOpen, setEditOpen] = useState(false);
   const [candidates, setCandidates] = useState<TokenCandidate[]>([]);
 
+  // Pre-populate the picker from candidates stored during the last bulk review pass.
+  useEffect(() => {
+    if (submission?.needs_review && submission.review_candidates?.length) {
+      setCandidates(submission.review_candidates);
+    }
+  }, [submission?.id, submission?.needs_review, submission?.review_candidates]);
+
   const handleFindToken = useCallback(async () => {
     if (!submission || finding) return;
     setFinding(true);
@@ -805,7 +812,7 @@ const Profile: React.FC = () => {
               {candidates.length > 0 && (
                 <div className="mt-3 rounded-md" style={{ border: '1px solid rgba(245,166,35,0.25)', backgroundColor: 'rgba(245,166,35,0.04)', padding: 12 }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: '#F5A623', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 8 }}>
-                    {candidates.length} tokens match this name — choose one
+                    {submission.needs_review ? 'Flagged for review' : 'Multiple matches'} · {candidates.length} candidate tokens — choose the primary
                   </div>
                   <div className="flex flex-col gap-1.5">
                     {candidates.map((c, i) => (

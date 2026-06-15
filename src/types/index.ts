@@ -1,3 +1,17 @@
+export interface TokenCandidate {
+  tokenAddress: string;
+  symbol: string | null;
+  name: string | null;
+  status: string | null;
+  deployerX: string | null;
+  feeX: string | null;
+  identityMatch: boolean;
+  projectMatch?: boolean;
+  bankrDeployed: boolean;
+  vol24h?: number | null;
+  marketCapUsd?: number | null;
+}
+
 export interface Founder {
   name: string;
   x: string;
@@ -56,6 +70,8 @@ export interface Submission {
   score: number;
   score_breakdown: ScoreBreakdown;
   low_effort: boolean;
+  needs_review?: boolean;
+  review_candidates?: TokenCandidate[];
   stage: string;
   owner: string;
   outreach: Activity[];
@@ -67,6 +83,7 @@ export interface FilterState {
   owner: string | null;
   source: string | null;
   liveOnly: boolean;
+  reviewOnly: boolean;
   hideLowEffort: boolean;
   scoreMin?: number;
   scoreMax?: number;

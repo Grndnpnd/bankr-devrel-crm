@@ -65,6 +65,7 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
     owner: null,
     source: null,
     liveOnly: false,
+    reviewOnly: false,
     hideLowEffort: false,
     scoreMin: 0,
     scoreMax: 100,
@@ -247,6 +248,9 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
     }
     if (state.filters.liveOnly) {
       filtered = filtered.filter((s) => (!!s.token && s.token.trim() !== '') || !!s.contract_address);
+    }
+    if (state.filters.reviewOnly) {
+      filtered = filtered.filter((s) => !!s.needs_review);
     }
     if (state.filters.hideLowEffort) {
       filtered = filtered.filter((s) => !s.low_effort);

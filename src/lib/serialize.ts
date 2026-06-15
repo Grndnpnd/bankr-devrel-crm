@@ -43,6 +43,8 @@ export function serialize(s: SubmissionWithRelations) {
     score: s.score,
     score_breakdown: s.scoreBreakdown as any,
     low_effort: s.lowEffort,
+    needs_review: (s as any).needsReview ?? false,
+    review_candidates: ((s as any).reviewCandidates as any) ?? [],
     stage: STAGE_TO_LABEL[s.stage] ?? "New",
     owner: s.owner ?? "",
     outreach: [...s.activities]
