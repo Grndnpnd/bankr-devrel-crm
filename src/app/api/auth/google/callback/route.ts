@@ -35,8 +35,13 @@ export async function GET(req: Request) {
       redirect_uri: redirectUri, grant_type: "authorization_code",
     }),
   });
-  if (!tokenRes.ok) return loginError(base, "oauth_exchange");
-  const tokens = await tokenRes.json().catch(() => null);
+  const tokenBody = await tokenRes.json().catch(() => null);
+  if (!tokenRes.ok || !tokenBody) {
+    // Google returns { error, error_description } — surface it so the cause is visible.
+    const detail = tokenBody?.error_description || tokenBody?.error || `http_${tokenRes.status}`;
+    return loginError(base, `oauth_exchange:${detail}`);
+  }
+  const tokens = tokenBody;
   const accessToken = tokens?.access_token;
   if (!accessToken) return loginError(base, "oauth_exchange");
 
