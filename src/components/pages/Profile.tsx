@@ -21,7 +21,7 @@ import SubmissionFormModal, { valuesFromSubmission, type SubmissionFormValues } 
 import type { TokenCandidate } from '@/store/useSubmissionStore';
 import { formatUsd } from '@/data/stats';
 import { toast } from 'sonner';
-import { useSubmissionStore } from '@/store/useSubmissionStore';
+import { useSubmissionStore, useOwnerNames } from '@/store/useSubmissionStore';
 import ScoreBadge from '@/components/ScoreBadge';
 import StagePill from '@/components/StagePill';
 import OnchainBadge from '@/components/OnchainBadge';
@@ -32,7 +32,6 @@ const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
 /* ─── Constants ─── */
 const STAGE_OPTIONS = ['New', 'Reviewing', 'Contacted', 'In Convo', 'Onboarding', 'Won', 'Passed'];
-const OWNER_OPTIONS = ['James', 'Sarah', 'Alex', 'Maria'];
 const ACTIVITY_TYPES: { type: Activity['type']; label: string; icon: React.ElementType; color: string }[] = [
   { type: 'note', label: 'Note', icon: MessageSquare, color: '#525252' },
   { type: 'dm', label: 'DM', icon: Send, color: '#F5A623' },
@@ -245,6 +244,7 @@ const Profile: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const { getSubmissionById, updateStage, updateOwner, addActivity, setContractAddress, clearContractAddress, findToken, deleteSubmission, updateSubmissionFields, me } = useSubmissionStore();
+  const OWNER_OPTIONS = useOwnerNames();
 
   const submission = useMemo(() => (id ? getSubmissionById(id) : undefined), [id, getSubmissionById]);
 

@@ -1,13 +1,30 @@
 'use client';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 
-export default function Login() {
+function LoginForm() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const search = useSearchParams();
+
+  useEffect(() => {
+    const code = search.get('error');
+    if (!code) return;
+    const messages: Record<string, string> = {
+      not_invited: "That Google account isn't on the team yet. Ask an admin to add it.",
+      deactivated: 'That account has been deactivated.',
+      oauth_domain: 'Please sign in with your Bankr Workspace account.',
+      oauth_unverified: "Your Google email isn't verified.",
+      oauth_state: 'Sign-in expired — please try again.',
+      oauth_exchange: 'Google sign-in failed — please try again.',
+      oauth_profile: 'Could not read your Google profile — please try again.',
+      oauth_config: 'Google sign-in is not configured.',
+    };
+    setErr(messages[code] || 'Google sign-in failed.');
+  }, [search]);
 
   async function submit() {
     setBusy(true); setErr('');
@@ -51,8 +68,34 @@ export default function Login() {
           style={{ width: '100%', marginTop: 22, height: 42, backgroundColor: '#F5A623', color: '#0D0D0D', border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 14, fontFamily: "'Inter', sans-serif", cursor: busy ? 'default' : 'pointer', opacity: busy || !email || !password ? 0.5 : 1 }}>
           {busy ? '…' : 'Sign in'}
         </button>
+
+        <div className="flex items-center gap-3" style={{ margin: '18px 0 14px' }}>
+          <div style={{ flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' }} />
+          <span style={{ fontSize: 11, color: '#525252', letterSpacing: '0.08em' }}>OR</span>
+          <div style={{ flex: 1, height: 1, backgroundColor: 'rgba(255,255,255,0.08)' }} />
+        </div>
+
+        <a href="/api/auth/google"
+          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, width: '100%', height: 42, backgroundColor: '#FFFFFF', color: '#1F1F1F', borderRadius: 8, fontWeight: 600, fontSize: 14, fontFamily: "'Inter', sans-serif", textDecoration: 'none' }}>
+          <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+            <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62z"/>
+            <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"/>
+            <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.95H.96a9 9 0 0 0 0 8.1l3.01-2.33z"/>
+            <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58A9 9 0 0 0 .96 4.95l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/>
+          </svg>
+          Continue with Google
+        </a>
+
         {err && <div style={{ color: '#EF4444', fontSize: 12, marginTop: 14, textAlign: 'center' }}>{err}</div>}
       </div>
     </div>
+  );
+}
+
+export default function Login() {
+  return (
+    <Suspense fallback={<div style={{ minHeight: '100vh', backgroundColor: '#0D0D0D' }} />}>
+      <LoginForm />
+    </Suspense>
   );
 }

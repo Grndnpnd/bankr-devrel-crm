@@ -273,3 +273,9 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
     return filtered;
   },
 }));
+
+/** Owner display names derived from the real team list (name, falling back to email). */
+export const useOwnerNames = (): string[] =>
+  useSubmissionStore((state) =>
+    state.users.map((u) => (u.name && u.name.trim()) || u.email).filter(Boolean)
+  );

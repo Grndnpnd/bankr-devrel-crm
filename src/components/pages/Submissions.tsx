@@ -14,7 +14,7 @@ import {
   Plus,
   AlertTriangle,
 } from 'lucide-react';
-import { useSubmissionStore } from '@/store/useSubmissionStore';
+import { useSubmissionStore, useOwnerNames } from '@/store/useSubmissionStore';
 import SubmissionFormModal, { type SubmissionFormValues } from '@/components/SubmissionFormModal';
 import { toast } from 'sonner';
 import ScoreBadge from '@/components/ScoreBadge';
@@ -39,7 +39,6 @@ const TAG_OPTIONS = [
   'Hiring',
   'Other',
 ];
-const OWNER_OPTIONS = ['James', 'Sarah', 'Alex', 'Maria', 'Unassigned'];
 const SOURCE_OPTIONS = ['google_form', 'plain'];
 const SORT_OPTIONS = [
   { key: 'score', label: 'Score' },
@@ -303,6 +302,8 @@ const InlineOwnerEditor: React.FC<{
   onChange: (owner: string) => void;
 }> = ({ owner, onChange }) => {
   const [editing, setEditing] = useState(false);
+  const ownerNames = useOwnerNames();
+  const OWNER_OPTIONS = [...ownerNames, 'Unassigned'];
   const display = owner || '\u2014';
 
   if (editing) {
@@ -564,6 +565,8 @@ const Submissions: React.FC = () => {
     me,
     createSubmission,
   } = useSubmissionStore();
+  const ownerNames = useOwnerNames();
+  const OWNER_OPTIONS = [...ownerNames, 'Unassigned'];
 
   const [addOpen, setAddOpen] = useState(false);
   const handleCreate = useCallback(async (v: SubmissionFormValues): Promise<string | null> => {
