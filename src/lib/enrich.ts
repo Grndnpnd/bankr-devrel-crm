@@ -183,3 +183,9 @@ export async function enrichAndBackfillAll(): Promise<{
   }
   return { refreshed, backfilled, failed, noMatch };
 }
+
+/** Remove a submission's token match (clear the CA) and rescore without onchain signal. */
+export async function clearTokenMatch(id: string) {
+  await prisma.tokenMatch.deleteMany({ where: { submissionId: id } });
+  await rescoreSubmission(id);
+}

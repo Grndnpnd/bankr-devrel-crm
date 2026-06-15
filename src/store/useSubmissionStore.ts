@@ -29,6 +29,7 @@ interface SubmissionStore {
   updateOwner: (id: string, owner: string) => Promise<void>;
   addActivity: (id: string, activity: Activity) => Promise<void>;
   setContractAddress: (id: string, contractAddress: string) => Promise<{ ok: boolean; error?: string }>;
+  clearContractAddress: (id: string) => Promise<{ ok: boolean; error?: string }>;
   findToken: (id: string) => Promise<{ ok: boolean; error?: string; via?: string; ambiguous?: boolean; candidates?: TokenCandidate[] }>;
   deleteSubmission: (id: string) => Promise<boolean>;
   createSubmission: (payload: Record<string, unknown>) => Promise<{ ok: boolean; error?: string; id?: string }>;
@@ -146,6 +147,16 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contractAddress }),
     });
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) {
+      replaceRow(set)(data);
+      return { ok: true };
+    }
+    return { ok: false, error: data?.error || `HTTP ${res.status}` };
+  },
+
+  clearContractAddress: async (id) => {
+    const res = await fetch(`/api/submissions/${id}/enrich`, { method: 'DELETE' });
     const data = await res.json().catch(() => ({}));
     if (res.ok) {
       replaceRow(set)(data);

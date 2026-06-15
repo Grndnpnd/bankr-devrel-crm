@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
-import { enrichSubmission, findContractAddressDebug } from "@/lib/enrich";
+import { enrichSubmission, findContractAddressDebug, clearTokenMatch } from "@/lib/enrich";
 import { serialize, INCLUDE } from "@/lib/serialize";
 
 export const dynamic = "force-dynamic";
@@ -42,5 +42,20 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     return NextResponse.json({ ...(row ? serialize(row) : {}), _found_via: via });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message ?? "enrichment failed" }, { status: 400 });
+  }
+}
+
+/** Clear a submission's token contract address / onchain match. */
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const session = await getSession();
+  if (!session || session.role === "VIEWER") {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+  try {
+    await clearTokenMatch(params.id);
+    const row = await prisma.submission.findUnique({ where: { id: params.id }, include: INCLUDE });
+    return NextResponse.json(row ? serialize(row) : { ok: true });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? "could not clear token" }, { status: 400 });
   }
 }

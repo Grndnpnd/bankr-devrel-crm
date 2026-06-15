@@ -243,7 +243,7 @@ const TimelineEntry: React.FC<{ activity: Activity }> = ({ activity }) => {
 const Profile: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { getSubmissionById, updateStage, updateOwner, addActivity, setContractAddress, findToken, deleteSubmission, updateSubmissionFields, me } = useSubmissionStore();
+  const { getSubmissionById, updateStage, updateOwner, addActivity, setContractAddress, clearContractAddress, findToken, deleteSubmission, updateSubmissionFields, me } = useSubmissionStore();
 
   const submission = useMemo(() => (id ? getSubmissionById(id) : undefined), [id, getSubmissionById]);
 
@@ -316,6 +316,19 @@ const Profile: React.FC = () => {
     if (r.ok) toast.success('Token data pulled');
     else toast.error('Could not fetch token', { description: r.error });
   }, [submission, setContractAddress]);
+
+  const [clearing, setClearing] = useState(false);
+  const handleClearToken = useCallback(async () => {
+    if (!submission || clearing) return;
+    if (!window.confirm('Clear this token match? The onchain data and its score contribution will be removed.')) return;
+    setClearing(true);
+    setCandidates([]);
+    setCaInput('');
+    const r = await clearContractAddress(submission.id);
+    setClearing(false);
+    if (r.ok) toast.success('Token cleared');
+    else toast.error('Could not clear token', { description: r.error });
+  }, [submission, clearing, clearContractAddress]);
 
   const handleEdit = useCallback(async (v: SubmissionFormValues): Promise<string | null> => {
     if (!submission) return 'no submission';
@@ -873,11 +886,23 @@ const Profile: React.FC = () => {
                   </div>
                 )}
 
-                {submission.matched_via && (
-                  <div className="mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                    <span style={{ fontSize: '12px', color: '#8A8A8A' }}>Matched via: {submission.matched_via}</span>
-                  </div>
-                )}
+                <div className="mt-3 pt-3 flex items-center justify-between" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <span style={{ fontSize: '12px', color: '#8A8A8A' }}>
+                    {submission.matched_via ? `Matched via: ${submission.matched_via}` : ''}
+                  </span>
+                  {me && me.role !== 'VIEWER' && (
+                    <button
+                      onClick={handleClearToken}
+                      disabled={clearing}
+                      className="inline-flex items-center gap-1.5 rounded-md"
+                      title="Clear this token match"
+                      style={{ height: 28, padding: '0 10px', fontSize: 12, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid rgba(239,68,68,0.3)', color: '#EF4444', cursor: clearing ? 'wait' : 'pointer', opacity: clearing ? 0.5 : 1, flexShrink: 0 }}
+                    >
+                      <Trash2 size={13} />
+                      {clearing ? 'Clearing…' : 'Clear token'}
+                    </button>
+                  )}
+                </div>
               </>
             ) : (
               <p style={{ fontSize: '12px', color: '#525252' }}>
