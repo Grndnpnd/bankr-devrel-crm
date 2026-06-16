@@ -8,7 +8,7 @@ import PipelineFunnel from '@/components/dashboard/widgets/PipelineWidget';
 import TopTargetsTable from '@/components/dashboard/widgets/TopTargetsWidget';
 import QuickActions from '@/components/dashboard/widgets/QuickActionsWidget';
 import {
-  DonutChart, FeeLeadersChart, ScoreDistChart, SubmissionTrendChart, OutreachTable,
+  DonutChart, FeeLeadersChart, SubmissionTrendChart, OutreachTable,
 } from '@/components/pages/Analytics';
 import AskData from '@/components/analytics/AskData';
 
@@ -25,23 +25,28 @@ export interface WidgetDef {
   label: string;
   description: string;
   defaultSpan: number;
+  defaultVisible: boolean;
   Component: React.FC;
 }
 
-/** The catalog of available dashboard widgets, in their default order. */
+/**
+ * The catalog of available dashboard widgets.
+ * Order here = the factory default top-to-bottom order. `defaultVisible` controls
+ * what's on the dashboard out of the box; everything else lives in the picker.
+ */
 export const WIDGET_REGISTRY: WidgetDef[] = [
-  { id: 'kpi-strip', label: 'Key Metrics', description: 'Top-line counts: submissions, live, score, new this week', defaultSpan: 12, Component: KPIStrip },
-  { id: 'score-distribution', label: 'Score Distribution', description: 'How submissions spread across score ranges', defaultSpan: 7, Component: ScoreDistributionChart },
-  { id: 'pipeline', label: 'Pipeline', description: 'Submissions by stage', defaultSpan: 5, Component: PipelineFunnel },
-  { id: 'top-targets', label: 'Top Targets', description: 'Highest-scoring projects to act on', defaultSpan: 12, Component: TopTargetsTable },
-  { id: 'quick-actions', label: 'Quick Actions', description: 'Import, add a submission, and shortcuts', defaultSpan: 12, Component: QuickActions },
-  // ── Analytics-page containers, now available on the dashboard too ──
-  { id: 'an-needs-help', label: 'Needs-Help Distribution', description: 'Breakdown of what projects need help with', defaultSpan: 6, Component: DonutChart },
-  { id: 'an-top-volume', label: 'Top Projects by 24h Volume', description: 'Highest onchain volume right now', defaultSpan: 6, Component: FeeLeadersChart },
-  { id: 'an-score-dist', label: 'Score Distribution (Analytics)', description: 'Score buckets across all submissions', defaultSpan: 6, Component: ScoreDistChart },
-  { id: 'an-trend', label: 'Submissions Over Time', description: 'Submission volume trend', defaultSpan: 6, Component: SubmissionTrendChart },
-  { id: 'an-outreach', label: 'Outreach Activity', description: 'Recent outreach across the team', defaultSpan: 12, Component: OutreachTable },
-  { id: 'ask-data', label: 'Ask Your Data', description: 'Build a panel or chat about your pipeline', defaultSpan: 12, Component: AskData },
+  // ── Factory default dashboard (top to bottom) ──
+  { id: 'kpi-strip', label: 'Key Metrics', description: 'Top-line counts: submissions, live, score, new this week', defaultSpan: 12, defaultVisible: true, Component: KPIStrip },
+  { id: 'score-distribution', label: 'Score Distribution', description: 'How submissions spread across score ranges', defaultSpan: 7, defaultVisible: true, Component: ScoreDistributionChart },
+  { id: 'pipeline', label: 'Pipeline', description: 'Submissions by stage', defaultSpan: 5, defaultVisible: true, Component: PipelineFunnel },
+  { id: 'top-targets', label: 'Top Targets', description: 'Highest-scoring projects to act on', defaultSpan: 12, defaultVisible: true, Component: TopTargetsTable },
+  { id: 'ask-data', label: 'Ask Your Data', description: 'Build a panel or chat about your pipeline', defaultSpan: 12, defaultVisible: true, Component: AskData },
+  // ── Available in the picker, hidden by default ──
+  { id: 'quick-actions', label: 'Quick Actions', description: 'Import, add a submission, and shortcuts', defaultSpan: 12, defaultVisible: false, Component: QuickActions },
+  { id: 'an-needs-help', label: 'Needs-Help Distribution', description: 'Breakdown of what projects need help with', defaultSpan: 6, defaultVisible: false, Component: DonutChart },
+  { id: 'an-top-volume', label: 'Top Projects by 24h Volume', description: 'Highest onchain volume right now', defaultSpan: 6, defaultVisible: false, Component: FeeLeadersChart },
+  { id: 'an-trend', label: 'Submissions Over Time', description: 'Submission volume trend', defaultSpan: 6, defaultVisible: false, Component: SubmissionTrendChart },
+  { id: 'an-outreach', label: 'Outreach Activity', description: 'Recent outreach across the team', defaultSpan: 12, defaultVisible: false, Component: OutreachTable },
 ];
 
 export const widgetById = (id: string): WidgetDef | undefined =>
@@ -49,7 +54,7 @@ export const widgetById = (id: string): WidgetDef | undefined =>
 
 /** The default layout, used when a user has none saved yet. */
 export const defaultLayout = (): DashboardWidget[] =>
-  WIDGET_REGISTRY.map((w, i) => ({ id: w.id, visible: true, span: w.defaultSpan, order: i }));
+  WIDGET_REGISTRY.map((w, i) => ({ id: w.id, visible: w.defaultVisible, span: w.defaultSpan, order: i, height: null }));
 
 /**
  * Merge a saved layout against the registry so newly-added widgets appear
@@ -67,7 +72,7 @@ export const reconcileLayout = (
   if (!saved || !saved.length) {
     // default: static widgets in order, then saved panels (half-width) after.
     const base = defaultLayout();
-    panelIds.forEach((id, i) => base.push({ id, visible: true, span: 6, order: base.length + i }));
+    panelIds.forEach((id, i) => base.push({ id, visible: false, span: 6, order: base.length + i, height: null }));
     return base;
   }
   const known = new Map(saved.filter((w) => validIds.has(w.id)).map((w) => [w.id, w]));
@@ -77,13 +82,13 @@ export const reconcileLayout = (
     const existing = known.get(def.id);
     merged.push(existing
       ? { id: def.id, visible: existing.visible !== false, span: Math.min(MAX_SPAN, Math.max(MIN_SPAN, existing.span || def.defaultSpan)), order: existing.order ?? maxOrder, height: existing.height ?? null }
-      : { id: def.id, visible: true, span: def.defaultSpan, order: ++maxOrder, height: null });
+      : { id: def.id, visible: def.defaultVisible, span: def.defaultSpan, order: ++maxOrder, height: null });
   }
   for (const id of panelIds) {
     const existing = known.get(id);
     merged.push(existing
       ? { id, visible: existing.visible !== false, span: Math.min(MAX_SPAN, Math.max(MIN_SPAN, existing.span || 6)), order: existing.order ?? maxOrder, height: existing.height ?? null }
-      : { id, visible: true, span: 6, order: ++maxOrder, height: null });
+      : { id, visible: false, span: 6, order: ++maxOrder, height: null });
   }
   return merged.sort((a, b) => a.order - b.order);
 };

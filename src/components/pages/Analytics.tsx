@@ -29,8 +29,6 @@ import { stageColors } from '@/data/stats';
 import type { ActivityType } from '@/data/analytics';
 import { useSubmissionStore, applyDrilldownFilter } from '@/store/useSubmissionStore';
 import AskData from '@/components/analytics/AskData';
-import AnalyticsPanel from '@/components/analytics/AnalyticsPanel';
-import { Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 // ── Animation ─────────────────────────────────────────────────────
@@ -694,36 +692,6 @@ export const OutreachTable: React.FC = () => {
   );
 };
 
-// ── Agent Query Bar ───────────────────────────────────────────────
-const SavedPanelsGrid: React.FC = () => {
-  const savedPanels = useSubmissionStore((st) => st.savedPanels);
-  const loadDashboardLayout = useSubmissionStore((st) => st.loadDashboardLayout);
-  const removeSavedPanel = useSubmissionStore((st) => st.removeSavedPanel);
-  React.useEffect(() => { loadDashboardLayout(); }, [loadDashboardLayout]);
-  if (!savedPanels.length) return null;
-  return (
-    <div>
-      <h3 style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 600, color: '#F0F0F0', marginBottom: 12 }}>
-        Saved panels
-      </h3>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
-        {savedPanels.map((panel) => (
-          <DataCard key={panel.id} title={panel.spec?.title || 'Panel'} style={{ position: 'relative' }}>
-            <button
-              onClick={() => removeSavedPanel(panel.id)}
-              title="Remove panel"
-              style={{ position: 'absolute', top: 14, right: 14, color: '#525252', display: 'flex' }}
-            >
-              <Trash2 size={14} />
-            </button>
-            <AnalyticsPanel spec={panel.spec} />
-          </DataCard>
-        ))}
-      </div>
-    </div>
-  );
-};
-
 const Analytics: React.FC = () => {
   const subs = useSubmissionStore((st) => st.submissions);
   const { analyticsStats } = useMemo(() => computeAnalytics(subs), [subs]);
@@ -790,9 +758,6 @@ const Analytics: React.FC = () => {
 
       {/* Ask Your Data (LLM) */}
       <AskData />
-
-      {/* Saved panels */}
-      <SavedPanelsGrid />
 
       <Toaster
         position="bottom-right"

@@ -1,7 +1,8 @@
 'use client';
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { LayoutGrid, Check, RotateCcw, EyeOff, GripVertical } from 'lucide-react';
+import { LayoutGrid, Check, RotateCcw, EyeOff, GripVertical, BookmarkPlus } from 'lucide-react';
+import { toast } from 'sonner';
 import { useSubmissionStore, type DashboardWidget } from '@/store/useSubmissionStore';
 import AnalyticsPanel from '@/components/analytics/AnalyticsPanel';
 import DataCard from '@/components/DataCard';
@@ -67,7 +68,7 @@ const WidgetControls: React.FC<{
 
 /* ─── Dashboard Page ─── */
 const Dashboard: React.FC = () => {
-  const { dashboardLayout, loadDashboardLayout, saveDashboardLayout, savedPanels } = useSubmissionStore();
+  const { dashboardLayout, dashboardDefault, loadDashboardLayout, saveDashboardLayout, saveDashboardDefault, savedPanels } = useSubmissionStore();
   const panelIds = useMemo(() => savedPanels.map((p) => p.id), [savedPanels]);
   const panelById = useMemo(() => new Map(savedPanels.map((p) => [p.id, p])), [savedPanels]);
   const [editing, setEditing] = useState(false);
@@ -168,7 +169,12 @@ const Dashboard: React.FC = () => {
     setEditing(false);
   };
   const cancel = () => { setDraft(reconcileLayout(dashboardLayout, panelIds)); setEditing(false); };
-  const reset = () => setDraft(defaultLayout());
+  const reset = () => setDraft(reconcileLayout(dashboardDefault, panelIds));
+  const saveAsDefault = async () => {
+    const snapshot = resequence(visible).concat(hidden.map((h, i) => ({ ...h, order: visible.length + i })));
+    await saveDashboardDefault(snapshot);
+    toast.success('Saved as your default', { description: 'Reset will now return to this layout.' });
+  };
 
   return (
     <div>
@@ -186,7 +192,10 @@ const Dashboard: React.FC = () => {
         </div>
         {editing ? (
           <div className="flex items-center gap-2">
-            <button onClick={reset} className="inline-flex items-center gap-1.5 rounded-md" style={{ height: 34, padding: '0 12px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#8A8A8A' }}>
+            <button onClick={saveAsDefault} title="Save current layout as your reset point" className="inline-flex items-center gap-1.5 rounded-md" style={{ height: 34, padding: '0 12px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#8A8A8A' }}>
+              <BookmarkPlus size={14} /> Save as default
+            </button>
+            <button onClick={reset} title={dashboardDefault ? 'Reset to your saved default' : 'Reset to factory layout'} className="inline-flex items-center gap-1.5 rounded-md" style={{ height: 34, padding: '0 12px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#8A8A8A' }}>
               <RotateCcw size={14} /> Reset
             </button>
             <button onClick={cancel} className="rounded-md" style={{ height: 34, padding: '0 14px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#8A8A8A' }}>

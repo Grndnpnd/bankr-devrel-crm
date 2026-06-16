@@ -13,6 +13,7 @@ interface SubmissionStore {
   users: TeamUser[];
   me: Me | null;
   dashboardLayout: DashboardWidget[] | null;
+  dashboardDefault: DashboardWidget[] | null;
   savedPanels: SavedPanel[];
   loaded: boolean;
   loading: boolean;
@@ -24,6 +25,7 @@ interface SubmissionStore {
   loadDashboardLayout: () => Promise<void>;
   saveDashboardLayout: (layout: DashboardWidget[]) => Promise<void>;
   setDashboardLayout: (layout: DashboardWidget[]) => void;
+  saveDashboardDefault: (layout: DashboardWidget[]) => Promise<void>;
   loadSavedPanels: () => Promise<void>;
   addSavedPanel: (spec: any) => Promise<SavedPanel>;
   removeSavedPanel: (id: string) => Promise<void>;
@@ -68,6 +70,7 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
   users: [],
   me: null,
   dashboardLayout: null,
+  dashboardDefault: null,
   savedPanels: [],
   loaded: false,
   loading: false,
@@ -93,8 +96,9 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
       if (!res.ok) return;
       const data = await res.json();
       const layout = Array.isArray(data?.dashboardLayout) ? (data.dashboardLayout as DashboardWidget[]) : null;
+      const dflt = Array.isArray(data?.dashboardDefault) ? (data.dashboardDefault as DashboardWidget[]) : null;
       const panels = Array.isArray(data?.savedPanels) ? (data.savedPanels as SavedPanel[]) : [];
-      set({ dashboardLayout: layout, savedPanels: panels });
+      set({ dashboardLayout: layout, dashboardDefault: dflt, savedPanels: panels });
     } catch { /* keep defaults */ }
   },
   loadSavedPanels: async () => {
@@ -130,6 +134,16 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
         body: JSON.stringify({ dashboardLayout: layout }),
       });
     } catch { /* optimistic; ignore network error */ }
+  },
+  saveDashboardDefault: async (layout) => {
+    set({ dashboardDefault: layout });
+    try {
+      await fetch('/api/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dashboardDefault: layout }),
+      });
+    } catch { /* optimistic */ }
   },
 
   load: async () => {
