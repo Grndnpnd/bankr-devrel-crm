@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles, Send, Plus, X, Loader2 } from 'lucide-react';
+import { Sparkles, Send, Plus, X, Loader2, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import type { AnalyticsSpec } from '@/lib/analyticsSpec';
@@ -22,6 +22,7 @@ const AskData: React.FC = () => {
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<AnalyticsSpec | null>(null);
+  const [sharePublic, setSharePublic] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const ask = useCallback(async (q?: string) => {
@@ -48,11 +49,17 @@ const AskData: React.FC = () => {
 
   const save = useCallback(async () => {
     if (!preview) return;
-    await addSavedPanel(preview);
-    toast.success('Panel saved', { description: 'Added to your saved panels and available as a dashboard widget.' });
+    const res = await addSavedPanel(preview, sharePublic);
+    if (!res) { toast.error('Could not save panel'); return; }
+    toast.success('Panel saved', {
+      description: sharePublic
+        ? 'Shared with the team — add it from Customize → Add container.'
+        : 'Saved to your panels — add it from Customize → Add container.',
+    });
     setPreview(null);
     setQuestion('');
-  }, [preview, addSavedPanel]);
+    setSharePublic(false);
+  }, [preview, addSavedPanel, sharePublic]);
 
   return (
     <motion.div
@@ -119,8 +126,15 @@ const AskData: React.FC = () => {
           <div className="flex items-center justify-between mb-3">
             <span style={{ fontSize: 14, fontWeight: 600, color: '#F0F0F0' }}>{preview.title}</span>
             <div className="flex items-center gap-2">
+              <button onClick={() => setSharePublic((v) => !v)} title="Make this panel available to the whole team"
+                className="inline-flex items-center gap-1.5 rounded-md" style={{ height: 30, padding: '0 10px', fontSize: 12, fontWeight: 600,
+                  backgroundColor: sharePublic ? 'rgba(245,166,35,0.18)' : 'transparent',
+                  border: sharePublic ? '1px solid rgba(245,166,35,0.4)' : '1px solid rgba(255,255,255,0.12)',
+                  color: sharePublic ? '#F5A623' : '#8A8A8A' }}>
+                <Users size={13} /> {sharePublic ? 'Shared with team' : 'Share with team'}
+              </button>
               <button onClick={save} className="inline-flex items-center gap-1.5 rounded-md" style={{ height: 30, padding: '0 12px', fontSize: 12, fontWeight: 600, backgroundColor: '#F5A623', color: '#0D0D0D' }}>
-                <Plus size={13} /> Save to dashboard
+                <Plus size={13} /> Save panel
               </button>
               <button onClick={() => setPreview(null)} className="flex items-center justify-center rounded-md" style={{ width: 30, height: 30, color: '#525252', border: '1px solid rgba(255,255,255,0.1)' }}>
                 <X size={15} />

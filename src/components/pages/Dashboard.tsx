@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { LayoutGrid, Check, RotateCcw, EyeOff, GripVertical, BookmarkPlus } from 'lucide-react';
+import { LayoutGrid, Check, RotateCcw, EyeOff, GripVertical, BookmarkPlus, Users, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSubmissionStore, type DashboardWidget } from '@/store/useSubmissionStore';
 import AnalyticsPanel from '@/components/analytics/AnalyticsPanel';
@@ -68,9 +68,10 @@ const WidgetControls: React.FC<{
 
 /* ─── Dashboard Page ─── */
 const Dashboard: React.FC = () => {
-  const { dashboardLayout, dashboardDefault, loadDashboardLayout, saveDashboardLayout, saveDashboardDefault, savedPanels } = useSubmissionStore();
+  const { dashboardLayout, dashboardDefault, loadDashboardLayout, saveDashboardLayout, saveDashboardDefault, savedPanels, togglePanelVisibility, removeSavedPanel } = useSubmissionStore();
   const panelIds = useMemo(() => savedPanels.map((p) => p.id), [savedPanels]);
   const panelById = useMemo(() => new Map(savedPanels.map((p) => [p.id, p])), [savedPanels]);
+  const myPanels = useMemo(() => savedPanels.filter((p) => p.mine), [savedPanels]);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<DashboardWidget[]>(defaultLayout());
 
@@ -232,10 +233,22 @@ const Dashboard: React.FC = () => {
                   ))}
                 </optgroup>
               )}
-              {hidden.some((w) => panelById.get(w.id)) && (
-                <optgroup label="Saved panels">
-                  {hidden.filter((w) => panelById.get(w.id)).map((w) => (
-                    <option key={w.id} value={w.id}>{panelById.get(w.id)?.spec?.title || 'Saved panel'}</option>
+              {hidden.some((w) => panelById.get(w.id)?.mine) && (
+                <optgroup label="My panels">
+                  {hidden.filter((w) => panelById.get(w.id)?.mine).map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {panelById.get(w.id)?.title || panelById.get(w.id)?.spec?.title || 'Saved panel'}
+                      {panelById.get(w.id)?.isPublic ? ' · shared' : ''}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {hidden.some((w) => { const p = panelById.get(w.id); return p && !p.mine; }) && (
+                <optgroup label="Shared by team">
+                  {hidden.filter((w) => { const p = panelById.get(w.id); return p && !p.mine; }).map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {panelById.get(w.id)?.title || 'Panel'} · {panelById.get(w.id)?.ownerName}
+                    </option>
                   ))}
                 </optgroup>
               )}
@@ -244,6 +257,38 @@ const Dashboard: React.FC = () => {
             <span style={{ fontSize: 13, color: '#525252' }}>Everything's already on your dashboard.</span>
           )}
           <span style={{ fontSize: 12, color: '#525252' }}>{hidden.length} available</span>
+        </div>
+      )}
+
+      {/* Panel manager (edit mode) — toggle sharing / delete your own LLM panels */}
+      {editing && myPanels.length > 0 && (
+        <div className="mb-5" style={{ padding: 12, borderRadius: 10, border: '1px dashed rgba(255,255,255,0.12)' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#525252', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 8 }}>
+            Manage my panels
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {myPanels.map((p) => (
+              <div key={p.id} className="flex items-center gap-2" style={{ fontSize: 13 }}>
+                <span style={{ flex: 1, color: '#C9C9C9', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {p.title || p.spec?.title || 'Saved panel'}
+                </span>
+                <button
+                  onClick={() => togglePanelVisibility(p.id, !p.isPublic)}
+                  title={p.isPublic ? 'Shared with team — click to make private' : 'Private — click to share with team'}
+                  className="inline-flex items-center gap-1 rounded-md"
+                  style={{ fontSize: 11, fontWeight: 600, padding: '3px 9px',
+                    backgroundColor: p.isPublic ? 'rgba(245,166,35,0.18)' : 'transparent',
+                    border: p.isPublic ? '1px solid rgba(245,166,35,0.4)' : '1px solid rgba(255,255,255,0.12)',
+                    color: p.isPublic ? '#F5A623' : '#8A8A8A' }}>
+                  <Users size={12} /> {p.isPublic ? 'Shared' : 'Private'}
+                </button>
+                <button onClick={() => removeSavedPanel(p.id)} title="Delete panel"
+                  className="flex items-center justify-center rounded-md" style={{ width: 26, height: 26, color: '#525252', border: '1px solid rgba(255,255,255,0.1)' }}>
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -268,7 +313,7 @@ const Dashboard: React.FC = () => {
               {editing && (
                 <WidgetControls
                   widget={w}
-                  label={def?.label ?? (panel?.spec?.title || 'Saved panel')}
+                  label={def?.label ?? (panel?.title || panel?.spec?.title || 'Saved panel')}
                   onSpan={(span) => update(w.id, { span })}
                   onHeight={(height) => update(w.id, { height })}
                   onHide={() => update(w.id, { visible: false })}
@@ -285,7 +330,7 @@ const Dashboard: React.FC = () => {
                 }}
               >
                 {Widget ? <Widget /> : (
-                  <DataCard title={panel!.spec?.title || 'Panel'}>
+                  <DataCard title={panel!.title || panel!.spec?.title || 'Panel'}>
                     <AnalyticsPanel spec={panel!.spec} compact />
                   </DataCard>
                 )}

@@ -41,7 +41,21 @@ model User {
   dashboardDefault Json?
   savedPanels     Json?
   activities   OutreachActivity[]
+  panels       SharedPanel[]
   createdAt    DateTime           @default(now())
+}
+
+model SharedPanel {
+  id        String   @id @default(cuid())
+  title     String
+  spec      Json
+  isPublic  Boolean  @default(false)
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([isPublic])
+  @@index([ownerId])
 }
 
 model Submission {

@@ -6,7 +6,7 @@ interface TeamUser { email: string; name: string | null; role: string }
 interface Me { email: string; name: string | null; role: string }
 export interface TokenCandidate { tokenAddress: string; symbol: string | null; name: string | null; status: string | null; deployerX: string | null; feeX: string | null; identityMatch: boolean; projectMatch?: boolean; bankrDeployed: boolean; vol24h?: number | null; marketCapUsd?: number | null }
 export interface DashboardWidget { id: string; visible: boolean; span: number; order: number; height?: number | null }
-export interface SavedPanel { id: string; spec: any; createdAt: string }
+export interface SavedPanel { id: string; spec: any; title: string; isPublic: boolean; mine: boolean; ownerName: string; createdAt: string }
 
 interface SubmissionStore {
   submissions: Submission[];
@@ -27,8 +27,9 @@ interface SubmissionStore {
   setDashboardLayout: (layout: DashboardWidget[]) => void;
   saveDashboardDefault: (layout: DashboardWidget[]) => Promise<void>;
   loadSavedPanels: () => Promise<void>;
-  addSavedPanel: (spec: any) => Promise<SavedPanel>;
+  addSavedPanel: (spec: any, isPublic?: boolean) => Promise<SavedPanel | null>;
   removeSavedPanel: (id: string) => Promise<void>;
+  togglePanelVisibility: (id: string, isPublic: boolean) => Promise<void>;
   load: () => Promise<void>;
   loadUsers: () => Promise<void>;
   importNow: (source?: string) => Promise<any>;
@@ -97,33 +98,50 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
       const data = await res.json();
       const layout = Array.isArray(data?.dashboardLayout) ? (data.dashboardLayout as DashboardWidget[]) : null;
       const dflt = Array.isArray(data?.dashboardDefault) ? (data.dashboardDefault as DashboardWidget[]) : null;
-      const panels = Array.isArray(data?.savedPanels) ? (data.savedPanels as SavedPanel[]) : [];
-      set({ dashboardLayout: layout, dashboardDefault: dflt, savedPanels: panels });
+      set({ dashboardLayout: layout, dashboardDefault: dflt });
+      // Panels now live in their own table; load them separately.
+      await get().loadSavedPanels();
     } catch { /* keep defaults */ }
   },
   loadSavedPanels: async () => {
     try {
-      const res = await fetch('/api/me');
+      const res = await fetch('/api/panels');
       if (!res.ok) return;
       const data = await res.json();
-      set({ savedPanels: Array.isArray(data?.savedPanels) ? (data.savedPanels as SavedPanel[]) : [] });
+      set({ savedPanels: Array.isArray(data) ? (data as SavedPanel[]) : [] });
     } catch { /* keep */ }
   },
-  addSavedPanel: async (spec) => {
-    const panel: SavedPanel = { id: `panel_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, spec, createdAt: new Date().toISOString() };
-    const next = [...get().savedPanels, panel];
-    set({ savedPanels: next });
+  addSavedPanel: async (spec, isPublic = false) => {
     try {
-      await fetch('/api/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savedPanels: next }) });
-    } catch { /* optimistic */ }
-    return panel;
+      const res = await fetch('/api/panels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spec, title: spec?.title, isPublic }),
+      });
+      if (!res.ok) return null;
+      const panel = (await res.json()) as SavedPanel;
+      set({ savedPanels: [...get().savedPanels, panel] });
+      return panel;
+    } catch { return null; }
   },
   removeSavedPanel: async (id) => {
-    const next = get().savedPanels.filter((p) => p.id !== id);
-    set({ savedPanels: next });
+    const prev = get().savedPanels;
+    set({ savedPanels: prev.filter((p) => p.id !== id) });
     try {
-      await fetch('/api/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savedPanels: next.length ? next : null }) });
-    } catch { /* optimistic */ }
+      const res = await fetch(`/api/panels/${id}`, { method: 'DELETE' });
+      if (!res.ok) set({ savedPanels: prev }); // rollback (e.g. not your panel)
+    } catch { set({ savedPanels: prev }); }
+  },
+  togglePanelVisibility: async (id, isPublic) => {
+    const prev = get().savedPanels;
+    set({ savedPanels: prev.map((p) => (p.id === id ? { ...p, isPublic } : p)) });
+    try {
+      const res = await fetch(`/api/panels/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isPublic }),
+      });
+      if (!res.ok) set({ savedPanels: prev });
+    } catch { set({ savedPanels: prev }); }
   },
   saveDashboardLayout: async (layout) => {
     set({ dashboardLayout: layout });
