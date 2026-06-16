@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession, createToken, setSessionCookie } from "@/lib/auth";
+import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,7 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const user = await prisma.user.findUnique({
     where: { id: session.id },
-    select: { id: true, email: true, name: true, role: true },
+    select: { id: true, email: true, name: true, role: true, dashboardLayout: true },
   });
   if (!user) return NextResponse.json({ error: "not found" }, { status: 404 });
   return NextResponse.json(user);
@@ -20,13 +21,24 @@ export async function PATCH(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const b = await req.json().catch(() => ({}));
-  if (!("name" in b)) return NextResponse.json({ error: "nothing to update" }, { status: 400 });
-  const name = b.name ? String(b.name).trim() : null;
+  const data: Record<string, unknown> = {};
+  if ("name" in b) data.name = b.name ? String(b.name).trim() : null;
+  // Dashboard layout: store the widget array as JSON (or clear it to reset to defaults).
+  if ("dashboardLayout" in b) {
+    data.dashboardLayout =
+      b.dashboardLayout === null
+        ? Prisma.DbNull
+        : (b.dashboardLayout as unknown as Prisma.InputJsonValue);
+  }
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: "nothing to update" }, { status: 400 });
+  }
   const user = await prisma.user.update({
     where: { id: session.id },
-    data: { name },
-    select: { id: true, email: true, name: true, role: true },
+    data: data as any,
+    select: { id: true, email: true, name: true, role: true, dashboardLayout: true },
   });
-  await setSessionCookie(await createToken(user));
+  // Re-issue the cookie only when identity fields changed (layout isn't in the token).
+  if ("name" in b) await setSessionCookie(await createToken({ id: user.id, email: user.email, name: user.name, role: user.role }));
   return NextResponse.json(user);
 }

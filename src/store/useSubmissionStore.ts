@@ -5,11 +5,13 @@ import type { Submission, FilterState, SortConfig, Activity } from '@/types';
 interface TeamUser { email: string; name: string | null; role: string }
 interface Me { email: string; name: string | null; role: string }
 export interface TokenCandidate { tokenAddress: string; symbol: string | null; name: string | null; status: string | null; deployerX: string | null; feeX: string | null; identityMatch: boolean; projectMatch?: boolean; bankrDeployed: boolean; vol24h?: number | null; marketCapUsd?: number | null }
+export interface DashboardWidget { id: string; visible: boolean; span: number; order: number }
 
 interface SubmissionStore {
   submissions: Submission[];
   users: TeamUser[];
   me: Me | null;
+  dashboardLayout: DashboardWidget[] | null;
   loaded: boolean;
   loading: boolean;
   searchQuery: string;
@@ -17,6 +19,9 @@ interface SubmissionStore {
   sort: SortConfig;
 
   setMe: (me: Me | null) => void;
+  loadDashboardLayout: () => Promise<void>;
+  saveDashboardLayout: (layout: DashboardWidget[]) => Promise<void>;
+  setDashboardLayout: (layout: DashboardWidget[]) => void;
   load: () => Promise<void>;
   loadUsers: () => Promise<void>;
   importNow: (source?: string) => Promise<any>;
@@ -57,6 +62,7 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
   submissions: [],
   users: [],
   me: null,
+  dashboardLayout: null,
   loaded: false,
   loading: false,
   searchQuery: '',
@@ -74,6 +80,26 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
   sort: { key: 'score', direction: 'desc' as const },
 
   setMe: (me) => set({ me }),
+  setDashboardLayout: (layout) => set({ dashboardLayout: layout }),
+  loadDashboardLayout: async () => {
+    try {
+      const res = await fetch('/api/me');
+      if (!res.ok) return;
+      const data = await res.json();
+      const layout = Array.isArray(data?.dashboardLayout) ? (data.dashboardLayout as DashboardWidget[]) : null;
+      set({ dashboardLayout: layout });
+    } catch { /* keep defaults */ }
+  },
+  saveDashboardLayout: async (layout) => {
+    set({ dashboardLayout: layout });
+    try {
+      await fetch('/api/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dashboardLayout: layout }),
+      });
+    } catch { /* optimistic; ignore network error */ }
+  },
 
   load: async () => {
     if (get().loading) return;

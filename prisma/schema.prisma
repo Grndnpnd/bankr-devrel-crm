@@ -37,6 +37,7 @@ model User {
   role         Role               @default(DEVREL)
   active       Boolean            @default(true)
   passwordHash String
+  dashboardLayout Json?
   activities   OutreachActivity[]
   createdAt    DateTime           @default(now())
 }
