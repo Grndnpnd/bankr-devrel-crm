@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import type { AnalyticsSpec } from '@/lib/analyticsSpec';
 import AnalyticsPanel from './AnalyticsPanel';
+import ChatPanel from './ChatPanel';
 
 const EXAMPLES = [
   'How many projects are in each stage?',
@@ -17,6 +18,7 @@ const EXAMPLES = [
 
 const AskData: React.FC = () => {
   const addSavedPanel = useSubmissionStore((st) => st.addSavedPanel);
+  const [mode, setMode] = useState<'panel' | 'chat'>('panel');
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<AnalyticsSpec | null>(null);
@@ -62,11 +64,25 @@ const AskData: React.FC = () => {
         <div className="flex items-center justify-center rounded-full" style={{ width: 36, height: 36, backgroundColor: 'rgba(245,166,35,0.12)' }}>
           <Sparkles size={20} style={{ color: '#F5A623' }} />
         </div>
-        <div>
+        <div style={{ flex: 1 }}>
           <h3 style={{ fontFamily: "'Manrope', sans-serif", fontSize: 17, fontWeight: 600, color: '#F0F0F0' }}>Ask Your Data</h3>
-          <p style={{ fontSize: 12, color: '#8A8A8A' }}>Ask a question; pin the answer as a panel.</p>
+          <p style={{ fontSize: 12, color: '#8A8A8A' }}>
+            {mode === 'panel' ? 'Build a chart or stat and pin it to your dashboard.' : 'Have a conversation about your pipeline.'}
+          </p>
+        </div>
+        <div className="flex items-center rounded-lg" style={{ padding: 2, backgroundColor: '#141414', border: '1px solid rgba(255,255,255,0.1)', gap: 2 }}>
+          {(['panel', 'chat'] as const).map((m) => (
+            <button key={m} onClick={() => setMode(m)}
+              style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 6, cursor: 'pointer',
+                backgroundColor: mode === m ? 'rgba(245,166,35,0.18)' : 'transparent',
+                color: mode === m ? '#F5A623' : '#8A8A8A' }}>
+              {m === 'panel' ? 'Build a panel' : 'Ask a question'}
+            </button>
+          ))}
         </div>
       </div>
+
+      {mode === 'chat' ? <ChatPanel /> : (<>
 
       <div className="flex items-center rounded-xl mb-3" style={{ height: 48, backgroundColor: '#141414', border: '1px solid rgba(255,255,255,0.1)', padding: '0 14px', gap: 10 }}>
         <input
@@ -114,6 +130,7 @@ const AskData: React.FC = () => {
           <AnalyticsPanel spec={preview} />
         </div>
       )}
+      </>)}
     </motion.div>
   );
 };

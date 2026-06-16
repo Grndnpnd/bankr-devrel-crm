@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { LayoutGrid, Check, RotateCcw, Eye, EyeOff, GripVertical } from 'lucide-react';
+import { LayoutGrid, Check, RotateCcw, EyeOff, GripVertical } from 'lucide-react';
 import { useSubmissionStore, type DashboardWidget } from '@/store/useSubmissionStore';
 import AnalyticsPanel from '@/components/analytics/AnalyticsPanel';
 import DataCard from '@/components/DataCard';
@@ -172,24 +172,38 @@ const Dashboard: React.FC = () => {
         )}
       </div>
 
-      {/* Hidden widgets tray (edit mode only) */}
-      {editing && hidden.length > 0 && (
-        <div className="mb-5" style={{ padding: 12, borderRadius: 10, border: '1px dashed rgba(255,255,255,0.12)' }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#525252', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 8 }}>
-            Hidden widgets
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {hidden.map((w) => (
-              <button
-                key={w.id}
-                onClick={() => update(w.id, { visible: true })}
-                className="inline-flex items-center gap-1.5 rounded-md"
-                style={{ fontSize: 12, fontWeight: 500, padding: '5px 10px', backgroundColor: '#141414', border: '1px solid rgba(255,255,255,0.1)', color: '#8A8A8A' }}
-              >
-                <Eye size={13} /> {widgetById(w.id)?.label ?? (panelById.get(w.id)?.spec?.title || 'Saved panel')}
-              </button>
-            ))}
-          </div>
+      {/* Add container picker (edit mode) — scales past a handful of saved panels */}
+      {editing && (
+        <div className="mb-5 flex items-center gap-3" style={{ padding: 12, borderRadius: 10, border: '1px dashed rgba(255,255,255,0.12)' }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#525252', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+            Add container
+          </span>
+          {hidden.length > 0 ? (
+            <select
+              value=""
+              onChange={(e) => { if (e.target.value) update(e.target.value, { visible: true }); }}
+              style={{ flex: 1, maxWidth: 360, height: 34, padding: '0 10px', fontSize: 13, color: '#F0F0F0', backgroundColor: '#141414', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, cursor: 'pointer' }}
+            >
+              <option value="" style={{ color: '#525252' }}>Choose a container to add…</option>
+              {hidden.some((w) => widgetById(w.id)) && (
+                <optgroup label="Built-in">
+                  {hidden.filter((w) => widgetById(w.id)).map((w) => (
+                    <option key={w.id} value={w.id}>{widgetById(w.id)!.label}</option>
+                  ))}
+                </optgroup>
+              )}
+              {hidden.some((w) => panelById.get(w.id)) && (
+                <optgroup label="Saved panels">
+                  {hidden.filter((w) => panelById.get(w.id)).map((w) => (
+                    <option key={w.id} value={w.id}>{panelById.get(w.id)?.spec?.title || 'Saved panel'}</option>
+                  ))}
+                </optgroup>
+              )}
+            </select>
+          ) : (
+            <span style={{ fontSize: 13, color: '#525252' }}>Everything's already on your dashboard.</span>
+          )}
+          <span style={{ fontSize: 12, color: '#525252' }}>{hidden.length} available</span>
         </div>
       )}
 
