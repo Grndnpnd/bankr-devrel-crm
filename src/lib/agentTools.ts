@@ -7,6 +7,8 @@ import {
 import { toChatRows, capRows } from '@/lib/chatData';
 import type { ToolDef } from '@/lib/llm';
 import { fetchTokenData, isContractAddress } from '@/lib/discover';
+import { prisma } from '@/lib/prisma';
+import { getWeights } from '@/lib/scoreConfig';
 
 /**
  * Stage 1 agent tools — all READ-ONLY. The harness is built so write tools
@@ -117,6 +119,24 @@ export const AGENT_TOOLS: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'list_saved_panels',
+      description:
+        'List the analytics panels that already exist (the current user\'s own panels plus team-shared ones), with their titles and what they show. Use BEFORE building a new panel to avoid duplicating one that exists, or when the user asks what panels they have.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_score_config',
+      description:
+        'Get the current scoring weights (how each component contributes to a project\'s 0-100 score: onchain volume, token launched, traction, founder, completeness). Use to explain why a project scored what it did or how scoring works.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'build_panel',
       description:
         'Create a saved analytics panel (chart/stat/table) the user can pin to their dashboard. Use when the user asks to "make a panel/chart" or "add this to my dashboard". Returns a validated spec the UI offers to save. Same shape as query_pipeline.',
@@ -163,7 +183,9 @@ const findProject = (submissions: Submission[], q: string): Submission | undefin
 };
 
 /** Execute a tool call by name. Async because some tools hit external APIs. */
-export async function runTool(name: string, args: any, submissions: Submission[]): Promise<ToolExecResult> {
+export interface ToolContext { userId: string }
+
+export async function runTool(name: string, args: any, submissions: Submission[], ctx: ToolContext): Promise<ToolExecResult> {
   if (name === 'query_pipeline') {
     const v = validateSpec(args);
     if (!v.ok) return { result: JSON.stringify({ error: 'invalid query', details: v.errors }) };
@@ -232,6 +254,40 @@ export async function runTool(name: string, args: any, submissions: Submission[]
       return { result: JSON.stringify({ found: true, live: true, token: t }) };
     } catch (e: any) {
       return { result: JSON.stringify({ error: e?.message ?? 'discover API error' }) };
+    }
+  }
+
+  if (name === 'list_saved_panels') {
+    try {
+      const rows = await prisma.sharedPanel.findMany({
+        where: { OR: [{ ownerId: ctx.userId }, { isPublic: true }] },
+        include: { owner: { select: { name: true, email: true } } },
+        orderBy: { createdAt: 'asc' },
+      });
+      const panels = rows.map((r: any) => ({
+        title: r.title,
+        type: r.spec?.type,
+        shows: r.spec?.groupBy ? `${r.spec?.metric || 'count'} by ${r.spec.groupBy}` : (r.spec?.metric || 'count'),
+        mine: r.ownerId === ctx.userId,
+        shared: r.isPublic,
+        owner: r.owner?.name || r.owner?.email || 'teammate',
+      }));
+      return { result: JSON.stringify({ count: panels.length, panels }) };
+    } catch (e: any) {
+      return { result: JSON.stringify({ error: e?.message ?? 'could not list panels' }) };
+    }
+  }
+
+  if (name === 'get_score_config') {
+    try {
+      const w = await getWeights();
+      return { result: JSON.stringify({
+        max: 100,
+        weights: { onchain_volume: w.fees, token_launched: w.launched, traction: w.traction, founder: w.founder, completeness: w.completeness },
+        note: 'Onchain volume is scored on a log scale capped at its weight; the others are awarded in full when present.',
+      }) };
+    } catch (e: any) {
+      return { result: JSON.stringify({ error: e?.message ?? 'could not read score config' }) };
     }
   }
 

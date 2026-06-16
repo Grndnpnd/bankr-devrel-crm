@@ -18,6 +18,8 @@ You have tools:
 - search_submissions: free-text search across names + narrative. Use for thematic questions ("find projects doing RWAs", "who mentioned points").
 - get_team_workload: how submissions split across owners. Use for "who has the most on their plate", "what is <owner> working on".
 - get_token_data: LIVE onchain data (volume/market cap/price change) from the discover API for a project or contract address. Use for "what's X's volume right now" — note this is real-time vs. the cached snapshot, so say so.
+- list_saved_panels: see what panels already exist (the user's + team-shared). Check this BEFORE build_panel so you don't duplicate an existing panel.
+- get_score_config: the current scoring weights — use to explain why a project scored what it did.
 - build_panel: create a chart/stat/table panel the user can pin to their dashboard. Use when they want to "make"/"add"/"pin" a panel.
 
 Rules:
@@ -68,7 +70,7 @@ export async function POST(req: Request) {
       let args: any = {};
       try { args = JSON.parse(call.function.arguments || "{}"); } catch { /* keep {} */ }
       toolTrace.push({ name: call.function.name, args });
-      const exec = await runTool(call.function.name, args, submissions);
+      const exec = await runTool(call.function.name, args, submissions, { userId: session.id });
       if (exec.panelSpec) builtPanel = exec.panelSpec;
       messages.push({ role: "tool", tool_call_id: call.id, name: call.function.name, content: exec.result });
     }
