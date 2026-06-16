@@ -7,6 +7,7 @@ import AccountTab from '@/components/settings/AccountTab';
 import ScoringTab from '@/components/settings/ScoringTab';
 import SourcesTab from '@/components/settings/SourcesTab';
 import UsersTab from '@/components/settings/UsersTab';
+import CronTab from '@/components/settings/CronTab';
 import ImportLogTab from '@/components/settings/ImportLogTab';
 import type { SettingsTab as TabType } from '@/components/settings/SettingsTabs';
 
@@ -68,6 +69,7 @@ const Settings: React.FC = () => {
         {activeTab === 'scoring' && <ScoringTab onUnsavedChange={scoringUnsaved} />}
         {activeTab === 'sources' && <SourcesTab />}
         {activeTab === 'users' && <UsersTab />}
+        {activeTab === 'automation' && <CronTab />}
         {activeTab === 'import-log' && <ImportLogTab />}
       </motion.div>
     </div>

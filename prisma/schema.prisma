@@ -58,6 +58,24 @@ model SharedPanel {
   @@index([ownerId])
 }
 
+model CronJob {
+  id          String    @id @default(cuid())
+  name        String
+  type        String                       // handler key, e.g. "refresh_onchain"
+  schedule    String                       // preset token ("15m"/"hourly"/...) or a cron expression
+  enabled     Boolean   @default(true)
+  lastRunAt   DateTime?
+  nextRunAt   DateTime?
+  lastStatus  String?                      // "ok" | "error" | "running"
+  lastResult  Json?
+  lastError   String?
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([enabled])
+}
+
 model Submission {
   id              String             @id @default(cuid())
   source          Source
