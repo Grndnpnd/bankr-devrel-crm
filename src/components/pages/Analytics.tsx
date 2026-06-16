@@ -224,7 +224,7 @@ const scoreRangeToBounds = (range: string): { scoreMin: number; scoreMax: number
 };
 
 // ── Tag Distribution Donut ────────────────────────────────────────
-const DonutChart: React.FC = () => {
+export const DonutChart: React.FC = () => {
   const subs = useSubmissionStore((st) => st.submissions);
   const { tagDistribution } = useMemo(() => computeAnalytics(subs), [subs]);
   const router = useRouter();
@@ -324,7 +324,7 @@ const DonutChart: React.FC = () => {
 };
 
 // ── Fee Leaders Horizontal Bar ────────────────────────────────────
-const FeeLeadersChart: React.FC = () => {
+export const FeeLeadersChart: React.FC = () => {
   const subs = useSubmissionStore((st) => st.submissions);
   const { volumeLeaders } = useMemo(() => computeAnalytics(subs), [subs]);
   const router = useRouter();
@@ -380,7 +380,7 @@ const FeeLeadersChart: React.FC = () => {
 };
 
 // ── Score Distribution Bar ────────────────────────────────────────
-const ScoreDistChart: React.FC = () => {
+export const ScoreDistChart: React.FC = () => {
   const subs = useSubmissionStore((st) => st.submissions);
   const { scoreBuckets } = useMemo(() => computeAnalytics(subs), [subs]);
   const router = useRouter();
@@ -429,7 +429,7 @@ const ScoreDistChart: React.FC = () => {
 };
 
 // ── Submission Trend Area ─────────────────────────────────────────
-const SubmissionTrendChart: React.FC = () => {
+export const SubmissionTrendChart: React.FC = () => {
   const subs = useSubmissionStore((st) => st.submissions);
   const { submissionTimeline } = useMemo(() => computeAnalytics(subs), [subs]);
   return (
@@ -518,7 +518,7 @@ function relativeTime(dateStr: string): string {
 }
 
 // ── Outreach Activity Table ───────────────────────────────────────
-const OutreachTable: React.FC = () => {
+export const OutreachTable: React.FC = () => {
   const subs = useSubmissionStore((st) => st.submissions);
   const { outreachActivity } = useMemo(() => computeAnalytics(subs), [subs]);
   return (

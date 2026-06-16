@@ -5,7 +5,7 @@ import type { Submission, FilterState, SortConfig, Activity } from '@/types';
 interface TeamUser { email: string; name: string | null; role: string }
 interface Me { email: string; name: string | null; role: string }
 export interface TokenCandidate { tokenAddress: string; symbol: string | null; name: string | null; status: string | null; deployerX: string | null; feeX: string | null; identityMatch: boolean; projectMatch?: boolean; bankrDeployed: boolean; vol24h?: number | null; marketCapUsd?: number | null }
-export interface DashboardWidget { id: string; visible: boolean; span: number; order: number }
+export interface DashboardWidget { id: string; visible: boolean; span: number; order: number; height?: number | null }
 export interface SavedPanel { id: string; spec: any; createdAt: string }
 
 interface SubmissionStore {

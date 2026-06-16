@@ -9,6 +9,7 @@ import DataCard from '@/components/DataCard';
 import {
   WIDGET_REGISTRY, widgetById, defaultLayout, reconcileLayout,
   SPAN_PRESETS, MIN_SPAN, MAX_SPAN,
+  HEIGHT_PRESETS, MIN_HEIGHT, MAX_HEIGHT,
 } from '@/components/dashboard/widgetRegistry';
 
 /* ─── Edit-mode controls overlaid on each widget ─── */
@@ -16,11 +17,12 @@ const WidgetControls: React.FC<{
   widget: DashboardWidget;
   label: string;
   onSpan: (span: number) => void;
+  onHeight: (h: number | null) => void;
   onHide: () => void;
   dragHandlers: {
     onPointerDown: (e: React.PointerEvent) => void;
   };
-}> = ({ widget, label, onSpan, onHide, dragHandlers }) => {
+}> = ({ widget, label, onSpan, onHeight, onHide, dragHandlers }) => {
   const presetActive = (v: number) => widget.span === v;
   const btn = (active: boolean): React.CSSProperties => ({
     fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 5, cursor: 'pointer',
@@ -43,9 +45,15 @@ const WidgetControls: React.FC<{
       <span style={{ fontSize: 12, fontWeight: 600, color: '#F0F0F0', flex: 1 }}>
         {label}
       </span>
+      <span style={{ fontSize: 10, color: '#525252', fontWeight: 600 }}>W</span>
       <button style={btn(presetActive(SPAN_PRESETS.S))} onClick={() => onSpan(SPAN_PRESETS.S)}>S</button>
       <button style={btn(presetActive(SPAN_PRESETS.M))} onClick={() => onSpan(SPAN_PRESETS.M)}>M</button>
       <button style={btn(presetActive(SPAN_PRESETS.L))} onClick={() => onSpan(SPAN_PRESETS.L)}>L</button>
+      <span style={{ fontSize: 10, color: '#525252', fontWeight: 600, marginLeft: 4 }}>H</span>
+      <button style={btn(widget.height === HEIGHT_PRESETS.S)} onClick={() => onHeight(HEIGHT_PRESETS.S)}>S</button>
+      <button style={btn(widget.height === HEIGHT_PRESETS.M)} onClick={() => onHeight(HEIGHT_PRESETS.M)}>M</button>
+      <button style={btn(widget.height === HEIGHT_PRESETS.L)} onClick={() => onHeight(HEIGHT_PRESETS.L)}>L</button>
+      <button style={btn(widget.height == null)} onClick={() => onHeight(null)} title="Auto height (fit content)">Auto</button>
       <button
         onClick={onHide}
         title="Hide this widget"
@@ -131,6 +139,29 @@ const Dashboard: React.FC = () => {
     window.removeEventListener('pointermove', onResizeMove);
     window.removeEventListener('pointerup', onResizeEnd);
   }, [onResizeMove]);
+
+  // ── Drag-to-resize height (bottom edge) ──
+  const vResizeRef = useRef<{ id: string; startY: number; startH: number } | null>(null);
+  const onVResizeStart = (id: string, currentH: number | null) => (e: React.PointerEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const el = (e.currentTarget as HTMLElement).closest('[data-widget-body]') as HTMLElement | null;
+    const startH = currentH ?? (el?.offsetHeight ?? MIN_HEIGHT);
+    vResizeRef.current = { id, startY: e.clientY, startH };
+    window.addEventListener('pointermove', onVResizeMove);
+    window.addEventListener('pointerup', onVResizeEnd);
+  };
+  const onVResizeMove = useCallback((e: PointerEvent) => {
+    const r = vResizeRef.current;
+    if (!r) return;
+    const h = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, r.startH + (e.clientY - r.startY)));
+    setDraft((prev) => prev.map((w) => (w.id === r.id ? { ...w, height: h } : w)));
+  }, []);
+  const onVResizeEnd = useCallback(() => {
+    vResizeRef.current = null;
+    window.removeEventListener('pointermove', onVResizeMove);
+    window.removeEventListener('pointerup', onVResizeEnd);
+  }, [onVResizeMove]);
 
   const save = async () => {
     await saveDashboardLayout(resequence(visible).concat(hidden.map((h, i) => ({ ...h, order: visible.length + i }))));
@@ -230,11 +261,20 @@ const Dashboard: React.FC = () => {
                   widget={w}
                   label={def?.label ?? (panel?.spec?.title || 'Saved panel')}
                   onSpan={(span) => update(w.id, { span })}
+                  onHeight={(height) => update(w.id, { height })}
                   onHide={() => update(w.id, { visible: false })}
                   dragHandlers={{ onPointerDown: onDragStart(w.id) }}
                 />
               )}
-              <div style={{ outline: editing ? '1px dashed rgba(245,166,35,0.25)' : 'none', borderRadius: 12, position: 'relative' }}>
+              <div
+                data-widget-body
+                style={{
+                  outline: editing ? '1px dashed rgba(245,166,35,0.25)' : 'none',
+                  borderRadius: 12, position: 'relative',
+                  height: w.height ? `${w.height}px` : undefined,
+                  overflow: w.height ? 'auto' : undefined,
+                }}
+              >
                 {Widget ? <Widget /> : (
                   <DataCard title={panel!.spec?.title || 'Panel'}>
                     <AnalyticsPanel spec={panel!.spec} compact />
@@ -250,6 +290,15 @@ const Dashboard: React.FC = () => {
                     }}
                   >
                     <div style={{ position: 'absolute', top: '50%', right: 1, transform: 'translateY(-50%)', width: 3, height: 36, borderRadius: 2, backgroundColor: 'rgba(245,166,35,0.5)' }} />
+                  </div>
+                )}
+                {editing && (
+                  <div
+                    onPointerDown={onVResizeStart(w.id, w.height ?? null)}
+                    title="Drag to resize height"
+                    style={{ position: 'absolute', left: 0, bottom: -3, width: '100%', height: 8, cursor: 'ns-resize' }}
+                  >
+                    <div style={{ position: 'absolute', left: '50%', bottom: 1, transform: 'translateX(-50%)', width: 36, height: 3, borderRadius: 2, backgroundColor: 'rgba(245,166,35,0.5)' }} />
                   </div>
                 )}
               </div>

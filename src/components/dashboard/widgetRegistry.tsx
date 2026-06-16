@@ -7,9 +7,16 @@ import ScoreDistributionChart from '@/components/dashboard/widgets/ScoreDistribu
 import PipelineFunnel from '@/components/dashboard/widgets/PipelineWidget';
 import TopTargetsTable from '@/components/dashboard/widgets/TopTargetsWidget';
 import QuickActions from '@/components/dashboard/widgets/QuickActionsWidget';
+import {
+  DonutChart, FeeLeadersChart, ScoreDistChart, SubmissionTrendChart, OutreachTable,
+} from '@/components/pages/Analytics';
+import AskData from '@/components/analytics/AskData';
 
 /** Span presets on a 12-column grid. */
 export const SPAN_PRESETS = { S: 4, M: 6, L: 12 } as const;
+export const HEIGHT_PRESETS = { S: 240, M: 380, L: 560 } as const;
+export const MIN_HEIGHT = 160;
+export const MAX_HEIGHT = 900;
 export const MIN_SPAN = 3;
 export const MAX_SPAN = 12;
 
@@ -28,6 +35,13 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { id: 'pipeline', label: 'Pipeline', description: 'Submissions by stage', defaultSpan: 5, Component: PipelineFunnel },
   { id: 'top-targets', label: 'Top Targets', description: 'Highest-scoring projects to act on', defaultSpan: 12, Component: TopTargetsTable },
   { id: 'quick-actions', label: 'Quick Actions', description: 'Import, add a submission, and shortcuts', defaultSpan: 12, Component: QuickActions },
+  // ── Analytics-page containers, now available on the dashboard too ──
+  { id: 'an-needs-help', label: 'Needs-Help Distribution', description: 'Breakdown of what projects need help with', defaultSpan: 6, Component: DonutChart },
+  { id: 'an-top-volume', label: 'Top Projects by 24h Volume', description: 'Highest onchain volume right now', defaultSpan: 6, Component: FeeLeadersChart },
+  { id: 'an-score-dist', label: 'Score Distribution (Analytics)', description: 'Score buckets across all submissions', defaultSpan: 6, Component: ScoreDistChart },
+  { id: 'an-trend', label: 'Submissions Over Time', description: 'Submission volume trend', defaultSpan: 6, Component: SubmissionTrendChart },
+  { id: 'an-outreach', label: 'Outreach Activity', description: 'Recent outreach across the team', defaultSpan: 12, Component: OutreachTable },
+  { id: 'ask-data', label: 'Ask Your Data', description: 'Build a panel or chat about your pipeline', defaultSpan: 12, Component: AskData },
 ];
 
 export const widgetById = (id: string): WidgetDef | undefined =>
@@ -62,14 +76,14 @@ export const reconcileLayout = (
   for (const def of WIDGET_REGISTRY) {
     const existing = known.get(def.id);
     merged.push(existing
-      ? { id: def.id, visible: existing.visible !== false, span: Math.min(MAX_SPAN, Math.max(MIN_SPAN, existing.span || def.defaultSpan)), order: existing.order ?? maxOrder }
-      : { id: def.id, visible: true, span: def.defaultSpan, order: ++maxOrder });
+      ? { id: def.id, visible: existing.visible !== false, span: Math.min(MAX_SPAN, Math.max(MIN_SPAN, existing.span || def.defaultSpan)), order: existing.order ?? maxOrder, height: existing.height ?? null }
+      : { id: def.id, visible: true, span: def.defaultSpan, order: ++maxOrder, height: null });
   }
   for (const id of panelIds) {
     const existing = known.get(id);
     merged.push(existing
-      ? { id, visible: existing.visible !== false, span: Math.min(MAX_SPAN, Math.max(MIN_SPAN, existing.span || 6)), order: existing.order ?? maxOrder }
-      : { id, visible: true, span: 6, order: ++maxOrder });
+      ? { id, visible: existing.visible !== false, span: Math.min(MAX_SPAN, Math.max(MIN_SPAN, existing.span || 6)), order: existing.order ?? maxOrder, height: existing.height ?? null }
+      : { id, visible: true, span: 6, order: ++maxOrder, height: null });
   }
   return merged.sort((a, b) => a.order - b.order);
 };
