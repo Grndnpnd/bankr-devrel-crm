@@ -18,19 +18,19 @@ import {
   Area,
 } from 'recharts';
 import {
-  Sparkles,
-  Send,
   StickyNote,
   Mail,
   Phone,
   ArrowRightLeft,
-  Search,
 } from 'lucide-react';
 import DataCard from '@/components/DataCard';
 import { activityTypeConfig, computeAnalytics } from '@/data/analytics';
 import { stageColors } from '@/data/stats';
 import type { ActivityType } from '@/data/analytics';
 import { useSubmissionStore, applyDrilldownFilter } from '@/store/useSubmissionStore';
+import AskData from '@/components/analytics/AskData';
+import AnalyticsPanel from '@/components/analytics/AnalyticsPanel';
+import { Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 // ── Animation ─────────────────────────────────────────────────────
@@ -695,156 +695,35 @@ const OutreachTable: React.FC = () => {
 };
 
 // ── Agent Query Bar ───────────────────────────────────────────────
-const exampleQueries = [
-  'Top 10 uncontacted by score',
-  'Live projects needing fundraising help',
-  'Avg score of projects with token launch needs',
-];
-
-const AgentQueryBar: React.FC = () => {
-  const handleQueryClick = useCallback(() => {
-    toast.info('Analytics agent coming in Phase 2', {
-      duration: 3000,
-      style: {
-        backgroundColor: '#1A1A1A',
-        border: '1px solid rgba(255,255,255,0.06)',
-        color: '#F0F0F0',
-      },
-    });
-  }, []);
-
+const SavedPanelsGrid: React.FC = () => {
+  const savedPanels = useSubmissionStore((st) => st.savedPanels);
+  const loadDashboardLayout = useSubmissionStore((st) => st.loadDashboardLayout);
+  const removeSavedPanel = useSubmissionStore((st) => st.removeSavedPanel);
+  React.useEffect(() => { loadDashboardLayout(); }, [loadDashboardLayout]);
+  if (!savedPanels.length) return null;
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.7, ease }}
-      className="rounded-2xl"
-      style={{
-        background:
-          'linear-gradient(135deg, #1A1A1A 0%, #0D0D0D 50%, #1A1A1A 100%)',
-        border: '1px solid rgba(245,166,35,0.10)',
-        padding: '24px',
-      }}
-    >
-      {/* Header */}
-      <div className="flex flex-col items-center text-center mb-5">
-        <div
-          className="flex items-center justify-center rounded-full mb-3"
-          style={{
-            width: '40px',
-            height: '40px',
-            backgroundColor: 'rgba(245,166,35,0.12)',
-          }}
-        >
-          <Sparkles size={24} style={{ color: '#F5A623' }} />
-        </div>
-        <h3
-          style={{
-            fontFamily: "'Manrope', sans-serif",
-            fontSize: '18px',
-            fontWeight: 600,
-            color: '#F0F0F0',
-            marginBottom: '4px',
-          }}
-        >
-          Ask Your Data
-        </h3>
-        <p style={{ fontSize: '13px', color: '#8A8A8A' }}>
-          Coming soon — Chat with your CRM data using natural language
-        </p>
-      </div>
-
-      {/* Input */}
-      <div className="relative mb-4">
-        <div
-          className="flex items-center rounded-xl"
-          style={{
-            height: '48px',
-            backgroundColor: '#141414',
-            border: '1px solid rgba(255,255,255,0.1)',
-            padding: '0 16px',
-            gap: '12px',
-          }}
-        >
-          <Search size={16} style={{ color: '#525252', flexShrink: 0 }} />
-          <input
-            type="text"
-            placeholder="Ask questions about your data... (e.g., 'Top uncontacted targets with community growth needs')"
-            disabled
-            className="flex-1 bg-transparent outline-none"
-            style={{
-              fontFamily: "'Inter', sans-serif",
-              fontSize: '13px',
-              color: '#F0F0F0',
-              cursor: 'not-allowed',
-            }}
-          />
-          <button
-            disabled
-            className="flex items-center justify-center rounded-lg"
-            style={{
-              width: '32px',
-              height: '32px',
-              backgroundColor: 'rgba(245,166,35,0.2)',
-              cursor: 'not-allowed',
-            }}
-          >
-            <Send size={14} style={{ color: '#525252' }} />
-          </button>
-        </div>
-        {/* Coming soon badge */}
-        <div
-          className="absolute rounded-full"
-          style={{
-            top: '-8px',
-            right: '12px',
-            padding: '1px 8px',
-            fontSize: '10px',
-            fontWeight: 600,
-            color: '#F5A623',
-            backgroundColor: '#1A1A1A',
-            border: '1px solid rgba(245,166,35,0.2)',
-            letterSpacing: '0.02em',
-          }}
-        >
-          Coming soon
-        </div>
-      </div>
-
-      {/* Example queries */}
-      <div className="flex flex-wrap justify-center gap-2">
-        {exampleQueries.map((q) => (
-          <button
-            key={q}
-            onClick={handleQueryClick}
-            className="rounded-full transition-all duration-200"
-            style={{
-              padding: '6px 14px',
-              fontSize: '12px',
-              color: '#8A8A8A',
-              backgroundColor: '#222',
-              border: '1px solid transparent',
-              fontFamily: "'Inter', sans-serif",
-              cursor: 'pointer',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
-              e.currentTarget.style.color = '#F0F0F0';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'transparent';
-              e.currentTarget.style.color = '#8A8A8A';
-            }}
-          >
-            {q}
-          </button>
+    <div>
+      <h3 style={{ fontFamily: "'Manrope', sans-serif", fontSize: 15, fontWeight: 600, color: '#F0F0F0', marginBottom: 12 }}>
+        Saved panels
+      </h3>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+        {savedPanels.map((panel) => (
+          <DataCard key={panel.id} title={panel.spec?.title || 'Panel'} style={{ position: 'relative' }}>
+            <button
+              onClick={() => removeSavedPanel(panel.id)}
+              title="Remove panel"
+              style={{ position: 'absolute', top: 14, right: 14, color: '#525252', display: 'flex' }}
+            >
+              <Trash2 size={14} />
+            </button>
+            <AnalyticsPanel spec={panel.spec} />
+          </DataCard>
         ))}
       </div>
-    </motion.div>
+    </div>
   );
 };
 
-// ── Main Analytics Page ───────────────────────────────────────────
 const Analytics: React.FC = () => {
   const subs = useSubmissionStore((st) => st.submissions);
   const { analyticsStats } = useMemo(() => computeAnalytics(subs), [subs]);
@@ -909,8 +788,11 @@ const Analytics: React.FC = () => {
       {/* Outreach Activity Table */}
       <OutreachTable />
 
-      {/* Agent Query Bar */}
-      <AgentQueryBar />
+      {/* Ask Your Data (LLM) */}
+      <AskData />
+
+      {/* Saved panels */}
+      <SavedPanelsGrid />
 
       <Toaster
         position="bottom-right"

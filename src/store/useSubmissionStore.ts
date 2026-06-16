@@ -6,12 +6,14 @@ interface TeamUser { email: string; name: string | null; role: string }
 interface Me { email: string; name: string | null; role: string }
 export interface TokenCandidate { tokenAddress: string; symbol: string | null; name: string | null; status: string | null; deployerX: string | null; feeX: string | null; identityMatch: boolean; projectMatch?: boolean; bankrDeployed: boolean; vol24h?: number | null; marketCapUsd?: number | null }
 export interface DashboardWidget { id: string; visible: boolean; span: number; order: number }
+export interface SavedPanel { id: string; spec: any; createdAt: string }
 
 interface SubmissionStore {
   submissions: Submission[];
   users: TeamUser[];
   me: Me | null;
   dashboardLayout: DashboardWidget[] | null;
+  savedPanels: SavedPanel[];
   loaded: boolean;
   loading: boolean;
   searchQuery: string;
@@ -22,6 +24,9 @@ interface SubmissionStore {
   loadDashboardLayout: () => Promise<void>;
   saveDashboardLayout: (layout: DashboardWidget[]) => Promise<void>;
   setDashboardLayout: (layout: DashboardWidget[]) => void;
+  loadSavedPanels: () => Promise<void>;
+  addSavedPanel: (spec: any) => Promise<SavedPanel>;
+  removeSavedPanel: (id: string) => Promise<void>;
   load: () => Promise<void>;
   loadUsers: () => Promise<void>;
   importNow: (source?: string) => Promise<any>;
@@ -63,6 +68,7 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
   users: [],
   me: null,
   dashboardLayout: null,
+  savedPanels: [],
   loaded: false,
   loading: false,
   searchQuery: '',
@@ -87,8 +93,33 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
       if (!res.ok) return;
       const data = await res.json();
       const layout = Array.isArray(data?.dashboardLayout) ? (data.dashboardLayout as DashboardWidget[]) : null;
-      set({ dashboardLayout: layout });
+      const panels = Array.isArray(data?.savedPanels) ? (data.savedPanels as SavedPanel[]) : [];
+      set({ dashboardLayout: layout, savedPanels: panels });
     } catch { /* keep defaults */ }
+  },
+  loadSavedPanels: async () => {
+    try {
+      const res = await fetch('/api/me');
+      if (!res.ok) return;
+      const data = await res.json();
+      set({ savedPanels: Array.isArray(data?.savedPanels) ? (data.savedPanels as SavedPanel[]) : [] });
+    } catch { /* keep */ }
+  },
+  addSavedPanel: async (spec) => {
+    const panel: SavedPanel = { id: `panel_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`, spec, createdAt: new Date().toISOString() };
+    const next = [...get().savedPanels, panel];
+    set({ savedPanels: next });
+    try {
+      await fetch('/api/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savedPanels: next }) });
+    } catch { /* optimistic */ }
+    return panel;
+  },
+  removeSavedPanel: async (id) => {
+    const next = get().savedPanels.filter((p) => p.id !== id);
+    set({ savedPanels: next });
+    try {
+      await fetch('/api/me', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ savedPanels: next.length ? next : null }) });
+    } catch { /* optimistic */ }
   },
   saveDashboardLayout: async (layout) => {
     set({ dashboardLayout: layout });

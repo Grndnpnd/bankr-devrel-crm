@@ -38,6 +38,7 @@ model User {
   active       Boolean            @default(true)
   passwordHash String
   dashboardLayout Json?
+  savedPanels     Json?
   activities   OutreachActivity[]
   createdAt    DateTime           @default(now())
 }

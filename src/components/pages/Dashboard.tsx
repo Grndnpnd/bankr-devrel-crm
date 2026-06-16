@@ -3,6 +3,9 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { motion } from 'framer-motion';
 import { LayoutGrid, Check, RotateCcw, Eye, EyeOff, GripVertical } from 'lucide-react';
 import { useSubmissionStore, type DashboardWidget } from '@/store/useSubmissionStore';
+import AnalyticsPanel from '@/components/analytics/AnalyticsPanel';
+import DataCard from '@/components/DataCard';
+
 import {
   WIDGET_REGISTRY, widgetById, defaultLayout, reconcileLayout,
   SPAN_PRESETS, MIN_SPAN, MAX_SPAN,
@@ -11,12 +14,13 @@ import {
 /* ─── Edit-mode controls overlaid on each widget ─── */
 const WidgetControls: React.FC<{
   widget: DashboardWidget;
+  label: string;
   onSpan: (span: number) => void;
   onHide: () => void;
   dragHandlers: {
     onPointerDown: (e: React.PointerEvent) => void;
   };
-}> = ({ widget, onSpan, onHide, dragHandlers }) => {
+}> = ({ widget, label, onSpan, onHide, dragHandlers }) => {
   const presetActive = (v: number) => widget.span === v;
   const btn = (active: boolean): React.CSSProperties => ({
     fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 5, cursor: 'pointer',
@@ -37,7 +41,7 @@ const WidgetControls: React.FC<{
         <GripVertical size={15} />
       </button>
       <span style={{ fontSize: 12, fontWeight: 600, color: '#F0F0F0', flex: 1 }}>
-        {widgetById(widget.id)?.label ?? widget.id}
+        {label}
       </span>
       <button style={btn(presetActive(SPAN_PRESETS.S))} onClick={() => onSpan(SPAN_PRESETS.S)}>S</button>
       <button style={btn(presetActive(SPAN_PRESETS.M))} onClick={() => onSpan(SPAN_PRESETS.M)}>M</button>
@@ -55,14 +59,16 @@ const WidgetControls: React.FC<{
 
 /* ─── Dashboard Page ─── */
 const Dashboard: React.FC = () => {
-  const { dashboardLayout, loadDashboardLayout, saveDashboardLayout } = useSubmissionStore();
+  const { dashboardLayout, loadDashboardLayout, saveDashboardLayout, savedPanels } = useSubmissionStore();
+  const panelIds = useMemo(() => savedPanels.map((p) => p.id), [savedPanels]);
+  const panelById = useMemo(() => new Map(savedPanels.map((p) => [p.id, p])), [savedPanels]);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<DashboardWidget[]>(defaultLayout());
 
   // Load the saved layout once on mount.
   useEffect(() => { loadDashboardLayout(); }, [loadDashboardLayout]);
   // Keep the working copy in sync with the store (reconciled against the registry).
-  useEffect(() => { setDraft(reconcileLayout(dashboardLayout)); }, [dashboardLayout]);
+  useEffect(() => { setDraft(reconcileLayout(dashboardLayout, panelIds)); }, [dashboardLayout, panelIds]);
 
   const ordered = useMemo(() => [...draft].sort((a, b) => a.order - b.order), [draft]);
   const visible = ordered.filter((w) => w.visible);
@@ -130,7 +136,7 @@ const Dashboard: React.FC = () => {
     await saveDashboardLayout(resequence(visible).concat(hidden.map((h, i) => ({ ...h, order: visible.length + i }))));
     setEditing(false);
   };
-  const cancel = () => { setDraft(reconcileLayout(dashboardLayout)); setEditing(false); };
+  const cancel = () => { setDraft(reconcileLayout(dashboardLayout, panelIds)); setEditing(false); };
   const reset = () => setDraft(defaultLayout());
 
   return (
@@ -180,7 +186,7 @@ const Dashboard: React.FC = () => {
                 className="inline-flex items-center gap-1.5 rounded-md"
                 style={{ fontSize: 12, fontWeight: 500, padding: '5px 10px', backgroundColor: '#141414', border: '1px solid rgba(255,255,255,0.1)', color: '#8A8A8A' }}
               >
-                <Eye size={13} /> {widgetById(w.id)?.label ?? w.id}
+                <Eye size={13} /> {widgetById(w.id)?.label ?? (panelById.get(w.id)?.spec?.title || 'Saved panel')}
               </button>
             ))}
           </div>
@@ -195,8 +201,9 @@ const Dashboard: React.FC = () => {
       >
         {visible.map((w) => {
           const def = widgetById(w.id);
-          if (!def) return null;
-          const Widget = def.Component;
+          const panel = !def ? panelById.get(w.id) : null;
+          if (!def && !panel) return null;
+          const Widget = def?.Component;
           return (
             <div
               key={w.id}
@@ -207,13 +214,18 @@ const Dashboard: React.FC = () => {
               {editing && (
                 <WidgetControls
                   widget={w}
+                  label={def?.label ?? (panel?.spec?.title || 'Saved panel')}
                   onSpan={(span) => update(w.id, { span })}
                   onHide={() => update(w.id, { visible: false })}
                   dragHandlers={{ onPointerDown: onDragStart(w.id) }}
                 />
               )}
               <div style={{ outline: editing ? '1px dashed rgba(245,166,35,0.25)' : 'none', borderRadius: 12, position: 'relative' }}>
-                <Widget />
+                {Widget ? <Widget /> : (
+                  <DataCard title={panel!.spec?.title || 'Panel'}>
+                    <AnalyticsPanel spec={panel!.spec} compact />
+                  </DataCard>
+                )}
                 {editing && (
                   <div
                     onPointerDown={onResizeStart(w.id, w.span)}

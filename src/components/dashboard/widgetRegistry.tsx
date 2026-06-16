@@ -40,24 +40,36 @@ export const defaultLayout = (): DashboardWidget[] =>
 /**
  * Merge a saved layout against the registry so newly-added widgets appear
  * (default visible at the end) and removed widgets are dropped.
+ *
+ * `panelIds` are dynamic, user-created saved-panel ids (prefix `panel_`). They
+ * are treated as first-class widgets: included if present, defaulted to visible
+ * at the end if newly saved, and dropped if the panel was deleted.
  */
-export const reconcileLayout = (saved: DashboardWidget[] | null): DashboardWidget[] => {
-  if (!saved || !saved.length) return defaultLayout();
-  const known = new Map(saved.map((w) => [w.id, w]));
+export const reconcileLayout = (
+  saved: DashboardWidget[] | null,
+  panelIds: string[] = [],
+): DashboardWidget[] => {
+  const validIds = new Set<string>([...WIDGET_REGISTRY.map((w) => w.id), ...panelIds]);
+  if (!saved || !saved.length) {
+    // default: static widgets in order, then saved panels (half-width) after.
+    const base = defaultLayout();
+    panelIds.forEach((id, i) => base.push({ id, visible: true, span: 6, order: base.length + i }));
+    return base;
+  }
+  const known = new Map(saved.filter((w) => validIds.has(w.id)).map((w) => [w.id, w]));
   const merged: DashboardWidget[] = [];
   let maxOrder = saved.reduce((m, w) => Math.max(m, w.order ?? 0), 0);
   for (const def of WIDGET_REGISTRY) {
     const existing = known.get(def.id);
-    if (existing) {
-      merged.push({
-        id: def.id,
-        visible: existing.visible !== false,
-        span: Math.min(MAX_SPAN, Math.max(MIN_SPAN, existing.span || def.defaultSpan)),
-        order: existing.order ?? maxOrder,
-      });
-    } else {
-      merged.push({ id: def.id, visible: true, span: def.defaultSpan, order: ++maxOrder });
-    }
+    merged.push(existing
+      ? { id: def.id, visible: existing.visible !== false, span: Math.min(MAX_SPAN, Math.max(MIN_SPAN, existing.span || def.defaultSpan)), order: existing.order ?? maxOrder }
+      : { id: def.id, visible: true, span: def.defaultSpan, order: ++maxOrder });
+  }
+  for (const id of panelIds) {
+    const existing = known.get(id);
+    merged.push(existing
+      ? { id, visible: existing.visible !== false, span: Math.min(MAX_SPAN, Math.max(MIN_SPAN, existing.span || 6)), order: existing.order ?? maxOrder }
+      : { id, visible: true, span: 6, order: ++maxOrder });
   }
   return merged.sort((a, b) => a.order - b.order);
 };

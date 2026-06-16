@@ -10,7 +10,7 @@ export async function GET() {
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const user = await prisma.user.findUnique({
     where: { id: session.id },
-    select: { id: true, email: true, name: true, role: true, dashboardLayout: true },
+    select: { id: true, email: true, name: true, role: true, dashboardLayout: true, savedPanels: true },
   });
   if (!user) return NextResponse.json({ error: "not found" }, { status: 404 });
   return NextResponse.json(user);
@@ -30,13 +30,19 @@ export async function PATCH(req: Request) {
         ? Prisma.DbNull
         : (b.dashboardLayout as unknown as Prisma.InputJsonValue);
   }
+  if ("savedPanels" in b) {
+    data.savedPanels =
+      b.savedPanels === null
+        ? Prisma.DbNull
+        : (b.savedPanels as unknown as Prisma.InputJsonValue);
+  }
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: "nothing to update" }, { status: 400 });
   }
   const user = await prisma.user.update({
     where: { id: session.id },
     data: data as any,
-    select: { id: true, email: true, name: true, role: true, dashboardLayout: true },
+    select: { id: true, email: true, name: true, role: true, dashboardLayout: true, savedPanels: true },
   });
   // Re-issue the cookie only when identity fields changed (layout isn't in the token).
   if ("name" in b) await setSessionCookie(await createToken({ id: user.id, email: user.email, name: user.name, role: user.role }));
