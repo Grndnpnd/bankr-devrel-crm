@@ -286,3 +286,15 @@ export const useOwnerNames = (): string[] => {
     [users]
   );
 };
+
+/** Reset all filters to defaults, then apply a partial — used by chart drill-downs
+ *  so a click lands on the submissions list showing exactly that slice. */
+export const applyDrilldownFilter = (partial: Partial<FilterState>) => {
+  useSubmissionStore.getState().setSearch('');
+  useSubmissionStore.getState().setFilters({
+    stage: [], tags: [], owner: null, source: null,
+    liveOnly: false, reviewOnly: false, hideLowEffort: false,
+    scoreMin: 0, scoreMax: 100,
+    ...partial,
+  });
+};

@@ -30,7 +30,8 @@ import DataCard from '@/components/DataCard';
 import { activityTypeConfig, computeAnalytics } from '@/data/analytics';
 import { stageColors } from '@/data/stats';
 import type { ActivityType } from '@/data/analytics';
-import { useSubmissionStore } from '@/store/useSubmissionStore';
+import { useSubmissionStore, applyDrilldownFilter } from '@/store/useSubmissionStore';
+import { useRouter } from 'next/navigation';
 
 // ── Animation ─────────────────────────────────────────────────────
 const ease = [0.16, 1, 0.3, 1] as [number, number, number, number];
@@ -216,10 +217,21 @@ const TimelineTooltip: React.FC<{
   );
 };
 
+// Map a score-bucket label like "61–80" to a [min,max] filter range.
+const scoreRangeToBounds = (range: string): { scoreMin: number; scoreMax: number } => {
+  const [lo, hi] = range.split(/[–-]/).map((n) => parseInt(n.trim(), 10));
+  return { scoreMin: Number.isFinite(lo) ? lo : 0, scoreMax: Number.isFinite(hi) ? hi : 100 };
+};
+
 // ── Tag Distribution Donut ────────────────────────────────────────
 const DonutChart: React.FC = () => {
   const subs = useSubmissionStore((st) => st.submissions);
   const { tagDistribution } = useMemo(() => computeAnalytics(subs), [subs]);
+  const router = useRouter();
+  const drillTag = useCallback((tag: string) => {
+    applyDrilldownFilter({ tags: [tag] });
+    router.push('/submissions');
+  }, [router]);
   return (
     <DataCard title="Needs-Help Tag Distribution" delay={0.1}>
       <ResponsiveContainer width="100%" height={280}>
@@ -239,7 +251,7 @@ const DonutChart: React.FC = () => {
             animationEasing="ease-out"
           >
             {tagDistribution.map((entry, i) => (
-              <Cell key={i} fill={entry.color} />
+              <Cell key={i} fill={entry.color} cursor="pointer" onClick={() => drillTag(entry.tag)} />
             ))}
           </Pie>
           <ReTooltip content={<TagTooltip />} />
@@ -272,7 +284,7 @@ const DonutChart: React.FC = () => {
         }}
       >
         {tagDistribution.map((item) => (
-          <div key={item.tag} className="flex items-center gap-2">
+          <div key={item.tag} className="flex items-center gap-2" style={{ cursor: 'pointer' }} onClick={() => drillTag(item.tag)} title={`View ${item.count} projects needing ${item.tag}`}>
             <div
               style={{
                 width: '8px',
@@ -315,6 +327,11 @@ const DonutChart: React.FC = () => {
 const FeeLeadersChart: React.FC = () => {
   const subs = useSubmissionStore((st) => st.submissions);
   const { volumeLeaders } = useMemo(() => computeAnalytics(subs), [subs]);
+  const router = useRouter();
+  const drillProject = useCallback((project: string) => {
+    const match = subs.find((s) => s.project === project);
+    if (match) router.push(`/submissions/${match.id}`);
+  }, [router, subs]);
   return (
     <DataCard title="Top Projects by 24h Volume" delay={0.18}>
       <ResponsiveContainer width="100%" height={280}>
@@ -345,7 +362,7 @@ const FeeLeadersChart: React.FC = () => {
             tickLine={false}
             tickFormatter={(v: string) => (v.length > 12 ? v.slice(0, 12) + '…' : v)}
           />
-          <ReTooltip content={<FeeTooltip />} />
+          <ReTooltip content={<FeeTooltip />} cursor={{ fill: 'rgba(16,185,129,0.08)' }} />
           <Bar
             dataKey="vol_24h"
             fill="#10B981"
@@ -353,6 +370,8 @@ const FeeLeadersChart: React.FC = () => {
             animationBegin={400}
             animationDuration={500}
             animationEasing="ease-out"
+            cursor="pointer"
+            onClick={(d: any) => d?.project && drillProject(d.project)}
           />
         </BarChart>
       </ResponsiveContainer>
@@ -364,6 +383,11 @@ const FeeLeadersChart: React.FC = () => {
 const ScoreDistChart: React.FC = () => {
   const subs = useSubmissionStore((st) => st.submissions);
   const { scoreBuckets } = useMemo(() => computeAnalytics(subs), [subs]);
+  const router = useRouter();
+  const drillScore = useCallback((range: string) => {
+    applyDrilldownFilter(scoreRangeToBounds(range));
+    router.push('/submissions');
+  }, [router]);
   return (
     <DataCard title="Score Distribution" delay={0.35}>
       <ResponsiveContainer width="100%" height={280}>
@@ -387,7 +411,7 @@ const ScoreDistChart: React.FC = () => {
             axisLine={false}
             tickLine={false}
           />
-          <ReTooltip content={<ScoreTooltip />} />
+          <ReTooltip content={<ScoreTooltip />} cursor={{ fill: 'rgba(245,166,35,0.08)' }} />
           <Bar
             dataKey="count"
             fill="#F5A623"
@@ -395,6 +419,8 @@ const ScoreDistChart: React.FC = () => {
             animationBegin={600}
             animationDuration={500}
             animationEasing="ease-out"
+            cursor="pointer"
+            onClick={(d: any) => d?.range && drillScore(d.range)}
           />
         </BarChart>
       </ResponsiveContainer>

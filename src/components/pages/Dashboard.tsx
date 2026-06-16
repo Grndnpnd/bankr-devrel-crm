@@ -29,7 +29,7 @@ import ScoreBadge from '@/components/ScoreBadge';
 import StagePill from '@/components/StagePill';
 import OnchainBadge from '@/components/OnchainBadge';
 import { scoreColor, formatUsd, computeStats } from '@/data/stats';
-import { useSubmissionStore } from '@/store/useSubmissionStore';
+import { useSubmissionStore, applyDrilldownFilter } from '@/store/useSubmissionStore';
 
 const EASE = [0.16, 1, 0.3, 1] as [number, number, number, number];
 
@@ -268,6 +268,11 @@ const KPIStrip: React.FC = () => {
 const ScoreDistributionChart: React.FC = () => {
   const subs = useSubmissionStore((st) => st.submissions);
   const { scoreDistribution, totalCount } = useMemo(() => computeStats(subs), [subs]);
+  const router = useRouter();
+  const drillScore = (min: number, max: number) => {
+    applyDrilldownFilter({ scoreMin: min, scoreMax: max });
+    router.push('/submissions');
+  };
   const data = useMemo(() => {
     return scoreDistribution.map((bucket) => ({
       ...bucket,
@@ -318,6 +323,8 @@ const ScoreDistributionChart: React.FC = () => {
                 <Cell
                   key={`cell-${index}`}
                   fill="#F5A623"
+                  cursor="pointer"
+                  onClick={() => drillScore(entry.min, entry.max)}
                   style={{
                     filter:
                       entry.label === '61–80' || entry.label === '81–100'
@@ -347,6 +354,11 @@ const PipelineFunnel: React.FC = () => {
   const { pipelineStages } = useMemo(() => computeStats(subs), [subs]);
   const total = pipelineStages.reduce((sum, s) => sum + s.count, 0);
   const maxCount = Math.max(...pipelineStages.map((s) => s.count), 1);
+  const router = useRouter();
+  const drillStage = (stage: string) => {
+    applyDrilldownFilter({ stage: [stage] });
+    router.push('/submissions');
+  };
 
   return (
     <DataCard title="Pipeline" delay={0.58}>
@@ -368,7 +380,7 @@ const PipelineFunnel: React.FC = () => {
               stroke="none"
             >
               {pipelineStages.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={entry.color} />
+                <Cell key={`cell-${index}`} fill={entry.color} cursor="pointer" onClick={() => drillStage(entry.stage)} />
               ))}
             </Pie>
             <Tooltip
@@ -425,7 +437,9 @@ const PipelineFunnel: React.FC = () => {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 1.0 + i * 0.05, duration: 0.3, ease: EASE }}
             className="flex items-center gap-3"
-            style={{ height: '36px' }}
+            style={{ height: '36px', cursor: 'pointer' }}
+            onClick={() => drillStage(stage.stage)}
+            title={`View ${stage.count} ${stage.stage} projects`}
           >
             <StagePill stage={stage.stage} />
             <div
