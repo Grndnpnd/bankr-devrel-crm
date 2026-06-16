@@ -430,7 +430,14 @@ const UsersTab: React.FC = () => {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return data?.error || `HTTP ${res.status}`;
-    toast.success(`${payload.email} added`, { description: 'Share the temporary password with them securely.' });
+    const email = data?._email;
+    if (email?.sent) {
+      toast.success(`${payload.email} added`, { description: 'Invite emailed with their temporary password.' });
+    } else if (email?.skipped) {
+      toast.success(`${payload.email} added`, { description: 'Email isn\u2019t configured yet \u2014 share the temporary password manually.' });
+    } else {
+      toast.success(`${payload.email} added`, { description: `Invite email didn\u2019t send${email?.error ? ` (${email.error})` : ''} \u2014 share the temp password manually.` });
+    }
     reload();
     return null;
   }, [reload]);

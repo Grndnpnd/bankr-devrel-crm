@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession, hashPassword } from "@/lib/auth";
+import { sendEmail } from "@/lib/email";
+import { inviteEmail } from "@/lib/emailTemplates";
 
 export const dynamic = "force-dynamic";
 
@@ -31,5 +33,22 @@ export async function POST(req: Request) {
     data: { email, name: name || null, role, passwordHash: await hashPassword(password) },
     select: { id: true, email: true, name: true, role: true, active: true, createdAt: true },
   });
-  return NextResponse.json(user, { status: 201 });
+
+  // Send the invite email. The user is already created — email is best-effort,
+  // so a failure here never fails the invite; we just report it to the caller.
+  const base = process.env.APP_URL || new URL(req.url).origin;
+  const tmpl = inviteEmail({
+    name: user.name,
+    email: user.email,
+    tempPassword: password,
+    role: user.role,
+    loginUrl: `${base}/login`,
+    invitedBy: session.name || session.email,
+  });
+  const mail = await sendEmail({ to: user.email, subject: tmpl.subject, html: tmpl.html, text: tmpl.text });
+
+  return NextResponse.json(
+    { ...user, _email: { sent: mail.ok, skipped: mail.skipped ?? false, error: mail.error } },
+    { status: 201 }
+  );
 }
