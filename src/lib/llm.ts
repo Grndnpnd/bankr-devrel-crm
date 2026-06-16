@@ -4,7 +4,7 @@
  */
 const BASE = process.env.BANKR_LLM_BASE_URL || 'https://llm.bankr.bot';
 const KEY = process.env.BANKR_LLM_KEY;
-const MODEL = process.env.BANKR_LLM_MODEL || 'gemini-2.5-flash';
+const MODEL = process.env.BANKR_LLM_MODEL || 'claude-haiku-4.5';
 
 export const llmConfigured = (): boolean => !!KEY;
 
@@ -69,6 +69,67 @@ export async function chat(system: string, user: string): Promise<ChatResult> {
     const content = data?.choices?.[0]?.message?.content;
     if (typeof content !== 'string') return { ok: false, error: 'empty response from gateway' };
     return { ok: true, content };
+  } catch (e: any) {
+    return { ok: false, error: e?.message ?? 'request failed' };
+  }
+}
+
+export interface ToolDef {
+  type: 'function';
+  function: { name: string; description: string; parameters: any };
+}
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+}
+export interface ToolMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
+  name?: string;
+}
+export interface ToolChatResult {
+  ok: boolean;
+  content?: string | null;
+  toolCalls?: ToolCall[];
+  finishReason?: string;
+  error?: string;
+  status?: number;
+}
+
+/** Chat completion with tools. Returns either tool calls (to execute) or a final answer. */
+export async function chatWithTools(messages: ToolMessage[], tools: ToolDef[], opts?: { temperature?: number; model?: string }): Promise<ToolChatResult> {
+  if (!KEY) return { ok: false, error: 'LLM gateway not configured' };
+  try {
+    const res = await fetch(`${BASE}/v1/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': KEY },
+      body: JSON.stringify({
+        model: opts?.model || MODEL,
+        messages,
+        tools,
+        tool_choice: 'auto',
+        temperature: opts?.temperature ?? 0.2,
+      }),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      const hint = res.status === 402 ? 'LLM credits exhausted — top up at bankr.bot/llm'
+        : res.status === 401 ? 'LLM key rejected'
+        : `gateway error ${res.status}`;
+      return { ok: false, status: res.status, error: `${hint}${body ? `: ${body.slice(0, 200)}` : ''}` };
+    }
+    const data = await res.json().catch(() => null);
+    const choice = data?.choices?.[0];
+    if (!choice) return { ok: false, error: 'empty response from gateway' };
+    return {
+      ok: true,
+      content: choice.message?.content ?? null,
+      toolCalls: choice.message?.tool_calls ?? undefined,
+      finishReason: choice.finish_reason,
+    };
   } catch (e: any) {
     return { ok: false, error: e?.message ?? 'request failed' };
   }

@@ -28,7 +28,6 @@ import { activityTypeConfig, computeAnalytics } from '@/data/analytics';
 import { stageColors } from '@/data/stats';
 import type { ActivityType } from '@/data/analytics';
 import { useSubmissionStore, applyDrilldownFilter } from '@/store/useSubmissionStore';
-import AskData from '@/components/analytics/AskData';
 import { useRouter } from 'next/navigation';
 
 // ── Animation ─────────────────────────────────────────────────────
@@ -756,8 +755,6 @@ const Analytics: React.FC = () => {
       {/* Outreach Activity Table */}
       <OutreachTable />
 
-      {/* Ask Your Data (LLM) */}
-      <AskData />
 
       <Toaster
         position="bottom-right"

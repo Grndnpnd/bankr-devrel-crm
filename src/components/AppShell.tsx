@@ -5,6 +5,7 @@ import { Toaster } from 'sonner';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
+import AgentBubble from '@/components/agent/AgentBubble';
 import type { SessionUser } from '@/lib/auth';
 
 function titleFor(pathname: string): string {
@@ -33,6 +34,7 @@ export default function AppShell({ me, children }: { me: SessionUser; children: 
         <div className="p-8">{children}</div>
       </main>
       <Toaster theme="dark" position="bottom-right" richColors />
+      <AgentBubble />
     </div>
   );
 }

@@ -10,7 +10,6 @@ import QuickActions from '@/components/dashboard/widgets/QuickActionsWidget';
 import {
   DonutChart, FeeLeadersChart, SubmissionTrendChart, OutreachTable,
 } from '@/components/pages/Analytics';
-import AskData from '@/components/analytics/AskData';
 
 /** Span presets on a 12-column grid. */
 export const SPAN_PRESETS = { S: 4, M: 6, L: 12 } as const;
@@ -40,7 +39,6 @@ export const WIDGET_REGISTRY: WidgetDef[] = [
   { id: 'score-distribution', label: 'Score Distribution', description: 'How submissions spread across score ranges', defaultSpan: 7, defaultVisible: true, Component: ScoreDistributionChart },
   { id: 'pipeline', label: 'Pipeline', description: 'Submissions by stage', defaultSpan: 5, defaultVisible: true, Component: PipelineFunnel },
   { id: 'top-targets', label: 'Top Targets', description: 'Highest-scoring projects to act on', defaultSpan: 12, defaultVisible: true, Component: TopTargetsTable },
-  { id: 'ask-data', label: 'Ask Your Data', description: 'Build a panel or chat about your pipeline', defaultSpan: 12, defaultVisible: true, Component: AskData },
   // ── Available in the picker, hidden by default ──
   { id: 'quick-actions', label: 'Quick Actions', description: 'Import, add a submission, and shortcuts', defaultSpan: 12, defaultVisible: false, Component: QuickActions },
   { id: 'an-needs-help', label: 'Needs-Help Distribution', description: 'Breakdown of what projects need help with', defaultSpan: 6, defaultVisible: false, Component: DonutChart },
