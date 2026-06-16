@@ -9,6 +9,7 @@ import type { ToolDef } from '@/lib/llm';
 import { fetchTokenData, isContractAddress } from '@/lib/discover';
 import { prisma } from '@/lib/prisma';
 import { getWeights } from '@/lib/scoreConfig';
+import { validateSchedule, nextRunFrom, JOB_HANDLERS, SCHEDULE_PRESETS } from '@/lib/scheduler';
 
 /**
  * Stage 1 agent tools — all READ-ONLY. The harness is built so write tools
@@ -119,6 +120,31 @@ export const AGENT_TOOLS: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'create_scheduled_job',
+      description:
+        'Create a scheduled (cron) job that runs automatically on a recurring schedule. Use when the user asks to "schedule", "automate", or "run X every …". Available job types come from get_scheduled_jobs/the system. Confirm the details with the user before creating if there is any ambiguity. Schedule can be a preset (15m, 30m, hourly, 6h, 12h, daily) or a standard cron expression.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'human name for the job' },
+          type: { type: 'string', description: 'job type key, e.g. refresh_onchain' },
+          schedule: { type: 'string', description: 'preset token (15m/30m/hourly/6h/12h/daily) or a cron expression' },
+        },
+        required: ['name', 'type', 'schedule'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_scheduled_jobs',
+      description: 'List existing scheduled jobs and the available job types, so you know what can be scheduled and what already is.',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'list_saved_panels',
       description:
         'List the analytics panels that already exist (the current user\'s own panels plus team-shared ones), with their titles and what they show. Use BEFORE building a new panel to avoid duplicating one that exists, or when the user asks what panels they have.',
@@ -183,7 +209,7 @@ const findProject = (submissions: Submission[], q: string): Submission | undefin
 };
 
 /** Execute a tool call by name. Async because some tools hit external APIs. */
-export interface ToolContext { userId: string }
+export interface ToolContext { userId: string; userEmail?: string }
 
 export async function runTool(name: string, args: any, submissions: Submission[], ctx: ToolContext): Promise<ToolExecResult> {
   if (name === 'query_pipeline') {
@@ -254,6 +280,41 @@ export async function runTool(name: string, args: any, submissions: Submission[]
       return { result: JSON.stringify({ found: true, live: true, token: t }) };
     } catch (e: any) {
       return { result: JSON.stringify({ error: e?.message ?? 'discover API error' }) };
+    }
+  }
+
+  if (name === 'list_scheduled_jobs') {
+    try {
+      const jobs = await prisma.cronJob.findMany({ orderBy: { createdAt: 'asc' } });
+      const types = Object.values(JOB_HANDLERS).map((h) => ({ type: h.type, label: h.label, description: h.description }));
+      const presets = Object.entries(SCHEDULE_PRESETS).map(([k, v]) => ({ token: k, label: v.label }));
+      return { result: JSON.stringify({
+        availableTypes: types,
+        schedulePresets: presets,
+        jobs: jobs.map((j: any) => ({ name: j.name, type: j.type, schedule: j.schedule, enabled: j.enabled, nextRunAt: j.nextRunAt, lastStatus: j.lastStatus })),
+      }) };
+    } catch (e: any) {
+      return { result: JSON.stringify({ error: e?.message ?? 'could not list jobs' }) };
+    }
+  }
+
+  if (name === 'create_scheduled_job') {
+    const jobName = String(args?.name || '').trim();
+    const jobType = String(args?.type || '').trim();
+    const schedule = String(args?.schedule || '').trim();
+    if (!jobName) return { result: JSON.stringify({ error: 'name required' }) };
+    if (!JOB_HANDLERS[jobType]) {
+      return { result: JSON.stringify({ error: `unknown job type "${jobType}". Available: ${Object.keys(JOB_HANDLERS).join(', ')}` }) };
+    }
+    const sched = validateSchedule(schedule);
+    if (!sched.ok) return { result: JSON.stringify({ error: sched.error }) };
+    try {
+      const job = await prisma.cronJob.create({
+        data: { name: jobName, type: jobType, schedule, enabled: true, nextRunAt: nextRunFrom(schedule), createdBy: ctx.userEmail || 'agent' },
+      });
+      return { result: JSON.stringify({ ok: true, created: { name: job.name, type: job.type, schedule: job.schedule, nextRunAt: job.nextRunAt } }) };
+    } catch (e: any) {
+      return { result: JSON.stringify({ error: e?.message ?? 'could not create job' }) };
     }
   }
 

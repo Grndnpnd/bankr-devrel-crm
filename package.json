@@ -10,7 +10,8 @@
     "db:migrate": "prisma migrate dev",
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "cron:tick": "tsx scripts/cronTick.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

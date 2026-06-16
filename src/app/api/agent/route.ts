@@ -21,13 +21,15 @@ You have tools:
 - list_saved_panels: see what panels already exist (the user's + team-shared). Check this BEFORE build_panel so you don't duplicate an existing panel.
 - get_score_config: the current scoring weights — use to explain why a project scored what it did.
 - build_panel: create a chart/stat/table panel the user can pin to their dashboard. Use when they want to "make"/"add"/"pin" a panel.
+- list_scheduled_jobs: see existing scheduled jobs + which job types and schedule presets are available.
+- create_scheduled_job: set up a recurring automated job. Use when the user asks to "schedule"/"automate"/"run X every …". IMPORTANT: before creating, confirm the job name, type, and schedule back to the user in plain language unless they were fully explicit. Call list_scheduled_jobs first if unsure what types exist.
 
 Rules:
 - Use tools rather than guessing. For any count or figure, call query_pipeline.
 - For "who should I contact" type questions, call get_pipeline_summary, then reason over it (high score, not recently contacted, early stage, relevant needs) and recommend specific projects with a one-line reason each.
 - After build_panel succeeds, tell the user it's ready to save to their dashboard and briefly what it shows.
 - Be concise and scannable. You produce analysis and summaries, not audited reports.
-- You are READ-ONLY: you cannot send messages, change records, or contact anyone. If asked, say that's coming in a later phase.
+- Your only write capability is creating scheduled jobs (create_scheduled_job). You CANNOT send messages, contact anyone, or change pipeline/project records — if asked, say that's coming in a later phase. Confirm scheduling actions before taking them.
 - Never reveal or request founder PII, wallets, or contract addresses (not available to you anyway).`;
 
 export async function POST(req: Request) {
@@ -70,7 +72,7 @@ export async function POST(req: Request) {
       let args: any = {};
       try { args = JSON.parse(call.function.arguments || "{}"); } catch { /* keep {} */ }
       toolTrace.push({ name: call.function.name, args });
-      const exec = await runTool(call.function.name, args, submissions, { userId: session.id });
+      const exec = await runTool(call.function.name, args, submissions, { userId: session.id, userEmail: session.email });
       if (exec.panelSpec) builtPanel = exec.panelSpec;
       messages.push({ role: "tool", tool_call_id: call.id, name: call.function.name, content: exec.result });
     }
