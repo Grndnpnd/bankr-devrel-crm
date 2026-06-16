@@ -6,6 +6,7 @@ import {
 } from '@/lib/analyticsSpec';
 import { toChatRows, capRows } from '@/lib/chatData';
 import type { ToolDef } from '@/lib/llm';
+import { fetchTokenData, isContractAddress } from '@/lib/discover';
 
 /**
  * Stage 1 agent tools — all READ-ONLY. The harness is built so write tools
@@ -62,6 +63,60 @@ export const AGENT_TOOLS: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'get_submission_detail',
+      description:
+        'Get the FULL record for one project by name — including the narrative fields (problem, solution, traction, plan, why Bankr, accomplishments, one-liner, website, links). Use when the user asks about a specific project in depth ("tell me about X", "what is X building", "summarize X\'s pitch").',
+      parameters: {
+        type: 'object',
+        properties: { project: { type: 'string', description: 'project name (exact or close match)' } },
+        required: ['project'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_submissions',
+      description:
+        'Free-text search across project name, one-liner, and narrative fields (problem/solution/plan/etc.). Use for thematic questions the structured filters can\'t answer ("find projects working on RWAs", "who mentioned a points program", "anything about prediction markets").',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'words/phrase to search for' },
+          limit: { type: 'number', description: 'max results (default 10)' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_team_workload',
+      description:
+        'Get how submissions are distributed across owners — total per owner and a stage breakdown each. Use for team-management questions ("who has the most on their plate", "how is work split", "what is <owner> working on").',
+      parameters: { type: 'object', properties: {}, required: [] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_token_data',
+      description:
+        'Fetch LIVE onchain data for a project\'s token from the Bankr discover API (current 24h volume, market cap, price change). Provide either a project name (we look up its stored contract address) or a contract address directly. Use for "what is X\'s volume right now" — this is real-time, not the cached snapshot.',
+      parameters: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'project name (we resolve its contract address)' },
+          contractAddress: { type: 'string', description: '0x… address, if known directly' },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'build_panel',
       description:
         'Create a saved analytics panel (chart/stat/table) the user can pin to their dashboard. Use when the user asks to "make a panel/chart" or "add this to my dashboard". Returns a validated spec the UI offers to save. Same shape as query_pipeline.',
@@ -100,8 +155,15 @@ export interface ToolExecResult {
   panelSpec?: AnalyticsSpec; // surfaced to the client when build_panel is used
 }
 
-/** Execute a tool call by name. Pure over the provided submissions. */
-export function runTool(name: string, args: any, submissions: Submission[]): ToolExecResult {
+const findProject = (submissions: Submission[], q: string): Submission | undefined => {
+  const needle = (q || '').trim().toLowerCase();
+  if (!needle) return undefined;
+  return submissions.find((s) => s.project?.toLowerCase() === needle)
+    || submissions.find((s) => s.project?.toLowerCase().includes(needle));
+};
+
+/** Execute a tool call by name. Async because some tools hit external APIs. */
+export async function runTool(name: string, args: any, submissions: Submission[]): Promise<ToolExecResult> {
   if (name === 'query_pipeline') {
     const v = validateSpec(args);
     if (!v.ok) return { result: JSON.stringify({ error: 'invalid query', details: v.errors }) };
@@ -112,6 +174,65 @@ export function runTool(name: string, args: any, submissions: Submission[]): Too
   if (name === 'get_pipeline_summary') {
     const rows = capRows(toChatRows(submissions));
     return { result: JSON.stringify({ today: new Date().toISOString().slice(0, 10), count: rows.length, rows }) };
+  }
+
+  if (name === 'get_submission_detail') {
+    const s = findProject(submissions, args?.project);
+    if (!s) return { result: JSON.stringify({ error: `no project matching "${args?.project}"` }) };
+    // Full detail incl. narrative fields (per scope). Founder PII still omitted.
+    const { founders, ...rest } = s as any;
+    return { result: JSON.stringify({ project: rest }) };
+  }
+
+  if (name === 'search_submissions') {
+    const q = String(args?.query || '').toLowerCase().trim();
+    if (!q) return { result: JSON.stringify({ error: 'empty query' }) };
+    const limit = Math.min(25, Math.max(1, Number(args?.limit) || 10));
+    const fields = ['project', 'one_liner', 'problem', 'solution', 'plan', 'traction', 'why_bankr', 'accomplishments'];
+    const hits = submissions
+      .map((s) => {
+        const hay = fields.map((f) => String((s as any)[f] ?? '')).join(' ').toLowerCase();
+        return { s, match: hay.includes(q) };
+      })
+      .filter((x) => x.match)
+      .slice(0, limit)
+      .map(({ s }) => ({ project: s.project, stage: s.stage, owner: s.owner || '(unassigned)', score: s.score, one_liner: s.one_liner }));
+    return { result: JSON.stringify({ query: args.query, count: hits.length, results: hits }) };
+  }
+
+  if (name === 'get_team_workload') {
+    const byOwner = new Map<string, { total: number; stages: Record<string, number> }>();
+    for (const s of submissions) {
+      const owner = s.owner || '(unassigned)';
+      if (!byOwner.has(owner)) byOwner.set(owner, { total: 0, stages: {} });
+      const rec = byOwner.get(owner)!;
+      rec.total += 1;
+      rec.stages[s.stage] = (rec.stages[s.stage] || 0) + 1;
+    }
+    const workload = Array.from(byOwner.entries())
+      .map(([owner, v]) => ({ owner, ...v }))
+      .sort((a, b) => b.total - a.total);
+    return { result: JSON.stringify({ owners: workload }) };
+  }
+
+  if (name === 'get_token_data') {
+    let ca: string | undefined = args?.contractAddress?.trim();
+    let projName = args?.project;
+    if (!ca && projName) {
+      const s = findProject(submissions, projName);
+      ca = (s as any)?.contract_address?.trim();
+      if (!ca) return { result: JSON.stringify({ error: `no stored contract address for "${projName}" — provide one or enrich the project first` }) };
+    }
+    if (!ca || !isContractAddress(ca)) {
+      return { result: JSON.stringify({ error: 'need a valid contract address or a project with one on file' }) };
+    }
+    try {
+      const t = await fetchTokenData(ca);
+      if (!t) return { result: JSON.stringify({ found: false, note: 'no live token data for that address' }) };
+      return { result: JSON.stringify({ found: true, live: true, token: t }) };
+    } catch (e: any) {
+      return { result: JSON.stringify({ error: e?.message ?? 'discover API error' }) };
+    }
   }
 
   if (name === 'build_panel') {
