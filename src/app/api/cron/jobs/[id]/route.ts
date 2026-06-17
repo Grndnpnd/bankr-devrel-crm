@@ -35,9 +35,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const session = await getSession();
   if (!session || !can(session.role, "cron.manage")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  const job = await prisma.cronJob.findUnique({ where: { id: params.id } });
-  if (!job) return NextResponse.json({ error: "not found" }, { status: 404 });
-  if (job.protected) return NextResponse.json({ error: "This is a core system job and can't be deleted." }, { status: 400 });
   await prisma.cronJob.delete({ where: { id: params.id } });
   return NextResponse.json({ ok: true });
 }

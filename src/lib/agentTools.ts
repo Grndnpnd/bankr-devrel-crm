@@ -9,7 +9,7 @@ import type { ToolDef } from '@/lib/llm';
 import { fetchTokenData, isContractAddress } from '@/lib/discover';
 import { prisma } from '@/lib/prisma';
 import { getWeights } from '@/lib/scoreConfig';
-import { validateSchedule, nextRunFrom, JOB_HANDLERS, SCHEDULE_PRESETS } from '@/lib/scheduler';
+import { validateSchedule, nextRunFrom, JOB_HANDLERS, SCHEDULE_PRESETS, CORE_TYPES } from '@/lib/scheduler';
 
 /**
  * Stage 1 agent tools — all READ-ONLY. The harness is built so write tools
@@ -286,7 +286,7 @@ export async function runTool(name: string, args: any, submissions: Submission[]
   if (name === 'list_scheduled_jobs') {
     try {
       const jobs = await prisma.cronJob.findMany({ orderBy: { createdAt: 'asc' } });
-      const types = Object.values(JOB_HANDLERS).map((h) => ({ type: h.type, label: h.label, description: h.description }));
+      const types = Object.values(JOB_HANDLERS).filter((h) => !CORE_TYPES.includes(h.type)).map((h) => ({ type: h.type, label: h.label, description: h.description }));
       const presets = Object.entries(SCHEDULE_PRESETS).map(([k, v]) => ({ token: k, label: v.label }));
       return { result: JSON.stringify({
         availableTypes: types,
@@ -304,7 +304,10 @@ export async function runTool(name: string, args: any, submissions: Submission[]
     const schedule = String(args?.schedule || '').trim();
     if (!jobName) return { result: JSON.stringify({ error: 'name required' }) };
     if (!JOB_HANDLERS[jobType]) {
-      return { result: JSON.stringify({ error: `unknown job type "${jobType}". Available: ${Object.keys(JOB_HANDLERS).join(', ')}` }) };
+      return { result: JSON.stringify({ error: `unknown job type "${jobType}". Available: ${Object.keys(JOB_HANDLERS).filter((t) => !CORE_TYPES.includes(t)).join(', ')}` }) };
+    }
+    if (CORE_TYPES.includes(jobType)) {
+      return { result: JSON.stringify({ error: `"${jobType}" runs automatically as a core system job and cannot be scheduled manually.` }) };
     }
     const sched = validateSchedule(schedule);
     if (!sched.ok) return { result: JSON.stringify({ error: sched.error }) };

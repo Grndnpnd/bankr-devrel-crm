@@ -8,6 +8,7 @@ import ScoringTab from '@/components/settings/ScoringTab';
 import SourcesTab from '@/components/settings/SourcesTab';
 import UsersTab from '@/components/settings/UsersTab';
 import CronTab from '@/components/settings/CronTab';
+import CoreRefreshTab from '@/components/settings/CoreRefreshTab';
 import ImportLogTab from '@/components/settings/ImportLogTab';
 import type { SettingsTab as TabType } from '@/components/settings/SettingsTabs';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
@@ -22,6 +23,7 @@ const Settings: React.FC = () => {
   const visibleTabs = useMemo<TabType[]>(() => {
     const tabs: TabType[] = ['account', 'scoring'];
     if (can(role, 'settings.sources')) tabs.push('sources');
+    if (can(role, 'settings.sources')) tabs.push('core-refresh');
     if (can(role, 'users.manage')) tabs.push('users');
     if (can(role, 'cron.manage')) tabs.push('automation');
     if (can(role, 'import.run')) tabs.push('import-log');
@@ -77,6 +79,7 @@ const Settings: React.FC = () => {
         {safeActive === 'account' && <AccountTab />}
         {safeActive === 'scoring' && <ScoringTab onUnsavedChange={scoringUnsaved} readOnly={!canEditScoring} />}
         {safeActive === 'sources' && <SourcesTab />}
+        {safeActive === 'core-refresh' && <CoreRefreshTab />}
         {safeActive === 'users' && <UsersTab />}
         {safeActive === 'automation' && <CronTab />}
         {safeActive === 'import-log' && <ImportLogTab />}

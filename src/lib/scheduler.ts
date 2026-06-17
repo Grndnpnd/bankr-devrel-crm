@@ -95,33 +95,60 @@ export const jobTypeList = () =>
   Object.values(JOB_HANDLERS).map((h) => ({ type: h.type, label: h.label, description: h.description }));
 
 /**
- * Core infrastructure jobs that must always exist. These keep the whole system
- * fed (onchain data + sheet submissions) and are marked protected so they can't
- * be deleted via the UI/API. If missing, they're recreated on the next tick.
- * The custom cron harness remains for additional ad-hoc jobs.
+ * Core infrastructure refreshes. These are HARD-CODED, not CronJob table rows —
+ * they can't be deleted or disabled, they just always run. Intervals are fixed
+ * in code (the safe place for load-bearing infra timing). Run state is tracked
+ * in CoreJobState purely for display + due-checking. The custom cron harness
+ * (CronJob table) remains for ad-hoc admin jobs.
  */
-const CORE_JOBS: { name: string; type: string; schedule: string }[] = [
-  { name: 'Refresh all data', type: 'refresh_onchain', schedule: '15m' },
-  { name: 'Refresh sheet submissions', type: 'refresh_sheet', schedule: '30m' },
+export const CORE_TYPES = ['refresh_onchain', 'refresh_sheet'];
+
+export const CORE_JOBS: { type: string; name: string; intervalMs: number }[] = [
+  { type: 'refresh_onchain', name: 'Refresh all data', intervalMs: 15 * 60_000 },
+  { type: 'refresh_sheet', name: 'Refresh sheet submissions', intervalMs: 30 * 60_000 },
 ];
 
-export async function ensureCoreJobs(): Promise<void> {
+/** Run the hard-coded core jobs whose interval has elapsed. */
+async function runDueCoreJobs(now: Date): Promise<any[]> {
+  const ran: any[] = [];
   for (const core of CORE_JOBS) {
-    const protectedOne = await prisma.cronJob.findFirst({ where: { type: core.type, protected: true } });
-    if (protectedOne) continue; // already have the protected core job
-
-    // Adopt an existing (manually-created) job of this type rather than duplicate it.
-    const existing = await prisma.cronJob.findFirst({ where: { type: core.type }, orderBy: { createdAt: 'asc' } });
-    if (existing) {
-      await prisma.cronJob.update({ where: { id: existing.id }, data: { protected: true, enabled: true } });
-    } else {
-      await prisma.cronJob.create({
-        data: {
-          name: core.name, type: core.type, schedule: core.schedule,
-          enabled: true, protected: true, nextRunAt: nextRunFrom(core.schedule), createdBy: 'system',
-        },
-      });
+    const handler = JOB_HANDLERS[core.type];
+    if (!handler) continue;
+    const state = await prisma.coreJobState.findUnique({ where: { type: core.type } });
+    const due = !state?.lastRunAt || (now.getTime() - new Date(state.lastRunAt).getTime()) >= core.intervalMs;
+    if (!due) continue;
+    // Reserve: stamp lastRunAt now so an overlapping tick won't double-fire.
+    await prisma.coreJobState.upsert({
+      where: { type: core.type },
+      update: { lastStatus: 'running', lastRunAt: now },
+      create: { type: core.type, lastStatus: 'running', lastRunAt: now },
+    });
+    try {
+      const result = await handler.run();
+      await prisma.coreJobState.update({ where: { type: core.type }, data: { lastStatus: 'ok', lastResult: result ?? {}, lastError: null, lastRunAt: new Date() } });
+      ran.push({ type: core.type, status: 'ok', result });
+    } catch (e: any) {
+      await prisma.coreJobState.update({ where: { type: core.type }, data: { lastStatus: 'error', lastError: e?.message ?? 'failed', lastRunAt: new Date() } });
+      ran.push({ type: core.type, status: 'error', error: e?.message });
     }
+  }
+  return ran;
+}
+
+/** Force-run a single core job now (manual "Run now" from the admin UI). */
+export async function runCoreJobNow(type: string): Promise<{ ok: boolean; result?: any; error?: string }> {
+  const handler = JOB_HANDLERS[type];
+  if (!handler || !CORE_JOBS.some((c) => c.type === type)) return { ok: false, error: 'unknown core job' };
+  await prisma.coreJobState.upsert({
+    where: { type }, update: { lastStatus: 'running' }, create: { type, lastStatus: 'running' },
+  });
+  try {
+    const result = await handler.run();
+    await prisma.coreJobState.update({ where: { type }, data: { lastStatus: 'ok', lastResult: result ?? {}, lastError: null, lastRunAt: new Date() } });
+    return { ok: true, result };
+  } catch (e: any) {
+    await prisma.coreJobState.update({ where: { type }, data: { lastStatus: 'error', lastError: e?.message ?? 'failed', lastRunAt: new Date() } });
+    return { ok: false, error: e?.message };
   }
 }
 
@@ -132,11 +159,15 @@ export async function ensureCoreJobs(): Promise<void> {
  * double-fire it.
  */
 export async function runDueJobs(now: Date = new Date()): Promise<{ ran: any[]; checked: number }> {
-  // Self-heal: make sure the protected core jobs always exist.
-  await ensureCoreJobs().catch(() => {});
+  // Always run the hard-coded core refreshes that are due.
+  const coreRan = await runDueCoreJobs(now).catch(() => [] as any[]);
+
+  // One-time cleanup: remove any legacy CronJob rows of the core types — those
+  // are now hard-coded and must not also run from the table (would double-fire).
+  await prisma.cronJob.deleteMany({ where: { type: { in: CORE_TYPES } } }).catch(() => {});
 
   const due = await prisma.cronJob.findMany({
-    where: { enabled: true, OR: [{ nextRunAt: null }, { nextRunAt: { lte: now } }] },
+    where: { enabled: true, type: { notIn: CORE_TYPES }, OR: [{ nextRunAt: null }, { nextRunAt: { lte: now } }] },
   });
 
   const ran: any[] = [];
@@ -173,5 +204,5 @@ export async function runDueJobs(now: Date = new Date()): Promise<{ ran: any[]; 
       ran.push({ id: job.id, name: job.name, status: 'error', error: e?.message });
     }
   }
-  return { ran, checked: due.length };
+  return { ran: [...coreRan, ...ran], checked: due.length + CORE_JOBS.length };
 }

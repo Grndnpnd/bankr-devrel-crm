@@ -13,7 +13,6 @@ interface CronJob {
   nextRunAt: string | null;
   lastStatus: string | null;
   lastError: string | null;
-  protected?: boolean;
 }
 interface JobType { type: string; label: string; description: string }
 
@@ -147,12 +146,6 @@ const CronTab: React.FC = () => {
                 <div style={{ flex: 1 }}>
                   <div className="flex items-center gap-2">
                     <span style={{ fontSize: 14, fontWeight: 600, color: '#F0F0F0' }}>{job.name}</span>
-                    {job.protected && (
-                      <span title="Core system job — always running, can't be deleted"
-                        style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', padding: '2px 6px', borderRadius: 4, backgroundColor: 'rgba(245,166,35,0.14)', color: '#F5A623' }}>
-                        Core
-                      </span>
-                    )}
                     {job.lastStatus === 'ok' && <CheckCircle2 size={14} style={{ color: '#10B981' }} />}
                     {job.lastStatus === 'error' && <AlertCircle size={14} style={{ color: '#EF4444' }} />}
                     {job.lastStatus === 'running' && <Loader2 size={14} className="animate-spin" style={{ color: '#F5A623' }} />}
@@ -176,12 +169,10 @@ const CronTab: React.FC = () => {
                       color: job.enabled ? '#10B981' : '#8A8A8A' }}>
                     {job.enabled ? 'Enabled' : 'Disabled'}
                   </button>
-                  {!job.protected && (
-                    <button onClick={() => remove(job)} title="Delete"
-                      className="flex items-center justify-center rounded-md" style={{ width: 30, height: 30, color: '#525252', border: '1px solid rgba(255,255,255,0.1)' }}>
-                      <Trash2 size={14} />
-                    </button>
-                  )}
+                  <button onClick={() => remove(job)} title="Delete"
+                    className="flex items-center justify-center rounded-md" style={{ width: 30, height: 30, color: '#525252', border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
             </div>
