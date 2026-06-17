@@ -7,7 +7,7 @@ export { COOKIE };
 const ALG = "HS256";
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 days
 
-export type Role = "ADMIN" | "DEVREL" | "VIEWER";
+export type Role = "ADMIN" | "DEVREL" | "SUPPORT" | "ENGINEERING";
 export interface SessionUser {
   id: string;
   email: string;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { can } from "@/lib/access";
 import { serialize, INCLUDE } from "@/lib/serialize";
 import { LABEL_TO_STAGE, STAGE_TO_LABEL } from "@/lib/labels";
 import type { Prisma } from "@prisma/client";
@@ -15,7 +16,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const session = await getSession();
-  if (!session || session.role === "VIEWER") {
+  if (!session || !can(session.role, "submissions.edit")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const body = await req.json().catch(() => ({}));

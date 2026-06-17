@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
+import { can } from "@/lib/access";
 import { chatWithTools, llmConfigured, type ToolMessage } from "@/lib/llm";
 import { AGENT_TOOLS, runTool } from "@/lib/agentTools";
 import type { AnalyticsSpec } from "@/lib/analyticsSpec";
@@ -34,7 +35,7 @@ Rules:
 
 export async function POST(req: Request) {
   const session = await getSession();
-  if (!session || session.role === "VIEWER") {
+  if (!session || !can(session.role, "analytics.use")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   if (!llmConfigured()) {

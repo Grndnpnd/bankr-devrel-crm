@@ -34,7 +34,7 @@ export interface InviteEmailParams {
 
 export function inviteEmail(p: InviteEmailParams): { subject: string; html: string; text: string } {
   const greeting = p.name ? `Hi ${p.name},` : "Hi,";
-  const roleLabel = p.role === "ADMIN" ? "Admin" : p.role === "VIEWER" ? "Viewer" : "DevRel";
+  const roleLabel = p.role === "ADMIN" ? "Admin" : p.role === "SUPPORT" ? "Support" : p.role === "ENGINEERING" ? "Engineering" : "DevRel";
   const inviter = p.invitedBy ? ` by ${p.invitedBy}` : "";
 
   const html = shell("You've been added to the Bankr DevRel CRM", `

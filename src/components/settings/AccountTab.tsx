@@ -5,11 +5,12 @@ import { User, Lock, Shield } from 'lucide-react';
 import DataCard from '@/components/DataCard';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 
-const ROLE_LABEL: Record<string, string> = { ADMIN: 'Admin', DEVREL: 'DevRel', VIEWER: 'Viewer' };
+const ROLE_LABEL: Record<string, string> = { ADMIN: 'Admin', DEVREL: 'DevRel', SUPPORT: 'Support', ENGINEERING: 'Engineering' };
 const ROLE_STYLE: Record<string, { bg: string; text: string }> = {
   ADMIN: { bg: 'rgba(245,166,35,0.15)', text: '#F5A623' },
   DEVREL: { bg: 'rgba(59,130,246,0.15)', text: '#3B82F6' },
-  VIEWER: { bg: 'rgba(82,82,82,0.25)', text: '#8A8A8A' },
+  SUPPORT: { bg: 'rgba(16,185,129,0.25)', text: '#10B981' },
+  ENGINEERING: { bg: 'rgba(139,92,246,0.25)', text: '#8B5CF6' },
 };
 
 const inputStyle: React.CSSProperties = {
@@ -71,7 +72,7 @@ const AccountTab: React.FC = () => {
     toast.success('Password changed');
   }, [current, next, pwValid, savingPw]);
 
-  const role = me?.role ?? 'VIEWER';
+  const role = me?.role ?? 'DEVREL';
 
   return (
     <div className="flex flex-col gap-6" style={{ maxWidth: 640 }}>

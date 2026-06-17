@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession, hashPassword } from "@/lib/auth";
+import { can, isValidRole } from "@/lib/access";
 import { sendEmail } from "@/lib/email";
 import { inviteEmail } from "@/lib/emailTemplates";
 
@@ -19,11 +20,11 @@ export async function GET() {
 /** Create a team member (admin). Body: { email, name, role, password }. */
 export async function POST(req: Request) {
   const session = await getSession();
-  if (session?.role !== "ADMIN") return NextResponse.json({ error: "admin only" }, { status: 403 });
+  if (!session || !can(session.role, "users.manage")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const b = await req.json().catch(() => ({}));
   const email = String(b.email ?? "").trim().toLowerCase();
   const name = String(b.name ?? "").trim();
-  const role = ["ADMIN", "DEVREL", "VIEWER"].includes(b.role) ? b.role : "DEVREL";
+  const role = isValidRole(b.role) ? b.role : "DEVREL";
   const password = String(b.password ?? "");
   if (!email || !email.includes("@")) return NextResponse.json({ error: "valid email required" }, { status: 400 });
   if (password.length < 8) return NextResponse.json({ error: "password must be at least 8 characters" }, { status: 400 });

@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { can } from "@/lib/access";
 import { validateSchedule, nextRunFrom, JOB_HANDLERS } from "@/lib/scheduler";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-function canManage(role?: string) { return role === "ADMIN" || role === "DEVREL"; }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const session = await getSession();
-  if (!session || !canManage(session.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!session || !can(session.role, "cron.manage")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const job = await prisma.cronJob.findUnique({ where: { id: params.id } });
   if (!job) return NextResponse.json({ error: "not found" }, { status: 404 });
 
@@ -34,7 +34,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const session = await getSession();
-  if (!session || !canManage(session.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!session || !can(session.role, "cron.manage")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   await prisma.cronJob.delete({ where: { id: params.id } });
   return NextResponse.json({ ok: true });
 }
@@ -42,7 +42,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
 // Run a job immediately (manual trigger from the UI).
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const session = await getSession();
-  if (!session || !canManage(session.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!session || !can(session.role, "cron.manage")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const job = await prisma.cronJob.findUnique({ where: { id: params.id } });
   if (!job) return NextResponse.json({ error: "not found" }, { status: 404 });
   const handler = JOB_HANDLERS[job.type];

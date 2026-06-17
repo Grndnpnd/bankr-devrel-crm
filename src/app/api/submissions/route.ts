@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { can } from "@/lib/access";
 import { serialize, INCLUDE } from "@/lib/serialize";
 import { stableExternalId, handle } from "@/lib/normalize";
 import { score } from "@/lib/scoring";
@@ -27,7 +28,7 @@ const TEXT_FIELDS = [
 /** Create a manual submission (admin/devrel). Body: { project, founderName, founderEmail?, founderX?, projectX?, website?, location?, needsHelp?: string[], ...text fields }. */
 export async function POST(req: Request) {
   const session = await getSession();
-  if (!session || session.role === "VIEWER") {
+  if (!session || !can(session.role, "submissions.edit")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const b = await req.json().catch(() => ({}));

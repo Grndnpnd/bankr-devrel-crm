@@ -11,7 +11,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts",
     "postinstall": "prisma generate",
-    "cron:tick": "tsx scripts/cronTick.ts"
+    "cron:tick": "tsx scripts/cronTick.ts",
+    "migrate:roles": "tsx scripts/migrateRoles.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

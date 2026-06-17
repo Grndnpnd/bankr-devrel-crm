@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { can } from "@/lib/access";
 import { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
@@ -69,7 +70,7 @@ export async function GET() {
 /** POST: create a panel I own. Body: { spec, title?, isPublic? }. */
 export async function POST(req: Request) {
   const session = await getSession();
-  if (!session || session.role === "VIEWER") {
+  if (!session || !can(session.role, "panels.create")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const b = await req.json().catch(() => ({}));

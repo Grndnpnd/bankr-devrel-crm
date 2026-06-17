@@ -9,7 +9,7 @@ import DataCard from '@/components/DataCard';
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
-type UserRole = 'Admin' | 'DevRel' | 'Viewer';
+type UserRole = 'Admin' | 'DevRel' | 'Support' | 'Engineering';
 type UserStatus = 'Active' | 'Invited' | 'Inactive';
 
 interface TeamUser {
@@ -26,8 +26,8 @@ interface TeamUser {
 /* ------------------------------------------------------------------ */
 /*  API mapping                                                        */
 /* ------------------------------------------------------------------ */
-const ROLE_TO_UI: Record<string, UserRole> = { ADMIN: 'Admin', DEVREL: 'DevRel', VIEWER: 'Viewer' };
-const ROLE_TO_API: Record<UserRole, string> = { Admin: 'ADMIN', DevRel: 'DEVREL', Viewer: 'VIEWER' };
+const ROLE_TO_UI: Record<string, UserRole> = { ADMIN: 'Admin', DEVREL: 'DevRel', SUPPORT: 'Support', ENGINEERING: 'Engineering' };
+const ROLE_TO_API: Record<UserRole, string> = { Admin: 'ADMIN', DevRel: 'DEVREL', Support: 'SUPPORT', Engineering: 'ENGINEERING' };
 const PALETTE = ['#F5A623', '#3B82F6', '#10B981', '#8B5CF6', '#14B8A6', '#EC4899'];
 
 const apiToTeamUser = (u: any): TeamUser => {
@@ -48,14 +48,16 @@ const apiToTeamUser = (u: any): TeamUser => {
 
 const roleDescriptions: Record<UserRole, string> = {
   Admin: 'Full access — manage users, scoring, sources',
-  DevRel: 'Can view, edit, and manage outreach',
-  Viewer: 'Read-only dashboard access',
+  DevRel: 'View, edit, manage outreach, analytics, automation',
+  Support: 'Same as DevRel for now (will narrow when Plain is piped in)',
+  Engineering: 'Same as DevRel for now',
 };
 
 const roleBadgeStyles: Record<UserRole, { bg: string; text: string }> = {
   Admin: { bg: 'rgba(245,166,35,0.15)', text: '#F5A623' },
   DevRel: { bg: 'rgba(59,130,246,0.15)', text: '#3B82F6' },
-  Viewer: { bg: 'rgba(82,82,82,0.25)', text: '#8A8A8A' },
+  Support: { bg: 'rgba(16,185,129,0.15)', text: '#10B981' },
+  Engineering: { bg: 'rgba(139,92,246,0.15)', text: '#8B5CF6' },
 };
 
 const statusDotColor: Record<UserStatus, string> = {
@@ -279,7 +281,7 @@ const InviteModal: React.FC<InviteModalProps> = ({ open, onClose, onInvite }) =>
                             overflow: 'hidden',
                           }}
                         >
-                          {(['Admin', 'DevRel', 'Viewer'] as UserRole[]).map((r) => (
+                          {(['Admin', 'DevRel', 'Support', 'Engineering'] as UserRole[]).map((r) => (
                             <button
                               key={r}
                               onClick={() => {
@@ -558,7 +560,7 @@ const UsersTab: React.FC = () => {
                                 minWidth: '140px',
                               }}
                             >
-                              {(['Admin', 'DevRel', 'Viewer'] as UserRole[]).map((r) => (
+                              {(['Admin', 'DevRel', 'Support', 'Engineering'] as UserRole[]).map((r) => (
                                 <button
                                   key={r}
                                   onClick={() => handleRoleChange(user.id, r)}

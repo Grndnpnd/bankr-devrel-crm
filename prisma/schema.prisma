@@ -27,7 +27,8 @@ enum Stage {
 enum Role {
   ADMIN
   DEVREL
-  VIEWER
+  SUPPORT
+  ENGINEERING
 }
 
 model User {

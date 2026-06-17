@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
+import { can } from "@/lib/access";
 import { enrichSubmission, findContractAddressDebug, clearTokenMatch } from "@/lib/enrich";
 import { serialize, INCLUDE } from "@/lib/serialize";
 
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const session = await getSession();
-  if (!session || session.role === "VIEWER") {
+  if (!session || !can(session.role, "submissions.enrich")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const body = await req.json().catch(() => ({}));
@@ -54,7 +55,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 /** Clear a submission's token contract address / onchain match. */
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const session = await getSession();
-  if (!session || session.role === "VIEWER") {
+  if (!session || !can(session.role, "submissions.enrich")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   try {

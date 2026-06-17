@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { can } from '@/lib/access';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -709,7 +710,7 @@ const Submissions: React.FC = () => {
           margin: '0 -32px 16px -32px',
         }}
       >
-        {me && me.role !== 'VIEWER' && (
+        {me && can(me.role, 'submissions.edit') && (
           <button
             onClick={() => setAddOpen(true)}
             className="inline-flex items-center gap-1.5 px-3 rounded-md transition-all duration-150"

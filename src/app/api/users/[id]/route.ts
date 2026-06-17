@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession, hashPassword } from "@/lib/auth";
+import { can, isValidRole } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
 /** Update a team member (admin). Body: { role?, active?, name?, password? }. */
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const session = await getSession();
-  if (session?.role !== "ADMIN") return NextResponse.json({ error: "admin only" }, { status: 403 });
+  if (!session || !can(session.role, "users.manage")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const b = await req.json().catch(() => ({}));
   const data: Record<string, unknown> = {};
-  if (b.role && ["ADMIN", "DEVREL", "VIEWER"].includes(b.role)) data.role = b.role;
+  if (b.role && isValidRole(b.role)) data.role = b.role;
   if (typeof b.active === "boolean") data.active = b.active;
   if ("name" in b) data.name = b.name ? String(b.name).trim() : null;
   if (b.password) {

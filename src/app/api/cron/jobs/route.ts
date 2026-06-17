@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
+import { can } from "@/lib/access";
 import { validateSchedule, nextRunFrom, JOB_HANDLERS, jobTypeList } from "@/lib/scheduler";
 
 export const dynamic = "force-dynamic";
 
-function canManage(role?: string) { return role === "ADMIN" || role === "DEVREL"; }
 
 export async function GET() {
   const session = await getSession();
@@ -16,7 +16,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await getSession();
-  if (!session || !canManage(session.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  if (!session || !can(session.role, "cron.manage")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const b = await req.json().catch(() => ({}));
   const name = String(b?.name || "").trim();
   const type = String(b?.type || "").trim();

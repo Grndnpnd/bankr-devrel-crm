@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { can } from '@/lib/access';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -491,7 +492,7 @@ const Profile: React.FC = () => {
             </span>
           </div>
 
-          {me && me.role !== 'VIEWER' && (
+          {me && can(me.role, 'submissions.edit') && (
             <button
               onClick={() => setEditOpen(true)}
               className="inline-flex items-center justify-center rounded-full transition-colors duration-150 mr-1"
@@ -907,7 +908,7 @@ const Profile: React.FC = () => {
                   <span style={{ fontSize: '12px', color: '#8A8A8A' }}>
                     {submission.matched_via ? `Matched via: ${submission.matched_via}` : ''}
                   </span>
-                  {me && me.role !== 'VIEWER' && (
+                  {me && can(me.role, 'submissions.edit') && (
                     <button
                       onClick={handleClearToken}
                       disabled={clearing}
