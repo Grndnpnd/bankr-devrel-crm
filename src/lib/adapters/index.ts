@@ -20,6 +20,7 @@ export interface ImportResult {
   pulled: number;
   created: number;
   updated: number;
+  unchanged: number;
 }
 
 /** Score + upsert a batch of canonical submissions. Dedup key = (source, externalId). */
@@ -28,6 +29,7 @@ export async function runImport(adapter: SourceAdapter, since?: Date): Promise<I
   const weights = await getWeights();
   let created = 0;
   let updated = 0;
+  let unchanged = 0;
 
   for (const s of items) {
     // Look up the existing row first so we can (a) count create vs update and
@@ -39,6 +41,7 @@ export async function runImport(adapter: SourceAdapter, since?: Date): Promise<I
         projectX: true, website: true, oneLiner: true, problem: true, solution: true,
         traction: true, funding: true, plan: true, whyBankr: true, accomplishments: true,
         links: true, notesField: true, location: true,
+        project: true, needsHelp: true, founders: true, score: true, lowEffort: true,
         tokenMatch: { select: { token: true, fees24h: true, vol24h: true } },
       },
     });
@@ -88,6 +91,40 @@ export async function runImport(adapter: SourceAdapter, since?: Date): Promise<I
     };
 
 
+    // Decide if this row actually changes anything. If an existing row's
+    // comparable fields all match what we'd write, skip the write entirely —
+    // that keeps the "updated" count truthful and avoids pointless DB churn
+    // (no more "142 updated" every cycle when nothing really changed).
+    if (existing) {
+      const same =
+        existing.project === base.project &&
+        (existing.projectX ?? null) === (base.projectX ?? null) &&
+        (existing.website ?? null) === (base.website ?? null) &&
+        (existing.oneLiner ?? null) === (base.oneLiner ?? null) &&
+        (existing.problem ?? null) === (base.problem ?? null) &&
+        (existing.solution ?? null) === (base.solution ?? null) &&
+        (existing.traction ?? null) === (base.traction ?? null) &&
+        (existing.funding ?? null) === (base.funding ?? null) &&
+        (existing.plan ?? null) === (base.plan ?? null) &&
+        (existing.whyBankr ?? null) === (base.whyBankr ?? null) &&
+        (existing.accomplishments ?? null) === (base.accomplishments ?? null) &&
+        (existing.links ?? null) === (base.links ?? null) &&
+        (existing.notesField ?? null) === (base.notesField ?? null) &&
+        (existing.location ?? null) === (base.location ?? null) &&
+        existing.score === base.score &&
+        existing.lowEffort === base.lowEffort &&
+        JSON.stringify(existing.needsHelp ?? []) === JSON.stringify(base.needsHelp ?? []) &&
+        JSON.stringify(existing.founders ?? null) === JSON.stringify(s.founders ?? null);
+
+      // Onchain match may still need a refresh even if the submission is unchanged.
+      const tokenChanged = !!s.token && (existing.tokenMatch?.token !== s.token || existing.tokenMatch?.fees24h !== s.fees24h);
+
+      if (same && !tokenChanged) {
+        unchanged++;
+        continue; // nothing to do for this row
+      }
+    }
+
     const row = await prisma.submission.upsert({
       where: { source_externalId: { source: s.source, externalId: s.externalId } },
       // On re-import we refresh the intake + score but PRESERVE workflow fields
@@ -108,5 +145,5 @@ export async function runImport(adapter: SourceAdapter, since?: Date): Promise<I
     }
   }
 
-  return { source: adapter.source, pulled: items.length, created, updated };
+  return { source: adapter.source, pulled: items.length, created, updated, unchanged };
 }
