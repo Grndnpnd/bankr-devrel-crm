@@ -94,29 +94,34 @@ export async function runImport(adapter: SourceAdapter, since?: Date): Promise<I
     // Change detection (score excluded — owned by the onchain job). If an
     // existing row's import-owned fields all match, skip the write entirely.
     if (existing) {
-      const same =
-        existing.project === base.project &&
-        (existing.projectX ?? null) === (base.projectX ?? null) &&
-        (existing.website ?? null) === (base.website ?? null) &&
-        (existing.oneLiner ?? null) === (base.oneLiner ?? null) &&
-        (existing.problem ?? null) === (base.problem ?? null) &&
-        (existing.solution ?? null) === (base.solution ?? null) &&
-        (existing.traction ?? null) === (base.traction ?? null) &&
-        (existing.funding ?? null) === (base.funding ?? null) &&
-        (existing.plan ?? null) === (base.plan ?? null) &&
-        (existing.whyBankr ?? null) === (base.whyBankr ?? null) &&
-        (existing.accomplishments ?? null) === (base.accomplishments ?? null) &&
-        (existing.links ?? null) === (base.links ?? null) &&
-        (existing.notesField ?? null) === (base.notesField ?? null) &&
-        (existing.location ?? null) === (base.location ?? null) &&
-        existing.lowEffort === base.lowEffort &&
-        JSON.stringify(existing.needsHelp ?? []) === JSON.stringify(base.needsHelp ?? []) &&
-        JSON.stringify(existing.founders ?? null) === JSON.stringify(s.founders ?? null);
+      const diffs: string[] = [];
+      const cmp = (label: string, a: any, b: any) => { if ((a ?? null) !== (b ?? null)) diffs.push(`${label}[${JSON.stringify(a)}!=${JSON.stringify(b)}]`); };
+      cmp('project', existing.project, base.project);
+      cmp('projectX', existing.projectX, base.projectX);
+      cmp('website', existing.website, base.website);
+      cmp('oneLiner', existing.oneLiner, base.oneLiner);
+      cmp('problem', existing.problem, base.problem);
+      cmp('solution', existing.solution, base.solution);
+      cmp('traction', existing.traction, base.traction);
+      cmp('funding', existing.funding, base.funding);
+      cmp('plan', existing.plan, base.plan);
+      cmp('whyBankr', existing.whyBankr, base.whyBankr);
+      cmp('accomplishments', existing.accomplishments, base.accomplishments);
+      cmp('links', existing.links, base.links);
+      cmp('notesField', existing.notesField, base.notesField);
+      cmp('location', existing.location, base.location);
+      if (existing.lowEffort !== base.lowEffort) diffs.push(`lowEffort[${existing.lowEffort}!=${base.lowEffort}]`);
+      if (JSON.stringify(existing.needsHelp ?? []) !== JSON.stringify(base.needsHelp ?? [])) diffs.push(`needsHelp[${JSON.stringify(existing.needsHelp)}!=${JSON.stringify(base.needsHelp)}]`);
+      if (JSON.stringify(existing.founders ?? null) !== JSON.stringify(s.founders ?? null)) diffs.push(`founders[${JSON.stringify(existing.founders)?.slice(0,120)}!=${JSON.stringify(s.founders)?.slice(0,120)}]`);
 
-      // Onchain match may still need a refresh even if the submission is unchanged.
       const tokenChanged = !!s.token && (existing.tokenMatch?.token !== s.token || existing.tokenMatch?.fees24h !== s.fees24h);
 
-      if (same && !tokenChanged) {
+      // TEMP DIAGNOSTIC: log the first 2 changed rows so the cron logs reveal the culprit field + values.
+      if (diffs.length && (updated + created) < 2) {
+        console.log(`[import-diff] "${s.project}": ${diffs.join(' | ')}${tokenChanged ? ' | +tokenChanged' : ''}`);
+      }
+
+      if (diffs.length === 0 && !tokenChanged) {
         unchanged++;
         continue;
       }
