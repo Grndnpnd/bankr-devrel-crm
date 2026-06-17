@@ -83,9 +83,10 @@ const components: ScoreComponent[] = [
 
 interface ScoringTabProps {
   onUnsavedChange?: (hasUnsaved: boolean) => void;
+  readOnly?: boolean;
 }
 
-const ScoringTab: React.FC<ScoringTabProps> = ({ onUnsavedChange }) => {
+const ScoringTab: React.FC<ScoringTabProps> = ({ onUnsavedChange, readOnly = false }) => {
   const subs = useSubmissionStore((s) => s.submissions);
   const reloadSubs = useSubmissionStore((s) => s.load);
 
@@ -212,6 +213,11 @@ const ScoringTab: React.FC<ScoringTabProps> = ({ onUnsavedChange }) => {
     <div className="max-w-[720px] mx-auto flex flex-col gap-6">
       {/* Score Configuration Card */}
       <DataCard title="Score Configuration" delay={0}>
+        {readOnly && (
+          <div className="rounded-md px-3 py-2 mb-4" style={{ backgroundColor: 'rgba(245,166,35,0.08)', border: '1px solid rgba(245,166,35,0.2)', fontSize: '12px', color: '#C99A5B' }}>
+            View only — scoring weights are managed by an admin.
+          </div>
+        )}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Info size={14} style={{ color: '#525252' }} />
@@ -219,7 +225,7 @@ const ScoringTab: React.FC<ScoringTabProps> = ({ onUnsavedChange }) => {
               Each component contributes to the total developer project score (max 100)
             </span>
           </div>
-          <button
+          {!readOnly && <button
             onClick={handleReset}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-all duration-150"
             style={{
@@ -241,7 +247,7 @@ const ScoringTab: React.FC<ScoringTabProps> = ({ onUnsavedChange }) => {
           >
             <RotateCcw size={12} />
             Reset to Defaults
-          </button>
+          </button>}
         </div>
 
         {/* Formula display */}
@@ -367,7 +373,8 @@ const ScoringTab: React.FC<ScoringTabProps> = ({ onUnsavedChange }) => {
                   min={0}
                   max={comp.maxSlider}
                   value={weights[comp.key]}
-                  onChange={(e) => handleSliderChange(comp.key, Number(e.target.value))}
+                  onChange={(e) => { if (!readOnly) handleSliderChange(comp.key, Number(e.target.value)); }}
+                  disabled={readOnly}
                   className="w-full scoring-slider"
                   style={{
                     '--track-color': '#222222',
@@ -382,7 +389,7 @@ const ScoringTab: React.FC<ScoringTabProps> = ({ onUnsavedChange }) => {
         </div>
 
         {/* Action buttons */}
-        <div className="flex items-center gap-3 mt-6 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        {!readOnly && <div className="flex items-center gap-3 mt-6 pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <button
             onClick={handleSave}
             disabled={!hasChanges || exceeds100 || applying}
@@ -445,11 +452,11 @@ const ScoringTab: React.FC<ScoringTabProps> = ({ onUnsavedChange }) => {
           {!hasChanges && applied && (
             <span style={{ fontSize: '11px', color: '#10B981' }}>{applied}</span>
           )}
-        </div>
+        </div>}
       </DataCard>
 
       {/* Live Preview Card */}
-      <DataCard title="Live Preview" delay={0.16}>
+      {!readOnly && <DataCard title="Live Preview" delay={0.16}>
         <p className="mb-4" style={{ fontSize: '12px', color: '#525252' }}>
           {preview
             ? `${preview.summary.changed} of ${preview.summary.total} scores change · avg \u00b1${preview.summary.avgAbsDelta} · top movers shown`
@@ -613,7 +620,7 @@ const ScoringTab: React.FC<ScoringTabProps> = ({ onUnsavedChange }) => {
             </tbody>
           </table>
         </div>
-      </DataCard>
+      </DataCard>}
     </div>
   );
 };

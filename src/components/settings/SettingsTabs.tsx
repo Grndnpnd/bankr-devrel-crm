@@ -17,9 +17,11 @@ interface SettingsTabsProps {
   active: SettingsTab;
   onChange: (tab: SettingsTab) => void;
   unsavedTabs?: Set<string>;
+  visibleTabs?: SettingsTab[];
 }
 
-const SettingsTabs: React.FC<SettingsTabsProps> = ({ active, onChange, unsavedTabs }) => {
+const SettingsTabs: React.FC<SettingsTabsProps> = ({ active, onChange, unsavedTabs, visibleTabs }) => {
+  const shown = visibleTabs ? tabs.filter((t) => visibleTabs.includes(t.id)) : tabs;
   return (
     <div
       className="flex items-center gap-1 mb-6"
@@ -29,7 +31,7 @@ const SettingsTabs: React.FC<SettingsTabsProps> = ({ active, onChange, unsavedTa
         padding: '2px',
       }}
     >
-      {tabs.map((tab) => {
+      {shown.map((tab) => {
         const isActive = active === tab.id;
         const hasUnsaved = unsavedTabs?.has(tab.id);
         return (
