@@ -47,12 +47,12 @@ export async function runImport(adapter: SourceAdapter, since?: Date): Promise<I
     });
 
     // The Google Form has no token/fees columns — those come from a separate
-    // onchain match. When the incoming row lacks them, fall back to whatever is
-    // already stored so a form re-import never tanks an onchain-scored project.
+    // onchain match. We only need token/score handling for NEW rows here; on
+    // existing rows, the onchain refresh job owns the score (it re-scores on
+    // every volume update), so the import must not touch it.
     const token = s.token || existing?.tokenMatch?.token || "";
     const fees24h = s.fees24h ?? existing?.tokenMatch?.fees24h ?? null;
     const vol24h = existing?.tokenMatch?.vol24h ?? null;
-    const { score: sc, breakdown } = score({ ...s, token, fees24h, vol24h }, weights);
 
     // Fill-blanks-only for content fields: on an existing row, keep whatever is
     // already stored if it's non-empty (preserves in-CRM edits); only fill from
@@ -79,22 +79,20 @@ export async function runImport(adapter: SourceAdapter, since?: Date): Promise<I
       location: keep(existing?.location, s.location),
     };
 
+    // Content the import is responsible for (no score here — that's the onchain
+    // job's domain). Used for both the change-check and the update payload.
     const base = {
       submittedAt: new Date(s.submittedAt),
       project: s.project,
       ...content,
       needsHelp: s.needsHelp,
       founders: s.founders as unknown as Prisma.InputJsonValue,
-      score: sc,
-      scoreBreakdown: breakdown as unknown as Prisma.InputJsonValue,
       lowEffort: s.lowEffort,
     };
 
 
-    // Decide if this row actually changes anything. If an existing row's
-    // comparable fields all match what we'd write, skip the write entirely —
-    // that keeps the "updated" count truthful and avoids pointless DB churn
-    // (no more "142 updated" every cycle when nothing really changed).
+    // Change detection (score excluded — owned by the onchain job). If an
+    // existing row's import-owned fields all match, skip the write entirely.
     if (existing) {
       const same =
         existing.project === base.project &&
@@ -111,7 +109,6 @@ export async function runImport(adapter: SourceAdapter, since?: Date): Promise<I
         (existing.links ?? null) === (base.links ?? null) &&
         (existing.notesField ?? null) === (base.notesField ?? null) &&
         (existing.location ?? null) === (base.location ?? null) &&
-        existing.score === base.score &&
         existing.lowEffort === base.lowEffort &&
         JSON.stringify(existing.needsHelp ?? []) === JSON.stringify(base.needsHelp ?? []) &&
         JSON.stringify(existing.founders ?? null) === JSON.stringify(s.founders ?? null);
@@ -121,16 +118,27 @@ export async function runImport(adapter: SourceAdapter, since?: Date): Promise<I
 
       if (same && !tokenChanged) {
         unchanged++;
-        continue; // nothing to do for this row
+        continue;
       }
     }
 
+    // New rows get an initial score so they aren't unscored until the next
+    // onchain pass; existing rows keep whatever the onchain job set.
+    const createScore = existing ? null : score({ ...s, token, fees24h, vol24h }, weights);
+
     const row = await prisma.submission.upsert({
       where: { source_externalId: { source: s.source, externalId: s.externalId } },
-      // On re-import we refresh the intake + score but PRESERVE workflow fields
-      // (stage / owner / activity) that the team has set.
+      // UPDATE: intake content only — never score (the onchain job owns it) and
+      // never workflow fields (stage/owner/activity the team set).
       update: base,
-      create: { ...base, source: s.source, externalId: s.externalId },
+      // CREATE: full row incl. an initial score.
+      create: {
+        ...base,
+        source: s.source,
+        externalId: s.externalId,
+        score: createScore!.score,
+        scoreBreakdown: createScore!.breakdown as unknown as Prisma.InputJsonValue,
+      },
     });
     existing ? updated++ : created++;
 
