@@ -123,8 +123,9 @@ export async function runImport(adapter: SourceAdapter, since?: Date): Promise<I
     }
 
     // New rows get an initial score so they aren't unscored until the next
-    // onchain pass; existing rows keep whatever the onchain job set.
-    const createScore = existing ? null : score({ ...s, token, fees24h, vol24h }, weights);
+    // onchain pass. (Computed unconditionally — cheap + pure — but only written
+    // on CREATE; existing rows keep whatever the onchain job set.)
+    const { score: initialScore, breakdown: initialBreakdown } = score({ ...s, token, fees24h, vol24h }, weights);
 
     const row = await prisma.submission.upsert({
       where: { source_externalId: { source: s.source, externalId: s.externalId } },
@@ -136,8 +137,8 @@ export async function runImport(adapter: SourceAdapter, since?: Date): Promise<I
         ...base,
         source: s.source,
         externalId: s.externalId,
-        score: createScore!.score,
-        scoreBreakdown: createScore!.breakdown as unknown as Prisma.InputJsonValue,
+        score: initialScore,
+        scoreBreakdown: initialBreakdown as unknown as Prisma.InputJsonValue,
       },
     });
     existing ? updated++ : created++;
