@@ -36,6 +36,9 @@ export async function runImport(adapter: SourceAdapter, since?: Date): Promise<I
       where: { source_externalId: { source: s.source, externalId: s.externalId } },
       select: {
         id: true,
+        projectX: true, website: true, oneLiner: true, problem: true, solution: true,
+        traction: true, funding: true, plan: true, whyBankr: true, accomplishments: true,
+        links: true, notesField: true, location: true,
         tokenMatch: { select: { token: true, fees24h: true, vol24h: true } },
       },
     });
@@ -48,28 +51,42 @@ export async function runImport(adapter: SourceAdapter, since?: Date): Promise<I
     const vol24h = existing?.tokenMatch?.vol24h ?? null;
     const { score: sc, breakdown } = score({ ...s, token, fees24h, vol24h }, weights);
 
+    // Fill-blanks-only for content fields: on an existing row, keep whatever is
+    // already stored if it's non-empty (preserves in-CRM edits); only fill from
+    // the incoming sheet value when the stored field is blank. New rows take the
+    // incoming value directly (existing is null).
+    const keep = (stored: string | null | undefined, incoming: string | null | undefined) => {
+      if (existing) return (stored && String(stored).trim() !== "") ? stored : (incoming || null);
+      return incoming || null;
+    };
+
+    const content = {
+      projectX: keep(existing?.projectX, s.projectX),
+      website: keep(existing?.website, s.website),
+      oneLiner: keep(existing?.oneLiner, s.oneLiner),
+      problem: keep(existing?.problem, s.problem),
+      solution: keep(existing?.solution, s.solution),
+      traction: keep(existing?.traction, s.traction),
+      funding: keep(existing?.funding, s.funding),
+      plan: keep(existing?.plan, s.plan),
+      whyBankr: keep(existing?.whyBankr, s.whyBankr),
+      accomplishments: keep(existing?.accomplishments, s.accomplishments),
+      links: keep(existing?.links, s.links),
+      notesField: keep(existing?.notesField, s.notesField),
+      location: keep(existing?.location, s.location),
+    };
+
     const base = {
       submittedAt: new Date(s.submittedAt),
       project: s.project,
-      projectX: s.projectX || null,
-      website: s.website || null,
-      oneLiner: s.oneLiner || null,
-      problem: s.problem || null,
-      solution: s.solution || null,
-      traction: s.traction || null,
-      funding: s.funding || null,
-      plan: s.plan || null,
-      whyBankr: s.whyBankr || null,
-      accomplishments: s.accomplishments || null,
-      links: s.links || null,
-      notesField: s.notesField || null,
-      location: s.location || null,
+      ...content,
       needsHelp: s.needsHelp,
       founders: s.founders as unknown as Prisma.InputJsonValue,
       score: sc,
       scoreBreakdown: breakdown as unknown as Prisma.InputJsonValue,
       lowEffort: s.lowEffort,
     };
+
 
     const row = await prisma.submission.upsert({
       where: { source_externalId: { source: s.source, externalId: s.externalId } },

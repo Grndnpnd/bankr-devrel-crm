@@ -95,12 +95,46 @@ export const jobTypeList = () =>
   Object.values(JOB_HANDLERS).map((h) => ({ type: h.type, label: h.label, description: h.description }));
 
 /**
+ * Core infrastructure jobs that must always exist. These keep the whole system
+ * fed (onchain data + sheet submissions) and are marked protected so they can't
+ * be deleted via the UI/API. If missing, they're recreated on the next tick.
+ * The custom cron harness remains for additional ad-hoc jobs.
+ */
+const CORE_JOBS: { name: string; type: string; schedule: string }[] = [
+  { name: 'Refresh all data', type: 'refresh_onchain', schedule: '15m' },
+  { name: 'Refresh sheet submissions', type: 'refresh_sheet', schedule: '30m' },
+];
+
+export async function ensureCoreJobs(): Promise<void> {
+  for (const core of CORE_JOBS) {
+    const protectedOne = await prisma.cronJob.findFirst({ where: { type: core.type, protected: true } });
+    if (protectedOne) continue; // already have the protected core job
+
+    // Adopt an existing (manually-created) job of this type rather than duplicate it.
+    const existing = await prisma.cronJob.findFirst({ where: { type: core.type }, orderBy: { createdAt: 'asc' } });
+    if (existing) {
+      await prisma.cronJob.update({ where: { id: existing.id }, data: { protected: true, enabled: true } });
+    } else {
+      await prisma.cronJob.create({
+        data: {
+          name: core.name, type: core.type, schedule: core.schedule,
+          enabled: true, protected: true, nextRunAt: nextRunFrom(core.schedule), createdBy: 'system',
+        },
+      });
+    }
+  }
+}
+
+/**
  * Run all due, enabled jobs. Returns a summary of what ran.
  * Concurrency-safe enough for a single instance: we mark a job "running" with a
  * freshly-advanced nextRunAt before executing, so an overlapping tick won't
  * double-fire it.
  */
 export async function runDueJobs(now: Date = new Date()): Promise<{ ran: any[]; checked: number }> {
+  // Self-heal: make sure the protected core jobs always exist.
+  await ensureCoreJobs().catch(() => {});
+
   const due = await prisma.cronJob.findMany({
     where: { enabled: true, OR: [{ nextRunAt: null }, { nextRunAt: { lte: now } }] },
   });
