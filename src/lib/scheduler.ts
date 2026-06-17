@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { enrichAndBackfillAll } from '@/lib/enrich';
+import { runImport } from '@/lib/adapters';
+import { GoogleSheetsAdapter } from '@/lib/adapters/googleSheets';
 import { CronExpressionParser } from 'cron-parser';
 
 /**
@@ -67,6 +69,24 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
     run: async () => {
       const r = await enrichAndBackfillAll();
       return r;
+    },
+  },
+  refresh_sheet: {
+    type: 'refresh_sheet',
+    label: 'Import from Google Sheet',
+    description: 'Pull new/updated form submissions from the connected Google Sheet into the CRM. New projects appear automatically; recorded in the Import Log.',
+    run: async () => {
+      try {
+        const result = await runImport(new GoogleSheetsAdapter());
+        await prisma.importLog.create({
+          data: { source: 'google', pulled: result.pulled, created: result.created, updated: result.updated, ok: true, by: 'cron' },
+        }).catch(() => {});
+        return result;
+      } catch (e: any) {
+        const message = e?.message ?? 'sheet import failed';
+        await prisma.importLog.create({ data: { source: 'google', ok: false, message, by: 'cron' } }).catch(() => {});
+        throw e; // re-throw so the job also records the error in its own status
+      }
     },
   },
 };
