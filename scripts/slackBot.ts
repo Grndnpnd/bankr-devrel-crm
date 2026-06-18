@@ -72,8 +72,6 @@ async function fetchThreadHistory(channel: string, threadTs: string | undefined,
   try {
     const res = await web.conversations.replies({ channel, ts: threadTs, limit: 20 });
     const msgs = ((res as any)?.messages || []) as any[];
-    console.log(`[slackbot][diag] raw thread msgs from Slack: ${msgs.length}`);
-    msgs.forEach((m, i) => console.log(`  raw[${i}] user=${m.user} bot_id=${m.bot_id ?? '-'} subtype=${m.subtype ?? '-'} textlen=${(m.text || '').length} text="${String(m.text || '').slice(0, 60)}"`));
     const history: ToolMessage[] = [];
     for (const m of msgs) {
       const text = stripMention(m.text || '');
@@ -92,13 +90,6 @@ async function fetchThreadHistory(channel: string, threadTs: string | undefined,
   }
 }
 
-// TEMP diagnostic: log the rebuilt history so we can see what the agent actually receives.
-function logHistory(tag: string, history: ToolMessage[]) {
-  try {
-    console.log(`[slackbot][diag] ${tag} — ${history.length} turns:`);
-    history.forEach((h, i) => console.log(`  [${i}] ${h.role}: ${String(h.content).slice(0, 100)}`));
-  } catch { /* noop */ }
-}
 
 async function handleQuestion(channel: string, threadTs: string | undefined, slackUserId: string, rawText: string) {
   const question = stripMention(rawText);
@@ -110,7 +101,6 @@ async function handleQuestion(channel: string, threadTs: string | undefined, sla
   const id = await resolveIdentity(slackUserId);
   // Read the thread so multi-turn follow-ups work conversationally.
   const history: ToolMessage[] = await fetchThreadHistory(channel, threadTs, rawText);
-  logHistory(`thread=${threadTs}`, history);
 
   // Load the same trimmed pipeline context the web bubble sends, so the agent's
   // tools (query_pipeline, get_pipeline_summary, etc.) actually see the data.
