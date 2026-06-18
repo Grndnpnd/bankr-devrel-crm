@@ -16,7 +16,7 @@ export async function GET() {
     where: isAdmin ? {} : { createdBy: session.email },
     orderBy: { createdAt: "asc" },
   });
-  return NextResponse.json({ jobs, types: jobTypeList().filter((t) => !CORE_TYPES.includes(t.type)) });
+  return NextResponse.json({ jobs, types: jobTypeList().filter((t) => !CORE_TYPES.includes(t.type) && t.type !== 'slack_report') });
 }
 
 export async function POST(req: Request) {
@@ -29,6 +29,7 @@ export async function POST(req: Request) {
   if (!name) return NextResponse.json({ error: "name required" }, { status: 400 });
   if (!JOB_HANDLERS[type]) return NextResponse.json({ error: "unknown job type" }, { status: 400 });
   if (CORE_TYPES.includes(type)) return NextResponse.json({ error: "That refresh runs automatically as a core system job." }, { status: 400 });
+  if (type === "slack_report") return NextResponse.json({ error: "Slack reports are created via the assistant (it builds the report spec)." }, { status: 400 });
   const sched = validateSchedule(schedule);
   if (!sched.ok) return NextResponse.json({ error: sched.error }, { status: 400 });
 

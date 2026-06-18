@@ -69,6 +69,7 @@ model CronJob {
   type        String                       // handler key, e.g. "refresh_onchain"
   schedule    String                       // preset token ("15m"/"hourly"/...) or a cron expression
   enabled     Boolean   @default(true)
+  config      Json?                        // job-type-specific config (e.g. slack_report spec + webhook)
   lastRunAt   DateTime?
   nextRunAt   DateTime?
   lastStatus  String?                      // "ok" | "error" | "running"

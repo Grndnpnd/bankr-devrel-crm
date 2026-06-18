@@ -58,7 +58,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const handler = JOB_HANDLERS[job.type];
   if (!handler) return NextResponse.json({ error: "unknown job type" }, { status: 400 });
   try {
-    const result = await handler.run();
+    const result = await handler.run((job as any).config);
     const updated = await prisma.cronJob.update({
       where: { id: job.id },
       data: { lastStatus: "ok", lastResult: result ?? {}, lastError: null, lastRunAt: new Date() },

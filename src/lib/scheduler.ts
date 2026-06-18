@@ -12,6 +12,9 @@ import { CronExpressionParser } from 'cron-parser';
 
 // Interval presets (friendly UI) → milliseconds. Anything not a preset is treated
 // as a standard cron expression.
+import { renderReport, validateReportSpec } from '@/lib/reports';
+import { sendSlackWebhook } from '@/lib/slack';
+
 export const SCHEDULE_PRESETS: Record<string, { label: string; ms: number }> = {
   '15m': { label: 'Every 15 minutes', ms: 15 * 60_000 },
   '30m': { label: 'Every 30 minutes', ms: 30 * 60_000 },
@@ -58,7 +61,7 @@ export interface JobHandler {
   type: string;
   label: string;
   description: string;
-  run: () => Promise<any>;
+  run: (config?: any) => Promise<any>;
 }
 
 export const JOB_HANDLERS: Record<string, JobHandler> = {
@@ -87,6 +90,21 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
         await prisma.importLog.create({ data: { source: 'google', ok: false, message, by: 'cron' } }).catch(() => {});
         throw e; // re-throw so the job also records the error in its own status
       }
+    },
+  },
+  slack_report: {
+    type: 'slack_report',
+    label: 'Scheduled Slack report',
+    description: 'Render a structured report (top candidates, team workload, pipeline, new-this-week) and deliver it to a Slack channel on a schedule. The agent builds the spec; this renders it deterministically each run.',
+    run: async (config?: any) => {
+      const spec = validateReportSpec(config?.spec);
+      const webhook = config?.webhook;
+      if (!spec) throw new Error('slack_report: invalid or empty report spec');
+      if (!webhook) throw new Error('slack_report: no destination webhook');
+      const blocks = await renderReport(spec);
+      const r = await sendSlackWebhook(webhook, { text: spec.title, blocks });
+      if (!r.ok) throw new Error(`slack delivery failed: ${r.error}`);
+      return { delivered: true, sections: spec.sections.length };
     },
   },
 };
@@ -190,7 +208,7 @@ export async function runDueJobs(now: Date = new Date()): Promise<{ ran: any[]; 
     }
 
     try {
-      const result = await handler.run();
+      const result = await handler.run((job as any).config);
       await prisma.cronJob.update({
         where: { id: job.id },
         data: { lastStatus: 'ok', lastResult: result ?? {}, lastError: null, lastRunAt: new Date() },

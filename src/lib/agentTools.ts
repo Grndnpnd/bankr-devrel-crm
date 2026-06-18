@@ -12,6 +12,8 @@ import { prisma } from '@/lib/prisma';
 import { EDITABLE_FIELDS, NEEDS_HELP_TAGS, isEditableField, allTrivial, snapshotCurrent, applyChangesToSubmission, type Change } from '@/lib/proposedEdits';
 import { createSubmissionFromFields, findProjectMatch, type NewSubmissionFields, ingestText } from '@/lib/ingest';
 import { can } from '@/lib/access';
+import { REPORT_SECTION_KINDS, validateReportSpec } from '@/lib/reports';
+import { resolveUserWebhook } from '@/lib/slack';
 import { getWeights } from '@/lib/scoreConfig';
 import { validateSchedule, nextRunFrom, JOB_HANDLERS, SCHEDULE_PRESETS, CORE_TYPES } from '@/lib/scheduler';
 
@@ -193,6 +195,35 @@ export const AGENT_TOOLS: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'create_slack_report',
+      description:
+        'Schedule a recurring report delivered to the user\'s Slack channel (e.g. "send my top 5 reach-out candidates and team workload to Slack every day at 8am"). You translate the request into a structured spec of report sections, then it runs deterministically on schedule and delivers via the user\'s configured Slack webhook. The user must have a Slack webhook set in Settings → Slack. Available sections: ' + REPORT_SECTION_KINDS.join(', ') + '. Schedule must be a preset (15m/30m/hourly/6h/12h/daily) or a cron expression.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'a short name for the scheduled report' },
+          title: { type: 'string', description: 'the report title shown in Slack' },
+          sections: {
+            type: 'array',
+            description: 'ordered report sections',
+            items: {
+              type: 'object',
+              properties: {
+                kind: { type: 'string', enum: [...REPORT_SECTION_KINDS] },
+                limit: { type: 'number', description: 'for top_candidates: how many (default 5)' },
+              },
+              required: ['kind'],
+            },
+          },
+          schedule: { type: 'string', description: 'preset token or cron expression' },
+        },
+        required: ['name', 'title', 'sections', 'schedule'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'create_scheduled_job',
       description:
         'Create a scheduled (cron) job that runs automatically on a recurring schedule. Use when the user asks to "schedule", "automate", or "run X every …". Available job types come from get_scheduled_jobs/the system. Confirm the details with the user before creating if there is any ambiguity. Schedule can be a preset (15m, 30m, hourly, 6h, 12h, daily) or a standard cron expression.',
@@ -291,6 +322,7 @@ export async function runTool(name: string, args: any, submissions: Submission[]
     create_submission: 'submissions.edit',
     propose_edit: 'submissions.edit',
     create_scheduled_job: 'cron.manage',
+    create_slack_report: 'cron.manage',
   };
   if (WRITE_TOOLS[name] && !can(ctx.role, WRITE_TOOLS[name])) {
     return { result: JSON.stringify({ error: `You don't have permission to ${name.replace('_', ' ')}.` }) };
@@ -379,6 +411,37 @@ export async function runTool(name: string, args: any, submissions: Submission[]
     } catch (e: any) {
       return { result: JSON.stringify({ error: e?.message ?? 'could not list jobs' }) };
     }
+  }
+
+  if (name === 'create_slack_report') {
+    const spec = validateReportSpec({ title: args?.title, sections: args?.sections });
+    if (!spec) return { result: JSON.stringify({ error: `invalid report spec — need at least one valid section from: ${REPORT_SECTION_KINDS.join(', ')}` }) };
+    const sched = validateSchedule(String(args?.schedule || ''));
+    if (!sched.ok) return { result: JSON.stringify({ error: sched.error }) };
+
+    // Resolve the user's Slack webhook (their own, or team fallback).
+    const webhook = await resolveUserWebhook(ctx.userEmail);
+    if (!webhook) return { result: JSON.stringify({ error: 'No Slack webhook configured. Set one in Settings → Slack first.' }) };
+
+    const job = await prisma.cronJob.create({
+      data: {
+        name: String(args?.name || spec.title),
+        type: 'slack_report',
+        schedule: String(args.schedule),
+        enabled: true,
+        nextRunAt: nextRunFrom(String(args.schedule)),
+        createdBy: ctx.userEmail || 'agent',
+        config: { spec, webhook } as unknown as Prisma.InputJsonValue,
+      },
+    });
+    return { result: JSON.stringify({
+      ok: true,
+      created: true,
+      jobName: job.name,
+      schedule: String(args.schedule),
+      sections: spec.sections.map((s: any) => s.kind),
+      message: `Scheduled "${job.name}" to deliver to your Slack ${String(args.schedule)}. DO NOT call more tools — confirm this to the user.`,
+    }) };
   }
 
   if (name === 'create_scheduled_job') {
