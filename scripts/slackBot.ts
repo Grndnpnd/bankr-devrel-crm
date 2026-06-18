@@ -63,6 +63,33 @@ function toSlackText(answer: string, capped?: boolean): string {
   return capped ? `${body}\n\n_(I cut this off to stay responsive — ask for a narrower slice if needed.)_` : body;
 }
 
+// Pull prior messages in a thread and convert to agent history, so follow-ups
+// ("add a flag to the second one") have conversational context. Best-effort:
+// if the history call fails (missing scope, etc.), fall back to single-turn.
+async function fetchThreadHistory(channel: string, threadTs: string | undefined, currentText: string): Promise<ToolMessage[]> {
+  const current: ToolMessage = { role: 'user', content: stripMention(currentText) };
+  if (!threadTs) return [current]; // not in a thread → single message
+  try {
+    const res = await web.conversations.replies({ channel, ts: threadTs, limit: 20 });
+    const msgs = ((res as any)?.messages || []) as any[];
+    const history: ToolMessage[] = [];
+    for (const m of msgs) {
+      const text = stripMention(m.text || '');
+      if (!text) continue;
+      // The bot's own messages become assistant turns; everyone else's are user turns.
+      const role: 'assistant' | 'user' = m.user === botUserId || m.bot_id ? 'assistant' : 'user';
+      history.push({ role, content: text });
+    }
+    // Ensure the current question is the last turn (replies usually include it, but be safe).
+    const last = history[history.length - 1];
+    if (!last || last.role !== 'user' || last.content !== current.content) history.push(current);
+    return history.slice(-12); // keep it bounded, same as the web route
+  } catch (e: any) {
+    console.error('[slackbot] thread history fetch failed (falling back to single-turn):', e?.message ?? e);
+    return [current];
+  }
+}
+
 async function handleQuestion(channel: string, threadTs: string | undefined, slackUserId: string, rawText: string) {
   const question = stripMention(rawText);
   if (!question) {
@@ -71,7 +98,8 @@ async function handleQuestion(channel: string, threadTs: string | undefined, sla
   }
 
   const id = await resolveIdentity(slackUserId);
-  const history: ToolMessage[] = [{ role: 'user', content: question }];
+  // Read the thread so multi-turn follow-ups work conversationally.
+  const history: ToolMessage[] = await fetchThreadHistory(channel, threadTs, rawText);
 
   // Load the same trimmed pipeline context the web bubble sends, so the agent's
   // tools (query_pipeline, get_pipeline_summary, etc.) actually see the data.
