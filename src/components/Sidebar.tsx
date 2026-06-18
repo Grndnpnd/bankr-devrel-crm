@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Inbox, BarChart3, Settings, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Inbox, BarChart3, Settings, Shield, ClipboardCheck, ChevronLeft, ChevronRight } from 'lucide-react';
 import Logo from './icons/Logo';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import { can } from '@/lib/access';
@@ -13,6 +13,7 @@ const navItems: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/submissions', label: 'Submissions', icon: Inbox },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
+  { to: '/review', label: 'Review', icon: ClipboardCheck },
   { to: '/settings', label: 'Settings', icon: Settings },
   { to: '/admin', label: 'Admin', icon: Shield, adminOnly: true },
 ];
@@ -21,6 +22,7 @@ const Sidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
   const me = useSubmissionStore((st) => st.me);
+  const pendingCount = useSubmissionStore((st) => st.proposals.length);
   // "Admin" capability proxy: anyone who can manage users (ADMIN) sees the Admin page.
   const items = navItems.filter((i) => !i.adminOnly || can(me?.role, 'users.manage'));
 
@@ -83,6 +85,18 @@ const Sidebar: React.FC = () => {
             >
               <item.icon size={20} style={{ color: active ? '#F5A623' : '#525252', flexShrink: 0 }} />
               {!collapsed && <span>{item.label}</span>}
+              {item.to === '/review' && pendingCount > 0 && (
+                <span style={{
+                  marginLeft: collapsed ? 0 : 'auto',
+                  position: collapsed ? 'absolute' : 'static',
+                  top: collapsed ? 4 : undefined, right: collapsed ? 4 : undefined,
+                  minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9,
+                  backgroundColor: '#F5A623', color: '#0D0D0D',
+                  fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {pendingCount}
+                </span>
+              )}
             </Link>
           );
         })}

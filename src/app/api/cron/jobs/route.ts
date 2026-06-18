@@ -10,7 +10,12 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  const jobs = await prisma.cronJob.findMany({ orderBy: { createdAt: "asc" } });
+  // Admins see all ad-hoc jobs; everyone else sees only the ones they created.
+  const isAdmin = can(session.role, "users.manage");
+  const jobs = await prisma.cronJob.findMany({
+    where: isAdmin ? {} : { createdBy: session.email },
+    orderBy: { createdAt: "asc" },
+  });
   return NextResponse.json({ jobs, types: jobTypeList().filter((t) => !CORE_TYPES.includes(t.type)) });
 }
 

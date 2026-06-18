@@ -14,6 +14,7 @@ import {
   ExternalLink,
   Plus,
   AlertTriangle,
+  FileEdit,
 } from 'lucide-react';
 import { useSubmissionStore, useOwnerNames } from '@/store/useSubmissionStore';
 import SubmissionFormModal, { type SubmissionFormValues } from '@/components/SubmissionFormModal';
@@ -565,9 +566,15 @@ const Submissions: React.FC = () => {
     filteredSubmissions,
     me,
     createSubmission,
+    proposals,
   } = useSubmissionStore();
   const ownerNames = useOwnerNames();
   const OWNER_OPTIONS = [...ownerNames, 'Unassigned'];
+  const pendingByProject = React.useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const pr of proposals) { m[pr.submissionId] = (m[pr.submissionId] ?? 0) + 1; }
+    return m;
+  }, [proposals]);
 
   const [addOpen, setAddOpen] = useState(false);
   const handleCreate = useCallback(async (v: SubmissionFormValues): Promise<string | null> => {
@@ -1414,6 +1421,12 @@ const Submissions: React.FC = () => {
                               }}>
                                 {sub.project}
                               </span>
+                              {(pendingByProject[sub.id] ?? 0) > 0 && (
+                                <span title={`${pendingByProject[sub.id]} pending edit(s) to review`}
+                                  className="inline-flex items-center gap-1" style={{ backgroundColor: 'rgba(245,166,35,0.12)', border: '1px solid rgba(245,166,35,0.3)', borderRadius: 5, padding: '1px 6px', fontSize: 10.5, fontWeight: 700, color: '#F5A623', whiteSpace: 'nowrap' }}>
+                                  <FileEdit size={10} /> {pendingByProject[sub.id]}
+                                </span>
+                              )}
                             </div>
                             <span style={{
                               fontFamily: "'Inter', sans-serif",

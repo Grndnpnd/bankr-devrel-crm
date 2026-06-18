@@ -1,24 +1,20 @@
 'use client';
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Database, RefreshCw, Users, Clock, History } from 'lucide-react';
+import { Database, RefreshCw, Users } from 'lucide-react';
 import '@/components/settings/settings.css';
 import SourcesTab from '@/components/settings/SourcesTab';
 import CoreRefreshTab from '@/components/settings/CoreRefreshTab';
 import UsersTab from '@/components/settings/UsersTab';
-import CronTab from '@/components/settings/CronTab';
-import ImportLogTab from '@/components/settings/ImportLogTab';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import { can } from '@/lib/access';
 
-type AdminTab = 'sources' | 'core-refresh' | 'users' | 'automation' | 'import-log';
+type AdminTab = 'sources' | 'core-refresh' | 'users';
 
 const TABS: { id: AdminTab; label: string; icon: React.ElementType; cap: Parameters<typeof can>[1] }[] = [
   { id: 'sources', label: 'Sources', icon: Database, cap: 'settings.sources' },
   { id: 'core-refresh', label: 'Core Refresh', icon: RefreshCw, cap: 'settings.sources' },
   { id: 'users', label: 'Users', icon: Users, cap: 'users.manage' },
-  { id: 'automation', label: 'Automation', icon: Clock, cap: 'cron.manage' },
-  { id: 'import-log', label: 'Import Log', icon: History, cap: 'import.run' },
 ];
 
 const AdminPage: React.FC = () => {
@@ -67,8 +63,6 @@ const AdminPage: React.FC = () => {
         {safeActive === 'sources' && <SourcesTab />}
         {safeActive === 'core-refresh' && <CoreRefreshTab />}
         {safeActive === 'users' && <UsersTab />}
-        {safeActive === 'automation' && <CronTab />}
-        {safeActive === 'import-log' && <ImportLogTab />}
       </motion.div>
     </div>
   );

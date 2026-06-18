@@ -14,18 +14,20 @@ function titleFor(pathname: string): string {
   if (pathname.startsWith('/analytics')) return 'Analytics';
   if (pathname.startsWith('/settings')) return 'Settings';
   if (pathname.startsWith('/admin')) return 'Admin';
+  if (pathname.startsWith('/review')) return 'Review Inbox';
   return 'Bankr';
 }
 
 export default function AppShell({ me, children }: { me: SessionUser; children: React.ReactNode }) {
   const pathname = usePathname();
-  const { setMe, load, loadUsers } = useSubmissionStore();
+  const { setMe, load, loadUsers, loadProposals } = useSubmissionStore();
 
   useEffect(() => {
     setMe(me);
     load();
     loadUsers();
-  }, [me, setMe, load, loadUsers]);
+    loadProposals();
+  }, [me, setMe, load, loadUsers, loadProposals]);
 
   return (
     <div className="min-h-full" style={{ backgroundColor: '#0D0D0D', fontFamily: "'Inter', sans-serif", fontSize: '13px', color: '#F0F0F0' }}>

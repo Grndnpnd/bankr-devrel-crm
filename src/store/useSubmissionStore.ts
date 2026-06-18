@@ -7,6 +7,7 @@ interface Me { email: string; name: string | null; role: string }
 export interface TokenCandidate { tokenAddress: string; symbol: string | null; name: string | null; status: string | null; deployerX: string | null; feeX: string | null; identityMatch: boolean; projectMatch?: boolean; bankrDeployed: boolean; vol24h?: number | null; marketCapUsd?: number | null }
 export interface DashboardWidget { id: string; visible: boolean; span: number; order: number; height?: number | null }
 export interface SavedPanel { id: string; spec: any; title: string; isPublic: boolean; mine: boolean; ownerName: string; createdAt: string }
+export interface ProposedEditDTO { id: string; submissionId: string; changes: any[]; rationale: string | null; status: string; source: string; proposedBy: string | null; createdAt: string; submission?: { id: string; project: string } }
 
 interface SubmissionStore {
   submissions: Submission[];
@@ -15,6 +16,7 @@ interface SubmissionStore {
   dashboardLayout: DashboardWidget[] | null;
   dashboardDefault: DashboardWidget[] | null;
   savedPanels: SavedPanel[];
+  proposals: ProposedEditDTO[];
   loaded: boolean;
   loading: boolean;
   searchQuery: string;
@@ -26,6 +28,8 @@ interface SubmissionStore {
   saveDashboardLayout: (layout: DashboardWidget[]) => Promise<void>;
   setDashboardLayout: (layout: DashboardWidget[]) => void;
   saveDashboardDefault: (layout: DashboardWidget[]) => Promise<void>;
+  loadProposals: () => Promise<void>;
+  resolveProposal: (id: string, action: 'approve' | 'reject') => Promise<boolean>;
   loadSavedPanels: () => Promise<void>;
   addSavedPanel: (spec: any, isPublic?: boolean) => Promise<SavedPanel | null>;
   removeSavedPanel: (id: string) => Promise<void>;
@@ -73,6 +77,7 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
   dashboardLayout: null,
   dashboardDefault: null,
   savedPanels: [],
+  proposals: [],
   loaded: false,
   loading: false,
   searchQuery: '',
@@ -102,6 +107,26 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
       // Panels now live in their own table; load them separately.
       await get().loadSavedPanels();
     } catch { /* keep defaults */ }
+  },
+  loadProposals: async () => {
+    try {
+      const res = await fetch('/api/proposed-edits?status=pending');
+      if (!res.ok) return;
+      const data = await res.json();
+      set({ proposals: Array.isArray(data?.proposals) ? data.proposals : [] });
+    } catch { /* keep */ }
+  },
+  resolveProposal: async (id, action) => {
+    try {
+      const res = await fetch(`/api/proposed-edits/${id}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      });
+      if (!res.ok) return false;
+      set({ proposals: get().proposals.filter((p) => p.id !== id) });
+      if (action === 'approve') get().load(); // refresh submissions to show applied change
+      return true;
+    } catch { return false; }
   },
   loadSavedPanels: async () => {
     try {

@@ -7,12 +7,18 @@ import { validateSchedule, nextRunFrom, JOB_HANDLERS } from "@/lib/scheduler";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
+// Non-admins may only act on ad-hoc jobs they created; admins on any.
+function ownsOrAdmin(session: any, job: { createdBy: string | null }) {
+  return can(session.role, "users.manage") || job.createdBy === session.email;
+}
+
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const session = await getSession();
   if (!session || !can(session.role, "cron.manage")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const job = await prisma.cronJob.findUnique({ where: { id: params.id } });
   if (!job) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (!ownsOrAdmin(session, job)) return NextResponse.json({ error: "not your job" }, { status: 403 });
 
   const b = await req.json().catch(() => ({}));
   const data: Record<string, unknown> = {};
@@ -35,6 +41,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const session = await getSession();
   if (!session || !can(session.role, "cron.manage")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  const job = await prisma.cronJob.findUnique({ where: { id: params.id } });
+  if (!job) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (!ownsOrAdmin(session, job)) return NextResponse.json({ error: "not your job" }, { status: 403 });
   await prisma.cronJob.delete({ where: { id: params.id } });
   return NextResponse.json({ ok: true });
 }
@@ -45,6 +54,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (!session || !can(session.role, "cron.manage")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const job = await prisma.cronJob.findUnique({ where: { id: params.id } });
   if (!job) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (!ownsOrAdmin(session, job)) return NextResponse.json({ error: "not your job" }, { status: 403 });
   const handler = JOB_HANDLERS[job.type];
   if (!handler) return NextResponse.json({ error: "unknown job type" }, { status: 400 });
   try {

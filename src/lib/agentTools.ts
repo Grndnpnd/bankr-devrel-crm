@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import type { Submission } from '@/types';
 import {
   validateSpec, executeSpec,
@@ -8,6 +9,7 @@ import { toChatRows, capRows } from '@/lib/chatData';
 import type { ToolDef } from '@/lib/llm';
 import { fetchTokenData, isContractAddress } from '@/lib/discover';
 import { prisma } from '@/lib/prisma';
+import { EDITABLE_FIELDS, NEEDS_HELP_TAGS, isEditableField, allTrivial, snapshotCurrent, applyChangesToSubmission, type Change } from '@/lib/proposedEdits';
 import { getWeights } from '@/lib/scoreConfig';
 import { validateSchedule, nextRunFrom, JOB_HANDLERS, SCHEDULE_PRESETS, CORE_TYPES } from '@/lib/scheduler';
 
@@ -114,6 +116,35 @@ export const AGENT_TOOLS: ToolDef[] = [
           contractAddress: { type: 'string', description: '0x… address, if known directly' },
         },
         required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'propose_edit',
+      description:
+        'Propose changes to a project card from a natural-language instruction (e.g. "update Solvr goals: add looking for partnerships; add flags Partnerships and GTM"). You resolve the project, the target field(s), and the operation. Trivial additive edits (append text / add flags) APPLY IMMEDIATELY; destructive (replace/remove) or multi-field or ambiguous edits are filed for human review. Always confirm your interpretation to the user in your reply. Editable fields: ' + Object.keys(EDITABLE_FIELDS).join(', ') + '. Needs-help flags must be one of: ' + NEEDS_HELP_TAGS.join(', ') + '.',
+      parameters: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'project name to edit (exact or close match)' },
+          changes: {
+            type: 'array',
+            description: 'one or more field changes',
+            items: {
+              type: 'object',
+              properties: {
+                field: { type: 'string', enum: Object.keys(EDITABLE_FIELDS), description: 'canonical field key' },
+                op: { type: 'string', enum: ['replace', 'append', 'add', 'remove'], description: 'append/add are additive (auto-apply); replace/remove are destructive (queued)' },
+                value: { description: 'text for replace/append; a flag or array of flags for add/remove on needsHelp' },
+              },
+              required: ['field', 'op'],
+            },
+          },
+          rationale: { type: 'string', description: 'brief why — how you interpreted the instruction' },
+        },
+        required: ['project', 'changes'],
       },
     },
   },
@@ -353,6 +384,59 @@ export async function runTool(name: string, args: any, submissions: Submission[]
     } catch (e: any) {
       return { result: JSON.stringify({ error: e?.message ?? 'could not read score config' }) };
     }
+  }
+
+  if (name === 'propose_edit') {
+    const sub = findProject(submissions, args?.project);
+    if (!sub) return { result: JSON.stringify({ error: `no project matching "${args?.project}"` }) };
+    const rawChanges: Change[] = Array.isArray(args?.changes) ? args.changes : [];
+    if (!rawChanges.length) return { result: JSON.stringify({ error: 'no changes given' }) };
+
+    // Validate fields + needs-help values.
+    for (const c of rawChanges) {
+      if (!isEditableField(c.field)) return { result: JSON.stringify({ error: `field "${c.field}" is not editable. Allowed: ${Object.keys(EDITABLE_FIELDS).join(', ')}` }) };
+      if (c.field === 'needsHelp') {
+        const vals = Array.isArray(c.value) ? c.value : [c.value];
+        const bad = vals.filter((v: string) => !NEEDS_HELP_TAGS.includes(v));
+        if (bad.length) return { result: JSON.stringify({ error: `invalid flag(s): ${bad.join(', ')}. Allowed: ${NEEDS_HELP_TAGS.join(', ')}` }) };
+      }
+    }
+
+    // We need the FULL submission for current values (the trimmed slice omits them).
+    const full = await prisma.submission.findUnique({ where: { id: (sub as any).id } });
+    if (!full) return { result: JSON.stringify({ error: 'project not found in db' }) };
+    const changes = snapshotCurrent(rawChanges, full as any);
+    const trivial = allTrivial(changes);
+
+    if (trivial) {
+      // Auto-apply additive edits immediately; record as auto_applied for audit.
+      await applyChangesToSubmission((sub as any).id, changes);
+      await prisma.proposedEdit.create({
+        data: {
+          submissionId: (sub as any).id,
+          changes: changes as unknown as Prisma.InputJsonValue,
+          rationale: args?.rationale ?? null,
+          status: 'auto_applied',
+          source: 'agent',
+          proposedBy: ctx.userEmail ?? 'agent',
+          reviewedAt: new Date(),
+        },
+      });
+      return { result: JSON.stringify({ ok: true, applied: true, project: (sub as any).project, changes: changes.map((c) => ({ field: c.field, op: c.op })) }) };
+    }
+
+    // Otherwise file a pending proposal for human review.
+    const pe = await prisma.proposedEdit.create({
+      data: {
+        submissionId: (sub as any).id,
+        changes: changes as unknown as Prisma.InputJsonValue,
+        rationale: args?.rationale ?? null,
+        status: 'pending',
+        source: 'agent',
+        proposedBy: ctx.userEmail ?? 'agent',
+      },
+    });
+    return { result: JSON.stringify({ ok: true, applied: false, queuedForReview: true, proposalId: pe.id, project: (sub as any).project, changes: changes.map((c) => ({ field: c.field, op: c.op })) }) };
   }
 
   if (name === 'build_panel') {
