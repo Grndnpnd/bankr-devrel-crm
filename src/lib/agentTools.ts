@@ -387,8 +387,8 @@ export async function runTool(name: string, args: any, submissions: Submission[]
   }
 
   if (name === 'propose_edit') {
-    const sub = findProject(submissions, args?.project);
-    if (!sub) return { result: JSON.stringify({ error: `no project matching "${args?.project}"` }) };
+    const projectQuery = (args?.project || '').trim();
+    if (!projectQuery) return { result: JSON.stringify({ error: 'no project given' }) };
     const rawChanges: Change[] = Array.isArray(args?.changes) ? args.changes : [];
     if (!rawChanges.length) return { result: JSON.stringify({ error: 'no changes given' }) };
 
@@ -402,18 +402,22 @@ export async function runTool(name: string, args: any, submissions: Submission[]
       }
     }
 
-    // We need the FULL submission for current values (the trimmed slice omits them).
-    const full = await prisma.submission.findUnique({ where: { id: (sub as any).id } });
-    if (!full) return { result: JSON.stringify({ error: 'project not found in db' }) };
+    // Resolve the real submission from the DB by project name (the trimmed chat
+    // slice the agent sees has no id). Exact match first, then contains.
+    const full =
+      (await prisma.submission.findFirst({ where: { project: { equals: projectQuery, mode: 'insensitive' } } }))
+      || (await prisma.submission.findFirst({ where: { project: { contains: projectQuery, mode: 'insensitive' } } }));
+    if (!full) return { result: JSON.stringify({ error: `no project matching "${projectQuery}"` }) };
+
     const changes = snapshotCurrent(rawChanges, full as any);
     const trivial = allTrivial(changes);
 
     if (trivial) {
       // Auto-apply additive edits immediately; record as auto_applied for audit.
-      await applyChangesToSubmission((sub as any).id, changes);
+      await applyChangesToSubmission(full.id, changes);
       await prisma.proposedEdit.create({
         data: {
-          submissionId: (sub as any).id,
+          submissionId: full.id,
           changes: changes as unknown as Prisma.InputJsonValue,
           rationale: args?.rationale ?? null,
           status: 'auto_applied',
@@ -422,13 +426,13 @@ export async function runTool(name: string, args: any, submissions: Submission[]
           reviewedAt: new Date(),
         },
       });
-      return { result: JSON.stringify({ ok: true, applied: true, project: (sub as any).project, changes: changes.map((c) => ({ field: c.field, op: c.op })) }) };
+      return { result: JSON.stringify({ ok: true, applied: true, project: full.project, changes: changes.map((c) => ({ field: c.field, op: c.op })) }) };
     }
 
     // Otherwise file a pending proposal for human review.
     const pe = await prisma.proposedEdit.create({
       data: {
-        submissionId: (sub as any).id,
+        submissionId: full.id,
         changes: changes as unknown as Prisma.InputJsonValue,
         rationale: args?.rationale ?? null,
         status: 'pending',
@@ -436,7 +440,7 @@ export async function runTool(name: string, args: any, submissions: Submission[]
         proposedBy: ctx.userEmail ?? 'agent',
       },
     });
-    return { result: JSON.stringify({ ok: true, applied: false, queuedForReview: true, proposalId: pe.id, project: (sub as any).project, changes: changes.map((c) => ({ field: c.field, op: c.op })) }) };
+    return { result: JSON.stringify({ ok: true, applied: false, queuedForReview: true, proposalId: pe.id, project: full.project, changes: changes.map((c) => ({ field: c.field, op: c.op })) }) };
   }
 
   if (name === 'build_panel') {

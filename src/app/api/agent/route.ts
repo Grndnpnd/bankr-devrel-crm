@@ -35,6 +35,15 @@ Rules:
 - Never reveal or request founder PII, wallets, or contract addresses (not available to you anyway).`;
 
 export async function POST(req: Request) {
+  try {
+    return await handle(req);
+  } catch (e: any) {
+    console.error("[agent] unhandled error:", e);
+    return NextResponse.json({ error: e?.message ?? "assistant error", detail: String(e?.stack ?? e).slice(0, 500) }, { status: 500 });
+  }
+}
+
+async function handle(req: Request) {
   const session = await getSession();
   if (!session || !can(session.role, "analytics.use")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -74,7 +83,14 @@ export async function POST(req: Request) {
       let args: any = {};
       try { args = JSON.parse(call.function.arguments || "{}"); } catch { /* keep {} */ }
       toolTrace.push({ name: call.function.name, args });
-      const exec = await runTool(call.function.name, args, submissions, { userId: session.id, userEmail: session.email });
+      let exec: { result: string; panelSpec?: AnalyticsSpec | null };
+      try {
+        exec = await runTool(call.function.name, args, submissions, { userId: session.id, userEmail: session.email });
+      } catch (e: any) {
+        // A tool throwing must not 500 the whole request — feed the error back
+        // to the model so it can recover or explain.
+        exec = { result: JSON.stringify({ error: e?.message ?? "tool failed" }) };
+      }
       if (exec.panelSpec) builtPanel = exec.panelSpec;
       messages.push({ role: "tool", tool_call_id: call.id, name: call.function.name, content: exec.result });
     }
