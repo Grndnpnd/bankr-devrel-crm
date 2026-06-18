@@ -13,6 +13,7 @@ import { WebClient } from '@slack/web-api';
 import { prisma } from '../src/lib/prisma';
 import { agentRun } from '../src/lib/agentRun';
 import { llmConfigured, type ToolMessage } from '../src/lib/llm';
+import { loadChatContext } from '../src/lib/chatData';
 
 const APP_TOKEN = process.env.SLACK_APP_TOKEN || '';
 const BOT_TOKEN = process.env.SLACK_BOT_TOKEN || '';
@@ -72,10 +73,14 @@ async function handleQuestion(channel: string, threadTs: string | undefined, sla
   const id = await resolveIdentity(slackUserId);
   const history: ToolMessage[] = [{ role: 'user', content: question }];
 
+  // Load the same trimmed pipeline context the web bubble sends, so the agent's
+  // tools (query_pipeline, get_pipeline_summary, etc.) actually see the data.
+  const submissions = await loadChatContext();
+
   try {
     const result = await agentRun({
       history,
-      submissions: [], // the bot has no client-side slice; tools read from the DB directly
+      submissions,
       ctx: { userId: id.userId, userEmail: id.userEmail, role: id.role },
       budgetMs: 60_000,
     });

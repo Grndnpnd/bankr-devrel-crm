@@ -59,3 +59,16 @@ export function capRows(rows: ChatRow[], max = 300): ChatRow[] {
   // Prioritize the most decision-relevant: higher score first.
   return [...rows].sort((a, b) => b.score - a.score).slice(0, max);
 }
+
+/**
+ * Server-side: load the full pipeline from the DB and produce the same trimmed
+ * chat-context the web bubble sends (serialize → toChatRows → capRows). Used by
+ * the Slack bot, which has no client-side store slice to pass.
+ */
+export async function loadChatContext(): Promise<ChatRow[]> {
+  const { prisma } = await import('@/lib/prisma');
+  const { serialize, INCLUDE } = await import('@/lib/serialize');
+  const rows = await prisma.submission.findMany({ include: INCLUDE, orderBy: { score: 'desc' } });
+  const serialized = rows.map((r: any) => serialize(r));
+  return capRows(toChatRows(serialized as any));
+}
