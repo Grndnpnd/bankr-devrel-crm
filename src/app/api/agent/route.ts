@@ -62,8 +62,24 @@ async function handle(req: Request) {
   let builtPanel: AnalyticsSpec | null = null;
   const toolTrace: { name: string; args: any }[] = [];
 
+  // Total time budget across all steps, kept well under the edge's 120s ceiling.
+  const DEADLINE = Date.now() + 55_000;
+
   for (let step = 0; step < MAX_STEPS; step++) {
-    const res = await chatWithTools(messages, AGENT_TOOLS);
+    const remaining = DEADLINE - Date.now();
+    if (remaining < 6_000) {
+      // Not enough time for another model round-trip — return what we have.
+      return NextResponse.json({
+        answer: builtPanel
+          ? "Here's the panel I built — I ran out of time to add more."
+          : "That took longer than expected — try a more specific request.",
+        panelSpec: builtPanel,
+        toolTrace,
+        capped: true,
+      });
+    }
+    // Give each model call at most the remaining budget (cap 30s).
+    const res = await chatWithTools(messages, AGENT_TOOLS, { timeoutMs: Math.min(remaining, 30_000) });
     if (!res.ok) {
       return NextResponse.json({ error: res.error ?? "assistant unavailable" }, { status: 502 });
     }

@@ -426,7 +426,13 @@ export async function runTool(name: string, args: any, submissions: Submission[]
           reviewedAt: new Date(),
         },
       });
-      return { result: JSON.stringify({ ok: true, applied: true, project: full.project, changes: changes.map((c) => ({ field: c.field, op: c.op })) }) };
+      return { result: JSON.stringify({
+        ok: true,
+        applied: true,
+        project: full.project,
+        changes: changes.map((c) => ({ field: c.field, op: c.op })),
+        message: `Applied immediately (additive edit). Tell the user what changed on ${full.project} and DO NOT call any more tools — just report this back.`,
+      }) };
     }
 
     // Otherwise file a pending proposal for human review.
@@ -440,7 +446,15 @@ export async function runTool(name: string, args: any, submissions: Submission[]
         proposedBy: ctx.userEmail ?? 'agent',
       },
     });
-    return { result: JSON.stringify({ ok: true, applied: false, queuedForReview: true, proposalId: pe.id, project: full.project, changes: changes.map((c) => ({ field: c.field, op: c.op })) }) };
+    return { result: JSON.stringify({
+      ok: true,
+      applied: false,
+      queuedForReview: true,
+      proposalId: pe.id,
+      project: full.project,
+      changes: changes.map((c) => ({ field: c.field, op: c.op })),
+      message: `Done. This is a destructive edit, so it was queued for human review (not applied). Tell the user it's in the Review inbox awaiting approval, and DO NOT call any more tools — just report this back.`,
+    }) };
   }
 
   if (name === 'build_panel') {

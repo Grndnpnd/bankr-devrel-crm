@@ -100,12 +100,15 @@ export interface ToolChatResult {
 }
 
 /** Chat completion with tools. Returns either tool calls (to execute) or a final answer. */
-export async function chatWithTools(messages: ToolMessage[], tools: ToolDef[], opts?: { temperature?: number; model?: string }): Promise<ToolChatResult> {
+export async function chatWithTools(messages: ToolMessage[], tools: ToolDef[], opts?: { temperature?: number; model?: string; timeoutMs?: number }): Promise<ToolChatResult> {
   if (!KEY) return { ok: false, error: 'LLM gateway not configured' };
+  const ctl = new AbortController();
+  const timeout = setTimeout(() => ctl.abort(), opts?.timeoutMs ?? 30_000);
   try {
     const res = await fetch(`${BASE}/v1/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-API-Key': KEY },
+      signal: ctl.signal,
       body: JSON.stringify({
         model: opts?.model || MODEL,
         messages,
@@ -131,7 +134,10 @@ export async function chatWithTools(messages: ToolMessage[], tools: ToolDef[], o
       finishReason: choice.finish_reason,
     };
   } catch (e: any) {
+    if (e?.name === 'AbortError') return { ok: false, error: 'the model took too long to respond' };
     return { ok: false, error: e?.message ?? 'request failed' };
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
