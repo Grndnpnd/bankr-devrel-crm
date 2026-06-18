@@ -2,21 +2,27 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Inbox, BarChart3, Settings, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Inbox, BarChart3, Settings, Shield, ChevronLeft, ChevronRight } from 'lucide-react';
 import Logo from './icons/Logo';
+import { useSubmissionStore } from '@/store/useSubmissionStore';
+import { can } from '@/lib/access';
 
-interface NavItem { to: string; label: string; icon: React.ElementType }
+interface NavItem { to: string; label: string; icon: React.ElementType; adminOnly?: boolean }
 
 const navItems: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/submissions', label: 'Submissions', icon: Inbox },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/admin', label: 'Admin', icon: Shield, adminOnly: true },
 ];
 
 const Sidebar: React.FC = () => {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
+  const me = useSubmissionStore((st) => st.me);
+  // "Admin" capability proxy: anyone who can manage users (ADMIN) sees the Admin page.
+  const items = navItems.filter((i) => !i.adminOnly || can(me?.role, 'users.manage'));
 
   const isActiveFor = (to: string) =>
     to === '/' ? pathname === '/' : pathname.startsWith(to);
@@ -43,7 +49,7 @@ const Sidebar: React.FC = () => {
       </div>
 
       <nav className="flex-1 py-3 flex flex-col gap-0.5 px-2">
-        {navItems.map((item) => {
+        {items.map((item) => {
           const active = isActiveFor(item.to);
           return (
             <Link

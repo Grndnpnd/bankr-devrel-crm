@@ -13,6 +13,7 @@ function titleFor(pathname: string): string {
   if (pathname.startsWith('/submissions')) return 'Submissions';
   if (pathname.startsWith('/analytics')) return 'Analytics';
   if (pathname.startsWith('/settings')) return 'Settings';
+  if (pathname.startsWith('/admin')) return 'Admin';
   return 'Bankr';
 }
 
