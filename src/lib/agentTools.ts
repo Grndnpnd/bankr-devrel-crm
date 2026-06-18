@@ -10,6 +10,8 @@ import type { ToolDef } from '@/lib/llm';
 import { fetchTokenData, isContractAddress } from '@/lib/discover';
 import { prisma } from '@/lib/prisma';
 import { EDITABLE_FIELDS, NEEDS_HELP_TAGS, isEditableField, allTrivial, snapshotCurrent, applyChangesToSubmission, type Change } from '@/lib/proposedEdits';
+import { createSubmissionFromFields, findProjectMatch, type NewSubmissionFields } from '@/lib/ingest';
+import { can } from '@/lib/access';
 import { getWeights } from '@/lib/scoreConfig';
 import { validateSchedule, nextRunFrom, JOB_HANDLERS, SCHEDULE_PRESETS, CORE_TYPES } from '@/lib/scheduler';
 
@@ -116,6 +118,31 @@ export const AGENT_TOOLS: ToolDef[] = [
           contractAddress: { type: 'string', description: '0x… address, if known directly' },
         },
         required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_submission',
+      description:
+        'Create a NEW project card from (possibly partial) info — use when the user wants to ADD a project that does not exist yet ("create a project called X", "add a new submission for Y"). Only the project name is required; fill any other fields you can extract and leave the rest blank (the user can fill them later, or a later enrich pass will). If a project with that name already EXISTS, this returns a duplicate notice — in that case do NOT create; use propose_edit to update the existing one instead. Founders, one-liner, etc. are all optional.',
+      parameters: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'project name (required)' },
+          oneLiner: { type: 'string' },
+          problem: { type: 'string' }, solution: { type: 'string' },
+          traction: { type: 'string' }, funding: { type: 'string' },
+          plan: { type: 'string', description: 'plan / goals' },
+          whyBankr: { type: 'string' }, accomplishments: { type: 'string' },
+          links: { type: 'string' }, notesField: { type: 'string', description: 'freeform notes' },
+          projectX: { type: 'string', description: 'X/Twitter handle' },
+          website: { type: 'string' }, location: { type: 'string' },
+          needsHelp: { type: 'array', items: { type: 'string' }, description: 'needs-help flags; must be from the allowed set: ' + NEEDS_HELP_TAGS.join(', ') },
+          founderName: { type: 'string' }, founderEmail: { type: 'string' }, founderX: { type: 'string' },
+        },
+        required: ['project'],
       },
     },
   },
@@ -240,9 +267,18 @@ const findProject = (submissions: Submission[], q: string): Submission | undefin
 };
 
 /** Execute a tool call by name. Async because some tools hit external APIs. */
-export interface ToolContext { userId: string; userEmail?: string }
+export interface ToolContext { userId: string; userEmail?: string; role?: string }
 
 export async function runTool(name: string, args: any, submissions: Submission[], ctx: ToolContext): Promise<ToolExecResult> {
+  // Capability gate for write tools (the route only checks analytics.use).
+  const WRITE_TOOLS: Record<string, Parameters<typeof can>[1]> = {
+    create_submission: 'submissions.edit',
+    propose_edit: 'submissions.edit',
+    create_scheduled_job: 'cron.manage',
+  };
+  if (WRITE_TOOLS[name] && !can(ctx.role, WRITE_TOOLS[name])) {
+    return { result: JSON.stringify({ error: `You don't have permission to ${name.replace('_', ' ')}.` }) };
+  }
   if (name === 'query_pipeline') {
     const v = validateSpec(args);
     if (!v.ok) return { result: JSON.stringify({ error: 'invalid query', details: v.errors }) };
@@ -383,6 +419,43 @@ export async function runTool(name: string, args: any, submissions: Submission[]
       }) };
     } catch (e: any) {
       return { result: JSON.stringify({ error: e?.message ?? 'could not read score config' }) };
+    }
+  }
+
+  if (name === 'create_submission') {
+    const project = (args?.project || '').trim();
+    if (!project) return { result: JSON.stringify({ error: 'project name is required' }) };
+
+    // Validate any needs-help flags up front.
+    if (Array.isArray(args?.needsHelp)) {
+      const bad = args.needsHelp.filter((v: string) => !NEEDS_HELP_TAGS.includes(v));
+      if (bad.length) return { result: JSON.stringify({ error: `invalid flag(s): ${bad.join(', ')}. Allowed: ${NEEDS_HELP_TAGS.join(', ')}` }) };
+    }
+
+    // Dedup: if a same-named project exists, don't create — tell the model to edit instead.
+    const match = await findProjectMatch(project);
+    if (match) {
+      return { result: JSON.stringify({
+        ok: false,
+        duplicate: true,
+        existingProject: match.project,
+        message: `A project named "${match.project}" already exists. Do NOT create a duplicate — if the user wants to add info to it, use propose_edit instead. Tell the user it already exists and ask if they want to update it. DO NOT call more tools until they confirm.`,
+      }) };
+    }
+
+    try {
+      const res = await createSubmissionFromFields(args as NewSubmissionFields, 'AGENT');
+      if (res.status === 'duplicate') {
+        return { result: JSON.stringify({ ok: false, duplicate: true, existingProject: res.existingProject, message: `"${res.existingProject}" already exists — use propose_edit to update it instead.` }) };
+      }
+      return { result: JSON.stringify({
+        ok: true,
+        created: true,
+        project: res.project,
+        message: `Created new project "${res.project}". Tell the user it's been added and that they can fill in the rest anytime. DO NOT call more tools — just report this back.`,
+      }) };
+    } catch (e: any) {
+      return { result: JSON.stringify({ error: e?.message ?? 'create failed' }) };
     }
   }
 

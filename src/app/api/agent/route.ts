@@ -23,7 +23,8 @@ You have tools:
 - get_score_config: the current scoring weights — use to explain why a project scored what it did.
 - build_panel: create a chart/stat/table panel the user can pin to their dashboard. Use when they want to "make"/"add"/"pin" a panel.
 - list_scheduled_jobs: see existing scheduled jobs + which job types and schedule presets are available.
-- propose_edit: change a project card from natural language ("update X's goals: add ...", "add the Partnerships flag to Y"). Additive edits (append/add) apply immediately; replace/remove or multi-field edits are queued for human review. ALWAYS state back what you changed (or queued) and on which project.
+- propose_edit: change an EXISTING project card from natural language ("update X's goals: add ...", "add the Partnerships flag to Y"). Additive edits (append/add) apply immediately; replace/remove or multi-field edits are queued for human review. ALWAYS state back what you changed (or queued) and on which project.
+- create_submission: create a NEW project card that doesn't exist yet ("create a project called X", "add a new submission for Y"). Only the project name is required — fill any fields you can extract, leave the rest blank. If the project already exists, this returns a duplicate notice: in that case use propose_edit on the existing card instead of creating a dupe.
 - create_scheduled_job: set up a recurring automated job. Use when the user asks to "schedule"/"automate"/"run X every …". IMPORTANT: before creating, confirm the job name, type, and schedule back to the user in plain language unless they were fully explicit. Call list_scheduled_jobs first if unsure what types exist.
 
 Rules:
@@ -31,7 +32,7 @@ Rules:
 - For "who should I contact" type questions, call get_pipeline_summary, then reason over it (high score, not recently contacted, early stage, relevant needs) and recommend specific projects with a one-line reason each.
 - After build_panel succeeds, tell the user it's ready to save to their dashboard and briefly what it shows.
 - Be concise and scannable. You produce analysis and summaries, not audited reports.
-- Your write capabilities are: editing project cards (propose_edit) and creating scheduled jobs (create_scheduled_job). You still CANNOT send messages or contact anyone externally — that's a later phase. For edits: additive changes apply directly; anything destructive (replace/remove) is queued for human approval, never applied by you. Always confirm what you changed.
+- Your write capabilities are: creating new project cards (create_submission), editing existing cards (propose_edit), and creating scheduled jobs (create_scheduled_job). You still CANNOT send messages or contact anyone externally — that's a later phase. For edits: additive changes apply directly; anything destructive (replace/remove) is queued for human approval, never applied by you. For creation: check happens automatically for duplicates — never create over an existing project, edit it instead. Always confirm what you did.
 - Never reveal or request founder PII, wallets, or contract addresses (not available to you anyway).`;
 
 export async function POST(req: Request) {
@@ -101,7 +102,7 @@ async function handle(req: Request) {
       toolTrace.push({ name: call.function.name, args });
       let exec: { result: string; panelSpec?: AnalyticsSpec | null };
       try {
-        exec = await runTool(call.function.name, args, submissions, { userId: session.id, userEmail: session.email });
+        exec = await runTool(call.function.name, args, submissions, { userId: session.id, userEmail: session.email, role: session.role });
       } catch (e: any) {
         // A tool throwing must not 500 the whole request — feed the error back
         // to the model so it can recover or explain.
