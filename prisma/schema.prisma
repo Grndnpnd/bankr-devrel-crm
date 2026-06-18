@@ -44,6 +44,7 @@ model User {
   dashboardLayout Json?
   dashboardDefault Json?
   savedPanels     Json?
+  slackWebhook    String?            // per-user Slack incoming-webhook URL
   activities   OutreachActivity[]
   panels       SharedPanel[]
   createdAt    DateTime           @default(now())
@@ -177,6 +178,13 @@ model OutreachActivity {
 }
 
 /// Tunable scoring weights (singleton row, id = "default").
+model AppConfig {
+  id              String   @id @default("default")
+  teamSlackWebhook String?              // admin-set team-wide Slack channel webhook
+  updatedAt       DateTime @updatedAt
+  updatedBy       String?
+}
+
 model ScoreConfig {
   id           String   @id @default("default")
   fees         Int      @default(40)

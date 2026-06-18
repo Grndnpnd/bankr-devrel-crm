@@ -1,16 +1,17 @@
 'use client';
 import React, { useState, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { UserCircle, SlidersHorizontal, Clock, History } from 'lucide-react';
+import { UserCircle, SlidersHorizontal, Clock, History, Slack } from 'lucide-react';
 import '@/components/settings/settings.css';
 import AccountTab from '@/components/settings/AccountTab';
 import ScoringTab from '@/components/settings/ScoringTab';
 import CronTab from '@/components/settings/CronTab';
 import ImportLogTab from '@/components/settings/ImportLogTab';
+import SlackTab from '@/components/settings/SlackTab';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import { can } from '@/lib/access';
 
-type Tab = 'account' | 'scoring' | 'automation' | 'import-log';
+type Tab = 'account' | 'scoring' | 'slack' | 'automation' | 'import-log';
 
 const Settings: React.FC = () => {
   const me = useSubmissionStore((st) => st.me);
@@ -21,6 +22,7 @@ const Settings: React.FC = () => {
     const t: { id: Tab; label: string; icon: React.ElementType }[] = [
       { id: 'account', label: 'Account', icon: UserCircle },
       { id: 'scoring', label: 'Scoring', icon: SlidersHorizontal },
+      { id: 'slack', label: 'Slack', icon: Slack },
     ];
     if (can(role, 'cron.manage')) t.push({ id: 'automation', label: 'Automation', icon: Clock });
     if (can(role, 'import.run')) t.push({ id: 'import-log', label: 'Import Log', icon: History });
@@ -66,6 +68,7 @@ const Settings: React.FC = () => {
       <motion.div key={safeActive} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.15 }}>
         {safeActive === 'account' && <AccountTab />}
         {safeActive === 'scoring' && <ScoringTab onUnsavedChange={scoringUnsaved} readOnly={!canEditScoring} />}
+        {safeActive === 'slack' && <SlackTab />}
         {safeActive === 'automation' && <CronTab />}
         {safeActive === 'import-log' && <ImportLogTab />}
       </motion.div>
