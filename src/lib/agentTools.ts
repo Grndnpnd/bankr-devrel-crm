@@ -582,7 +582,7 @@ export async function runTool(name: string, args: any, submissions: Submission[]
         ok: false,
         duplicate: true,
         existingProject: match.project,
-        message: `A project named "${match.project}" already exists. Do NOT create a duplicate — if the user wants to add info to it, use propose_edit instead. Tell the user it already exists and ask if they want to update it. DO NOT call more tools until they confirm.`,
+        message: `A project named "${match.project}" already exists. Do NOT create a duplicate. Tell the user it already exists and ask if they want to update it with the new info instead. REMEMBER the field values from their request — if they confirm ("yeah update it"), call propose_edit on "${match.project}" with those values. DO NOT call more tools until they confirm.`,
       }) };
     }
 
