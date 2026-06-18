@@ -103,3 +103,35 @@ export async function applyChangesToSubmission(
   if (Object.keys(data).length === 0) return;
   await prisma.submission.update({ where: { id: submissionId }, data });
 }
+
+/**
+ * Shared approve/reject for a pending proposal. Used by the web API route AND
+ * the agent's resolve_proposal tool (Slack inline approval), so the logic lives
+ * in one place. Returns a result object; callers adapt the response.
+ */
+export async function resolveProposal(
+  id: string,
+  action: 'approve' | 'reject',
+  reviewedBy: string,
+): Promise<{ ok: boolean; error?: string; status?: string }> {
+  const { prisma } = await import('@/lib/prisma');
+  const pe = await prisma.proposedEdit.findUnique({ where: { id } });
+  if (!pe) return { ok: false, error: 'proposal not found' };
+  if (pe.status !== 'pending') return { ok: false, error: 'that proposal was already resolved' };
+
+  if (action === 'approve') {
+    const changes = (pe.changes as unknown as Change[]) || [];
+    try {
+      await applyChangesToSubmission(pe.submissionId, changes);
+    } catch (e: any) {
+      return { ok: false, error: e?.message ?? 'apply failed' };
+    }
+    await prisma.proposedEdit.update({ where: { id }, data: { status: 'approved', reviewedBy, reviewedAt: new Date() } });
+    return { ok: true, status: 'approved' };
+  }
+  if (action === 'reject') {
+    await prisma.proposedEdit.update({ where: { id }, data: { status: 'rejected', reviewedBy, reviewedAt: new Date() } });
+    return { ok: true, status: 'rejected' };
+  }
+  return { ok: false, error: 'action must be approve or reject' };
+}

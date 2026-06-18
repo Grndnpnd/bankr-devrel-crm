@@ -9,7 +9,7 @@ import { toChatRows, capRows } from '@/lib/chatData';
 import type { ToolDef } from '@/lib/llm';
 import { fetchTokenData, isContractAddress } from '@/lib/discover';
 import { prisma } from '@/lib/prisma';
-import { EDITABLE_FIELDS, NEEDS_HELP_TAGS, isEditableField, allTrivial, snapshotCurrent, applyChangesToSubmission, type Change } from '@/lib/proposedEdits';
+import { EDITABLE_FIELDS, NEEDS_HELP_TAGS, isEditableField, allTrivial, snapshotCurrent, applyChangesToSubmission, resolveProposal, type Change } from '@/lib/proposedEdits';
 import { createSubmissionFromFields, findProjectMatch, type NewSubmissionFields, ingestText } from '@/lib/ingest';
 import { can } from '@/lib/access';
 import { REPORT_SECTION_KINDS, REPORT_COLUMNS, SORT_FIELDS, validateReportSpec } from '@/lib/reports';
@@ -160,6 +160,35 @@ export const AGENT_TOOLS: ToolDef[] = [
           founderName: { type: 'string' }, founderEmail: { type: 'string' }, founderX: { type: 'string' },
         },
         required: ['project'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_pending_proposals',
+      description:
+        'List edits currently queued for review (pending approval). Optionally filter by project name. Use this to see what needs approval, or to find the proposal a user wants to approve/reject in conversation ("approve that change", "what\'s pending for Acme").',
+      parameters: {
+        type: 'object',
+        properties: { project: { type: 'string', description: 'optional project name filter' } },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'resolve_proposal',
+      description:
+        'Approve or reject a pending queued edit. Use when the user says to approve/reject a change (e.g. replies "approve" after you showed a queued diff). Identify the proposal by its id (from list_pending_proposals) or by project name if there is exactly one pending edit for that project. Approving applies the change immediately and clears it from the review queue (web + Slack share the same queue).',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['approve', 'reject'] },
+          proposalId: { type: 'string', description: 'the proposal id (preferred)' },
+          project: { type: 'string', description: 'project name — used only if proposalId is not given and there is exactly one pending edit for it' },
+        },
+        required: ['action'],
       },
     },
   },
@@ -330,6 +359,7 @@ export async function runTool(name: string, args: any, submissions: Submission[]
     ingest_project: 'submissions.edit',
     create_submission: 'submissions.edit',
     propose_edit: 'submissions.edit',
+    resolve_proposal: 'submissions.edit',
     create_scheduled_job: 'cron.manage',
     create_slack_report: 'cron.manage',
   };
@@ -572,6 +602,52 @@ export async function runTool(name: string, args: any, submissions: Submission[]
     }
   }
 
+  if (name === 'list_pending_proposals') {
+    const where: any = { status: 'pending' };
+    if (args?.project) {
+      const match = await findProjectMatch(String(args.project));
+      if (!match) return { result: JSON.stringify({ pending: [], note: `No project matching "${args.project}".` }) };
+      where.submissionId = match.id;
+    }
+    const rows = await prisma.proposedEdit.findMany({
+      where, orderBy: { createdAt: 'desc' }, take: 20,
+      include: { submission: { select: { project: true } } },
+    });
+    const pending = rows.map((r: any) => ({
+      id: r.id,
+      project: r.submission?.project ?? '(unknown)',
+      changes: (r.changes as any[])?.map((c: any) => ({ field: c.field, op: c.op, value: c.value, from: c.currentValue })) ?? [],
+      proposedBy: r.proposedBy,
+      createdAt: r.createdAt,
+    }));
+    return { result: JSON.stringify({ pending, count: pending.length }) };
+  }
+
+  if (name === 'resolve_proposal') {
+    const action = args?.action;
+    if (action !== 'approve' && action !== 'reject') return { result: JSON.stringify({ error: 'action must be approve or reject' }) };
+    let proposalId = args?.proposalId ? String(args.proposalId) : '';
+
+    // Resolve by project if no id given — only if exactly one pending edit exists.
+    if (!proposalId && args?.project) {
+      const match = await findProjectMatch(String(args.project));
+      if (!match) return { result: JSON.stringify({ error: `No project matching "${args.project}".` }) };
+      const pendings = await prisma.proposedEdit.findMany({ where: { status: 'pending', submissionId: match.id }, select: { id: true } });
+      if (pendings.length === 0) return { result: JSON.stringify({ error: `No pending edits for "${match.project}".` }) };
+      if (pendings.length > 1) return { result: JSON.stringify({ error: `There are ${pendings.length} pending edits for "${match.project}" — ask which one (list_pending_proposals to see them).` }) };
+      proposalId = pendings[0].id;
+    }
+    if (!proposalId) return { result: JSON.stringify({ error: 'need a proposalId or a project with exactly one pending edit' }) };
+
+    const res = await resolveProposal(proposalId, action, ctx.userEmail || 'agent');
+    if (!res.ok) return { result: JSON.stringify({ error: res.error }) };
+    return { result: JSON.stringify({
+      ok: true,
+      status: res.status,
+      message: `Proposal ${res.status}. ${action === 'approve' ? 'The change has been applied.' : 'The change was discarded.'} DO NOT call more tools — confirm to the user.`,
+    }) };
+  }
+
   if (name === 'propose_edit') {
     const projectQuery = (args?.project || '').trim();
     if (!projectQuery) return { result: JSON.stringify({ error: 'no project given' }) };
@@ -638,8 +714,8 @@ export async function runTool(name: string, args: any, submissions: Submission[]
       queuedForReview: true,
       proposalId: pe.id,
       project: full.project,
-      changes: changes.map((c) => ({ field: c.field, op: c.op })),
-      message: `Done. This is a destructive edit, so it was queued for human review (not applied). Tell the user it's in the Review inbox awaiting approval, and DO NOT call any more tools — just report this back.`,
+      changes: changes.map((c) => ({ field: c.field, op: c.op, to: c.value, from: (c as any).currentValue })),
+      message: `This is a destructive edit, so it was queued (NOT applied). Show the user a clear before → after diff of each change on "${full.project}", then ask them to reply "approve" or "reject". If they approve, call resolve_proposal with this proposalId. It's also in the web Review inbox. DO NOT call more tools now — just show the diff and ask.`,
     }) };
   }
 
