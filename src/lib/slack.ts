@@ -64,6 +64,5 @@ export function reportBlocks(title: string, body: string): any[] {
   return [
     { type: 'header', text: { type: 'plain_text', text: title.slice(0, 150), emoji: true } },
     { type: 'section', text: { type: 'mrkdwn', text: body.slice(0, 2900) } },
-    { type: 'context', elements: [{ type: 'mrkdwn', text: `Bankr DevRel CRM · ${new Date().toLocaleString()}` }] },
   ];
 }
