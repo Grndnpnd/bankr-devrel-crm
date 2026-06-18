@@ -135,12 +135,39 @@ socket.on('app_mention', async ({ event, ack }: any) => {
 });
 
 // message: DMs to the bot (channel_type === 'im'), ignore the bot's own + non-DMs.
+// True if the bot has already posted in this thread (→ an ongoing conversation
+// it's part of, so a reply should be treated as directed at it without a re-tag).
+async function botIsInThread(channel: string, threadTs: string): Promise<boolean> {
+  try {
+    const res = await web.conversations.replies({ channel, ts: threadTs, limit: 30 });
+    const msgs = ((res as any)?.messages || []) as any[];
+    return msgs.some((m) => m.user === botUserId || m.bot_id);
+  } catch {
+    return false;
+  }
+}
+
 socket.on('message', async ({ event, ack }: any) => {
   await ack();
   if (!event || event.bot_id || event.user === botUserId) return;
-  if (event.channel_type !== 'im') return; // only DMs here; channels go via app_mention
   if (event.subtype) return; // ignore edits/joins/etc.
-  await handleQuestion(event.channel, event.thread_ts, event.user, event.text || '');
+
+  // DMs: always handled (the whole DM is a conversation with the bot).
+  if (event.channel_type === 'im') {
+    await handleQuestion(event.channel, event.thread_ts, event.user, event.text || '');
+    return;
+  }
+
+  // Channel messages: only auto-respond to a THREAD REPLY in a thread the bot is
+  // already part of. (Top-level channel messages still require an @-mention,
+  // handled by app_mention — this avoids the bot replying to everything.)
+  if (event.thread_ts && event.thread_ts !== event.ts) {
+    // A mention in the reply is already covered by app_mention — skip to avoid double-handling.
+    if ((event.text || '').includes(`<@${botUserId}>`)) return;
+    if (await botIsInThread(event.channel, event.thread_ts)) {
+      await handleQuestion(event.channel, event.thread_ts, event.user, event.text || '');
+    }
+  }
 });
 
 async function main() {
