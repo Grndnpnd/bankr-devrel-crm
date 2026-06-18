@@ -42,7 +42,6 @@ model User {
   dashboardDefault Json?
   savedPanels     Json?
   activities   OutreachActivity[]
-  proposedEdits ProposedEdit[]
   panels       SharedPanel[]
   createdAt    DateTime           @default(now())
 }
@@ -135,6 +134,7 @@ model Submission {
   owner           String?
   tokenMatch      TokenMatch?
   activities      OutreachActivity[]
+  proposedEdits   ProposedEdit[]
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
