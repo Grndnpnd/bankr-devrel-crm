@@ -53,8 +53,16 @@ const COL_HEADER: Record<ReportColumn, string> = {
   marketCap: 'Mkt Cap', stage: 'Stage', owner: 'Owner', needs: 'Needs', lastContact: 'Last contact',
 };
 
-const fmtUsd = (n: number | null | undefined) => (n == null ? '—' : '$' + Math.round(n).toLocaleString());
+const fmtUsd = (n: number | null | undefined): string => {
+  if (n == null) return '—';
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return '$' + (n / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1) + 'M';
+  if (abs >= 1_000) return '$' + (n / 1_000).toFixed(abs >= 100_000 ? 0 : 1) + 'K';
+  return '$' + Math.round(n).toLocaleString();
+};
 const fmtDate = (d: Date | null | undefined) => (d ? new Date(d).toLocaleDateString() : 'never');
+// Which columns are numeric (right-aligned in the table).
+const NUMERIC_COLS = new Set<ReportColumn>(['score', 'vol24h', 'marketCap']);
 
 // ── query_table (the flexible workhorse) ─────────────────────────────────────
 async function renderQueryTable(s: Extract<ReportSection, { kind: 'query_table' }>): Promise<string> {
@@ -85,7 +93,7 @@ async function renderQueryTable(s: Extract<ReportSection, { kind: 'query_table' 
 
   const enriched = rows.map((r: any) => ({
     project: r.project,
-    ticker: r.tokenMatch?.token ? `$${r.tokenMatch.token}` : '—',
+    ticker: r.tokenMatch?.token ? `$${String(r.tokenMatch.token).toUpperCase()}` : '—',
     score: r.score ?? 0,
     vol24h: r.tokenMatch?.vol24h ?? null,
     marketCap: r.tokenMatch?.marketCapUsd ?? null,
@@ -121,12 +129,19 @@ async function renderQueryTable(s: Extract<ReportSection, { kind: 'query_table' 
       case 'lastContact': return fmtDate(e.lastContact);
     }
   };
-  // Column widths
-  const widths = columns.map((c) => Math.max(COL_HEADER[c].length, ...top.map((e: any) => cell(e, c).length)));
-  const pad = (str: string, w: number) => str.padEnd(w);
-  const headerRow = columns.map((c, i) => pad(COL_HEADER[c], widths[i])).join('  ');
-  const bodyRows = top.map((e: any) => columns.map((c, i) => pad(cell(e, c), widths[i])).join('  '));
-  const table = '```\n' + [headerRow, ...bodyRows].join('\n') + '\n```';
+  // Column widths (content + header), with a leading rank column.
+  const dataWidths = columns.map((c) => Math.max(COL_HEADER[c].length, ...top.map((e: any) => cell(e, c).length)));
+  const rankWidth = Math.max(1, String(top.length).length) + 1; // "1." → width 2+
+  const padL = (str: string, w: number) => str.padEnd(w);   // left-align (text)
+  const padR = (str: string, w: number) => str.padStart(w); // right-align (numbers)
+  const padCol = (val: string, c: ReportColumn, w: number) => (NUMERIC_COLS.has(c) ? padR(val, w) : padL(val, w));
+
+  const headerRow = padL('#', rankWidth) + '  ' + columns.map((c, i) => (NUMERIC_COLS.has(c) ? padR(COL_HEADER[c], dataWidths[i]) : padL(COL_HEADER[c], dataWidths[i]))).join('  ');
+  const underline = '─'.repeat(headerRow.length);
+  const bodyRows = top.map((e: any, idx: number) =>
+    padL(`${idx + 1}.`, rankWidth) + '  ' + columns.map((c, i) => padCol(cell(e, c), c, dataWidths[i])).join('  '),
+  );
+  const table = '```\n' + [headerRow, underline, ...bodyRows].join('\n') + '\n```';
   return `*${s.title || 'Results'}*\n${table}`;
 }
 
