@@ -1,5 +1,6 @@
 'use client';
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { sourceDisplayName } from '@/lib/labels';
 import { can } from '@/lib/access';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -41,7 +42,7 @@ const TAG_OPTIONS = [
   'Hiring',
   'Other',
 ];
-const SOURCE_OPTIONS = ['google_form', 'plain'];
+const SOURCE_OPTIONS = ['google_form', 'plain', 'manual', 'agent', 'slack', 'telegram'];
 const SORT_OPTIONS = [
   { key: 'score', label: 'Score' },
   { key: 'submitted_at', label: 'Date submitted' },
@@ -944,7 +945,7 @@ const Submissions: React.FC = () => {
                 fontWeight: 500,
               }}
             >
-              {filters.source === 'google_form' ? 'Google Form' : filters.source === 'plain' ? 'Plain' : 'All Sources'}
+              {filters.source ? sourceDisplayName(filters.source) : 'All Sources'}
               <ChevronDown size={12} />
             </button>
           }
@@ -979,7 +980,7 @@ const Submissions: React.FC = () => {
                 onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
               >
                 <Checkbox checked={filters.source === s} onChange={() => {}} size={14} />
-                {s === 'google_form' ? 'Google Form' : 'Plain'}
+                {sourceDisplayName(s)}
               </button>
             ))}
           </div>
@@ -1515,7 +1516,7 @@ const Submissions: React.FC = () => {
                             fontSize: '11px',
                             color: '#525252',
                           }}>
-                            {sub.source === 'google_form' ? 'Google Form' : 'Plain'}
+                            {sourceDisplayName(sub.source)}
                           </span>
                         </td>
 
