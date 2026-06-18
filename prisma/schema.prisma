@@ -12,6 +12,9 @@ enum Source {
   GOOGLE_FORM
   PLAIN
   MANUAL
+  AGENT
+  SLACK
+  TELEGRAM
 }
 
 enum Stage {

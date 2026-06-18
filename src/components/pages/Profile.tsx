@@ -1,3 +1,4 @@
+import { sourceDisplayName } from '@/lib/labels';
 'use client';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { can } from '@/lib/access';
@@ -264,7 +265,7 @@ const Profile: React.FC = () => {
         type: 'system',
         author: 'System',
         timestamp: submission.submitted_at,
-        content: 'Imported from ' + (submission.source === 'google_form' ? 'Google Form' : 'Plain'),
+        content: 'Imported from ' + sourceDisplayName(submission.source),
       },
     ];
     if (submission.outreach && submission.outreach.length > 0) {
@@ -640,7 +641,7 @@ const Profile: React.FC = () => {
                   color: '#525252',
                 }}
               >
-                {submission.source === 'google_form' ? 'Google Form' : 'Plain'}
+                {sourceDisplayName(submission.source)}
               </span>
               <span style={{ fontSize: '12px', color: '#525252', fontFamily: "'Inter', sans-serif" }}>
                 Submitted {submission.submitted_at ? formatDistanceToNow(parseISO(submission.submitted_at.split('.')[0].replace(' ', 'T')), { addSuffix: true }) : ''}

@@ -59,7 +59,7 @@ export async function findProjectMatch(project: string): Promise<{ id: string; p
  */
 export async function createSubmissionFromFields(
   f: NewSubmissionFields,
-  source: 'MANUAL' | 'AGENT' = 'AGENT',
+  source: 'MANUAL' | 'AGENT' | 'SLACK' | 'TELEGRAM' = 'AGENT',
 ): Promise<CreateResult> {
   const project = (f.project || '').trim();
   if (!project) throw new Error('project name is required');
