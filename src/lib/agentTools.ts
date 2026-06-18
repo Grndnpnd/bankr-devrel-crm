@@ -10,7 +10,7 @@ import type { ToolDef } from '@/lib/llm';
 import { fetchTokenData, isContractAddress } from '@/lib/discover';
 import { prisma } from '@/lib/prisma';
 import { EDITABLE_FIELDS, NEEDS_HELP_TAGS, isEditableField, allTrivial, snapshotCurrent, applyChangesToSubmission, type Change } from '@/lib/proposedEdits';
-import { createSubmissionFromFields, findProjectMatch, type NewSubmissionFields } from '@/lib/ingest';
+import { createSubmissionFromFields, findProjectMatch, type NewSubmissionFields, ingestText } from '@/lib/ingest';
 import { can } from '@/lib/access';
 import { getWeights } from '@/lib/scoreConfig';
 import { validateSchedule, nextRunFrom, JOB_HANDLERS, SCHEDULE_PRESETS, CORE_TYPES } from '@/lib/scheduler';
@@ -118,6 +118,21 @@ export const AGENT_TOOLS: ToolDef[] = [
           contractAddress: { type: 'string', description: '0x… address, if known directly' },
         },
         required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'ingest_project',
+      description:
+        'Take a chunk of UNSTRUCTURED text about a project (a pasted blurb, a forwarded message, raw notes) and turn it into CRM data automatically — it extracts the fields, then creates a new card OR updates a matching existing one. Use this when the user dumps freeform info ("here\'s a project: ...", "add this: ...", "log this from our convo: ..."), as opposed to a precise single-field edit (use propose_edit) or an explicit create with known fields (create_submission). If the text is too vague, it returns what to clarify — ASK the user, don\'t guess. Never sets score.',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'the raw unstructured text to ingest' },
+        },
+        required: ['text'],
       },
     },
   },
@@ -272,6 +287,7 @@ export interface ToolContext { userId: string; userEmail?: string; role?: string
 export async function runTool(name: string, args: any, submissions: Submission[], ctx: ToolContext): Promise<ToolExecResult> {
   // Capability gate for write tools (the route only checks analytics.use).
   const WRITE_TOOLS: Record<string, Parameters<typeof can>[1]> = {
+    ingest_project: 'submissions.edit',
     create_submission: 'submissions.edit',
     propose_edit: 'submissions.edit',
     create_scheduled_job: 'cron.manage',
@@ -419,6 +435,31 @@ export async function runTool(name: string, args: any, submissions: Submission[]
       }) };
     } catch (e: any) {
       return { result: JSON.stringify({ error: e?.message ?? 'could not read score config' }) };
+    }
+  }
+
+  if (name === 'ingest_project') {
+    const text = (args?.text || '').trim();
+    if (!text) return { result: JSON.stringify({ error: 'no text to ingest' }) };
+    try {
+      const outcome = await ingestText(text, 'AGENT', ctx.userEmail || 'agent');
+      if (outcome.status === 'needs_clarification') {
+        return { result: JSON.stringify({
+          ok: false, needsClarification: true, message: outcome.message,
+          missing: outcome.missing,
+          instruction: 'ASK the user this clarifying question. Do NOT call more tools until they answer.',
+        }) };
+      }
+      return { result: JSON.stringify({
+        ok: outcome.status !== 'error',
+        status: outcome.status,
+        project: outcome.project,
+        changes: outcome.changes,
+        message: outcome.message,
+        instruction: 'Report this outcome to the user plainly. DO NOT call more tools — just summarize what happened.',
+      }) };
+    } catch (e: any) {
+      return { result: JSON.stringify({ error: e?.message ?? 'ingest failed' }) };
     }
   }
 
