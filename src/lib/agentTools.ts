@@ -12,7 +12,7 @@ import { prisma } from '@/lib/prisma';
 import { EDITABLE_FIELDS, NEEDS_HELP_TAGS, isEditableField, allTrivial, snapshotCurrent, applyChangesToSubmission, type Change } from '@/lib/proposedEdits';
 import { createSubmissionFromFields, findProjectMatch, type NewSubmissionFields, ingestText } from '@/lib/ingest';
 import { can } from '@/lib/access';
-import { REPORT_SECTION_KINDS, validateReportSpec } from '@/lib/reports';
+import { REPORT_SECTION_KINDS, REPORT_COLUMNS, SORT_FIELDS, validateReportSpec } from '@/lib/reports';
 import { resolveUserWebhook } from '@/lib/slack';
 import { getWeights } from '@/lib/scoreConfig';
 import { validateSchedule, nextRunFrom, JOB_HANDLERS, SCHEDULE_PRESETS, CORE_TYPES } from '@/lib/scheduler';
@@ -197,7 +197,10 @@ export const AGENT_TOOLS: ToolDef[] = [
     function: {
       name: 'create_slack_report',
       description:
-        'Schedule a recurring report delivered to the user\'s Slack channel (e.g. "send my top 5 reach-out candidates and team workload to Slack every day at 8am"). You translate the request into a structured spec of report sections, then it runs deterministically on schedule and delivers via the user\'s configured Slack webhook. The user must have a Slack webhook set in Settings → Slack. Available sections: ' + REPORT_SECTION_KINDS.join(', ') + '. Schedule must be a preset (15m/30m/hourly/6h/12h/daily) or a cron expression.',
+        'Schedule a recurring report delivered to the user\'s Slack channel. You translate the request into a structured spec, then it runs deterministically on schedule (no AI at run time) and delivers via the user\'s Slack webhook (must be set in Settings → Slack). ' +
+        'The flexible workhorse section is "query_table" — use it for any ranked list like "top 10 by 24h volume with ticker and market cap". For query_table set: sortBy (one of ' + SORT_FIELDS.join('/') + '), direction (desc/asc), limit, and columns (any of ' + REPORT_COLUMNS.join('/') + '), plus optional stageFilter and onlyWithToken. ' +
+        'Named shortcut sections also exist: top_candidates, team_workload, pipeline_summary, new_this_week. ' +
+        'IMPORTANT: build the report the user actually asked for — if they ask for "top 10 by volume with ticker and market cap", produce a query_table with sortBy=vol24h, limit=10, columns=[project,ticker,vol24h,marketCap]. Give it an accurate title. Schedule is a preset (15m/30m/hourly/6h/12h/daily) or a cron expression (e.g. "*/10 * * * *" for every 10 min).',
       parameters: {
         type: 'object',
         properties: {
@@ -205,12 +208,18 @@ export const AGENT_TOOLS: ToolDef[] = [
           title: { type: 'string', description: 'the report title shown in Slack' },
           sections: {
             type: 'array',
-            description: 'ordered report sections',
+            description: 'ordered report sections — usually one query_table built to match the request',
             items: {
               type: 'object',
               properties: {
                 kind: { type: 'string', enum: [...REPORT_SECTION_KINDS] },
-                limit: { type: 'number', description: 'for top_candidates: how many (default 5)' },
+                title: { type: 'string', description: 'section heading (query_table)' },
+                sortBy: { type: 'string', enum: [...SORT_FIELDS], description: 'query_table sort field' },
+                direction: { type: 'string', enum: ['desc', 'asc'] },
+                limit: { type: 'number', description: 'how many rows (default 10; top_candidates default 5)' },
+                columns: { type: 'array', items: { type: 'string', enum: [...REPORT_COLUMNS] }, description: 'query_table columns to show' },
+                stageFilter: { type: 'array', items: { type: 'string' }, description: 'optional: restrict to these pipeline stages' },
+                onlyWithToken: { type: 'boolean', description: 'optional: only projects that have a token' },
               },
               required: ['kind'],
             },
