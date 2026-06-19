@@ -25,6 +25,10 @@ export interface ChatRow {
   last_contact: string | null;          // ISO date of most recent outreach
   contact_count: number;                 // total outreach events
   recent_outreach: { type: string; by: string; date: string }[]; // last few, no bodies
+  outreach_types?: string[];             // typed outreach history: all types logged on this project
+  last_outreach_type?: string | null;    // typed outreach history: most-recent type
+  last_outreach_at?: string | null;      // typed outreach history: most-recent date
+  outreach_log?: { type: string; detail: string; date: string }[]; // recent typed outreach entries
 }
 
 export function toChatRows(subs: Submission[], maxOutreachPerRow = 5): ChatRow[] {
@@ -33,6 +37,11 @@ export function toChatRows(subs: Submission[], maxOutreachPerRow = 5): ChatRow[]
       .filter((a) => a.type !== 'system')
       .map((a) => ({ type: a.type, by: a.author, date: a.timestamp }));
     const sorted = [...outreach].sort((a, b) => (a.date < b.date ? 1 : -1));
+    // Typed outreach HISTORY (distinct from the activities timeline above) — this is
+    // what powers "list projects with Agent Hours / a Reddit post" queries.
+    const log = (s.outreach_log ?? [])
+      .map((o) => ({ type: o.type, detail: o.detail || '', date: o.occurredAt }))
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
     return {
       project: s.project,
       stage: s.stage,
@@ -49,6 +58,10 @@ export function toChatRows(subs: Submission[], maxOutreachPerRow = 5): ChatRow[]
       last_contact: sorted[0]?.date ?? null,
       contact_count: outreach.length,
       recent_outreach: sorted.slice(0, maxOutreachPerRow),
+      outreach_types: s.outreach_types ?? [],
+      last_outreach_type: s.last_outreach_type ?? null,
+      last_outreach_at: s.last_outreach_at ?? null,
+      outreach_log: log.slice(0, maxOutreachPerRow),
     };
   });
 }

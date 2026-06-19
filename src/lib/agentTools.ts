@@ -10,7 +10,7 @@ import type { ToolDef } from '@/lib/llm';
 import { fetchTokenData, isContractAddress } from '@/lib/discover';
 import { enrichSubmission } from '@/lib/enrich';
 import { enqueueOutbound } from '@/lib/outbound';
-import { logOutreach } from '@/lib/outreach';
+import { logOutreach, listOutreachTypes } from '@/lib/outreach';
 import { prisma } from '@/lib/prisma';
 import { EDITABLE_FIELDS, NEEDS_HELP_TAGS, isEditableField, allTrivial, snapshotCurrent, applyChangesToSubmission, resolveProposal, type Change } from '@/lib/proposedEdits';
 import { createSubmissionFromFields, findProjectMatch, type NewSubmissionFields, ingestText } from '@/lib/ingest';
@@ -208,6 +208,22 @@ export const AGENT_TOOLS: ToolDef[] = [
           note: { type: 'string', description: 'the note text to log' },
         },
         required: ['project', 'note'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_outreach',
+      description:
+        'List projects that have a given outreach type in their history (e.g. "which projects have been on Agent Hours", "list projects with a Reddit post"). Deterministic — use this for any "which/list projects with <outreach type>" question rather than reading rows yourself. Accepts a type label or key (Reddit Post, Co-marketing, Press Release, Agent Hours, Telegram Group Chat, or a custom type). Set mostRecentOnly to match only projects whose LATEST outreach is that type.',
+      parameters: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', description: 'outreach type label or key to filter by' },
+          mostRecentOnly: { type: 'boolean', description: 'if true, match only projects whose most-recent outreach is this type (default false = has any)' },
+        },
+        required: ['type'],
       },
     },
   },
@@ -718,6 +734,35 @@ export async function runTool(name: string, args: any, submissions: Submission[]
       status: res.status,
       message: `Proposal ${res.status}. ${action === 'approve' ? 'The change has been applied.' : 'The change was discarded.'} DO NOT call more tools — confirm to the user.`,
     }) };
+  }
+
+  if (name === 'list_outreach') {
+    const rawType = String(args?.type || '').trim();
+    if (!rawType) return { result: JSON.stringify({ error: 'need an outreach type' }) };
+    const mostRecentOnly = !!args?.mostRecentOnly;
+    // Resolve the input (label or key) to a key without creating a new type.
+    const allTypes = await listOutreachTypes();
+    const lc = rawType.toLowerCase();
+    const resolved =
+      allTypes.find((t) => t.key === lc.replace(/[^a-z0-9]+/g, '_')) ||
+      allTypes.find((t) => t.label.toLowerCase() === lc);
+    const key = resolved?.key ?? lc.replace(/[^a-z0-9]+/g, '_');
+    const label = resolved?.label ?? rawType;
+
+    const hits = submissions
+      .filter((s) => {
+        if (mostRecentOnly) return (s.last_outreach_type ?? '') === key;
+        return (s.outreach_types ?? []).includes(key);
+      })
+      .map((s) => ({
+        project: s.project,
+        stage: s.stage,
+        owner: s.owner || '(unassigned)',
+        score: s.score,
+        last_outreach_type: s.last_outreach_type ?? null,
+        last_outreach_at: (s as any).last_outreach_at ?? null,
+      }));
+    return { result: JSON.stringify({ type: label, key, mostRecentOnly, count: hits.length, projects: hits }) };
   }
 
   if (name === 'log_outreach') {
