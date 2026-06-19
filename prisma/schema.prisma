@@ -152,13 +152,11 @@ model Submission {
   @@index([stage])
 }
 
-/**
- * Outbound message queue. A teammate's Telegram bot (separate repo/service) POLLS
- * the pending rows via GET /api/outbound/pending, sends them, and reports delivery
- * via POST /api/outbound/[id]/result. Same trust model as inbound: their service is
- * always the caller, bearer-authed with INGEST_API_KEY; the CRM never calls them.
- * Claim-with-timeout prevents double-sends if the bot polls twice or crashes mid-send.
- */
+// Outbound message queue. A teammate's Telegram bot (separate repo/service) POLLS
+// the pending rows via GET /api/outbound/pending, sends them, and reports delivery
+// via POST /api/outbound/[id]/result. Same trust model as inbound: their service is
+// always the caller, bearer-authed with INGEST_API_KEY; the CRM never calls them.
+// Claim-with-timeout prevents double-sends if the bot polls twice or crashes mid-send.
 model OutboundMessage {
   id            String     @id @default(cuid())
   submissionId  String
