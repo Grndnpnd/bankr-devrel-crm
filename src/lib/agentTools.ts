@@ -9,6 +9,7 @@ import { toChatRows, capRows } from '@/lib/chatData';
 import type { ToolDef } from '@/lib/llm';
 import { fetchTokenData, isContractAddress } from '@/lib/discover';
 import { enrichSubmission } from '@/lib/enrich';
+import { enqueueOutbound } from '@/lib/outbound';
 import { prisma } from '@/lib/prisma';
 import { EDITABLE_FIELDS, NEEDS_HELP_TAGS, isEditableField, allTrivial, snapshotCurrent, applyChangesToSubmission, resolveProposal, type Change } from '@/lib/proposedEdits';
 import { createSubmissionFromFields, findProjectMatch, type NewSubmissionFields, ingestText } from '@/lib/ingest';
@@ -212,6 +213,22 @@ export const AGENT_TOOLS: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'send_telegram',
+      description:
+        'Queue an outbound Telegram message to a project (e.g. "DM Solvr: hey, saw your launch — would love to chat"). The message is delivered by the Telegram bot and the outreach is auto-tracked (the project advances NEW → CONTACTED once delivery is confirmed). The project must have a Telegram target set (on its card, or captured from a prior inbound message) — if it doesn\'t, tell the user to add one.',
+      parameters: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'the project name' },
+          message: { type: 'string', description: 'the message body to send' },
+        },
+        required: ['project', 'message'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'set_contract_address',
       description:
         'Set (or refresh) the onchain token contract address for an existing project, then pull its live token data from Bankr (volume, market cap, price). Use when the user gives a specific 0x… address (e.g. "set Acme\'s contract to 0x123…"). This attaches real onchain data and re-scores the project, so report back the matched token (symbol + volume + market cap) so the user can confirm it\'s the right token.',
@@ -395,6 +412,7 @@ export async function runTool(name: string, args: any, submissions: Submission[]
     resolve_proposal: 'submissions.edit',
     add_note: 'submissions.edit',
     set_contract_address: 'submissions.enrich',
+    send_telegram: 'submissions.edit',
     create_scheduled_job: 'cron.manage',
     create_slack_report: 'cron.manage',
   };
@@ -680,6 +698,21 @@ export async function runTool(name: string, args: any, submissions: Submission[]
       ok: true,
       status: res.status,
       message: `Proposal ${res.status}. ${action === 'approve' ? 'The change has been applied.' : 'The change was discarded.'} DO NOT call more tools — confirm to the user.`,
+    }) };
+  }
+
+  if (name === 'send_telegram') {
+    const project = (args?.project || '').trim();
+    const message = (args?.message || '').trim();
+    if (!project || !message) return { result: JSON.stringify({ error: 'need both project and message' }) };
+    const match = await findProjectMatch(project);
+    if (!match) return { result: JSON.stringify({ error: `no project matching "${project}"` }) };
+    const out = await enqueueOutbound({ submissionId: match.id, body: message, createdBy: ctx.userEmail ?? 'agent' });
+    if (!out.ok) return { result: JSON.stringify({ error: out.error }) };
+    return { result: JSON.stringify({
+      ok: true,
+      project: match.project,
+      message: `Queued a Telegram message to "${match.project}". It will be delivered shortly and the outreach auto-tracked. Confirm to the user and DO NOT call more tools.`,
     }) };
   }
 

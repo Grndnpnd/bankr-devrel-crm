@@ -20,6 +20,7 @@ export function serialize(s: SubmissionWithRelations) {
     one_liner: s.oneLiner ?? "",
     founders: (s.founders as any) ?? [],
     location: s.location ?? "",
+    telegram_target: s.telegramTarget ?? "",
     accomplishments: s.accomplishments ?? "",
     problem: s.problem ?? "",
     solution: s.solution ?? "",

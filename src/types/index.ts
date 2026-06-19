@@ -47,6 +47,7 @@ export interface Submission {
   one_liner: string;
   founders: Founder[];
   location: string;
+  telegram_target?: string;
   accomplishments: string;
   problem: string;
   solution: string;

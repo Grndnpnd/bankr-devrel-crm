@@ -56,10 +56,25 @@ export async function POST(req: Request) {
 
   const source: AllowedSource = ALLOWED_SOURCES.includes(body?.source) ? body.source : "TELEGRAM";
   const submittedBy = typeof body?.submittedBy === "string" ? body.submittedBy.slice(0, 120) : "telegram";
+  const telegramTarget = typeof body?.telegramTarget === "string" ? body.telegramTarget.trim().slice(0, 120) : "";
 
   try {
     const outcome = await ingestText(text, source, submittedBy);
-    // outcome.status ∈ created | updated | queued | needs_clarification | error
+    // If the bot told us where this came from, capture it as the project's Telegram
+    // target (so outbound "just works" later) — only when the project doesn't already
+    // have one, and only on a successful create/update/queue.
+    if (telegramTarget && outcome.project && outcome.status !== "error" && outcome.status !== "needs_clarification") {
+      try {
+        const { prisma } = await import("@/lib/prisma");
+        const sub = await prisma.submission.findFirst({
+          where: { project: { equals: outcome.project, mode: "insensitive" } },
+          select: { id: true, telegramTarget: true },
+        });
+        if (sub && !sub.telegramTarget) {
+          await prisma.submission.update({ where: { id: sub.id }, data: { telegramTarget } });
+        }
+      } catch { /* non-fatal — ingest already succeeded */ }
+    }
     const httpStatus = outcome.status === "error" ? 502 : 200;
     return NextResponse.json(outcome, { status: httpStatus });
   } catch (e: any) {

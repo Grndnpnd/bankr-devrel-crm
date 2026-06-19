@@ -751,6 +751,39 @@ const Profile: React.FC = () => {
                   Claim
                 </button>
               )}
+
+              {me && can(me.role, 'submissions.edit') && (
+                <button
+                  onClick={async () => {
+                    let target = submission.telegram_target;
+                    if (!target) {
+                      const t = window.prompt('No Telegram target set for this project. Enter their Telegram username or chat ID:');
+                      if (!t) return;
+                      target = t.trim();
+                      await fetch(`/api/submissions/${submission.id}/telegram`, {
+                        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ target }),
+                      });
+                    }
+                    const msg = window.prompt(`Message to send to ${submission.project} on Telegram:`);
+                    if (!msg || !msg.trim()) return;
+                    const res = await fetch(`/api/submissions/${submission.id}/telegram`, {
+                      method: 'POST', headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ message: msg.trim() }),
+                    });
+                    const d = await res.json().catch(() => ({}));
+                    if (res.ok) toast.success('Message queued', { description: 'It will be delivered and the outreach auto-tracked.' });
+                    else toast.error(d?.error || 'Could not queue message');
+                  }}
+                  className="rounded-md transition-all duration-150"
+                  style={{ padding: '6px 14px', backgroundColor: 'transparent', border: '1px solid rgba(124,58,237,0.4)', color: '#7c3aed', fontSize: '12px', fontWeight: 600, fontFamily: "'Inter', sans-serif" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = 'rgba(124,58,237,0.12)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+                  title={submission.telegram_target ? `Reach out via Telegram (${submission.telegram_target})` : 'Set a Telegram target and reach out'}
+                >
+                  Reach out
+                </button>
+              )}
             </div>
           </motion.div>
 
