@@ -2,7 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 import { COOKIE } from "./lib/constants";
 
-const PUBLIC = ["/login", "/api/auth/login", "/api/auth/google"];
+// Routes that bypass the session-cookie check. /api/ingest is service-to-service
+// (Telegram bot, etc.) — it's NOT unprotected, it enforces its own bearer-token
+// auth (INGEST_API_KEY) inside the route; it just can't also require a session cookie.
+const PUBLIC = ["/login", "/api/auth/login", "/api/auth/google", "/api/ingest"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

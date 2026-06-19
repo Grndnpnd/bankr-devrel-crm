@@ -31,23 +31,6 @@ function authorized(req: Request): boolean {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-// TEMP DIAGNOSTIC — reveals whether the env var is present + length info, WITHOUT
-// leaking the secret itself. Remove after debugging.
-//   GET /api/ingest  with header  Authorization: Bearer <whatever you're testing>
-export async function GET(req: Request) {
-  const secret = process.env.INGEST_API_KEY;
-  const provided = (req.headers.get("authorization") || "").replace(/^Bearer\s+/i, "");
-  return NextResponse.json({
-    envKeyPresent: !!secret,
-    envKeyLength: secret ? secret.length : 0,
-    envKeyLastChar: secret ? secret.slice(-1) : null,
-    providedLength: provided.length,
-    providedLastChar: provided ? provided.slice(-1) : null,
-    lengthsMatch: !!secret && secret.length === provided.length,
-    exactMatch: !!secret && secret === provided,
-  });
-}
-
 const ALLOWED_SOURCES = ["TELEGRAM", "SLACK", "AGENT"] as const;
 type AllowedSource = (typeof ALLOWED_SOURCES)[number];
 
