@@ -64,7 +64,7 @@ const Terminal: React.FC = () => {
   }, [loading, turns, submissions]);
 
   return (
-    <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
+    <div className="flex flex-col" style={{ height: 'calc(100vh - 112px)' }}>
       {/* Header */}
       <div className="flex items-center gap-3" style={{ padding: '16px 28px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'linear-gradient(90deg, rgba(124,58,237,0.16) 0%, rgba(124,58,237,0.04) 40%, transparent 100%)' }}>
         <div className="rounded-full overflow-hidden" style={{ width: 38, height: 38, backgroundColor: 'rgba(124,58,237,0.18)' }}>
