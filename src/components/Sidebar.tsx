@@ -27,6 +27,7 @@ const Sidebar: React.FC = () => {
   const dashboardLayouts = useSubmissionStore((st) => st.dashboardLayouts);
   const activeLayoutId = useSubmissionStore((st) => st.activeLayoutId);
   const switchLayout = useSubmissionStore((st) => st.switchLayout);
+  const clearActiveLayout = useSubmissionStore((st) => st.clearActiveLayout);
   const router = useRouter();
   // "Admin" capability proxy: anyone who can manage users (ADMIN) sees the Admin page.
   const items = navItems.filter((i) => !i.adminOnly || can(me?.role, 'users.manage'));
@@ -60,11 +61,17 @@ const Sidebar: React.FC = () => {
 
       <nav className="flex-1 py-3 flex flex-col gap-0.5 px-2">
         {items.map((item) => {
-          const active = isActiveFor(item.to);
+          // The main Dashboard item is "active" only when on / AND no named layout
+          // is selected — named layouts are supplements, and clicking Dashboard
+          // returns to the main (unnamed) view.
+          const active = item.to === '/'
+            ? (isActiveFor('/') && activeLayoutId === null)
+            : isActiveFor(item.to);
           const link = (
             <Link
               key={item.to}
               href={item.to}
+              onClick={item.to === '/' ? () => clearActiveLayout() : undefined}
               className={`flex items-center gap-3 rounded-md transition-all duration-200 relative ${
                 collapsed ? 'justify-center w-10 h-10 mx-auto' : 'px-4 h-10'
               }`}

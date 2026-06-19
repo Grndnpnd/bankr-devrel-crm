@@ -15,6 +15,7 @@ interface SubmissionStore {
   users: TeamUser[];
   me: Me | null;
   dashboardLayout: DashboardWidget[] | null;
+  baseLayout: DashboardWidget[] | null;
   dashboardDefault: DashboardWidget[] | null;
   dashboardLayouts: NamedLayout[];
   activeLayoutId: string | null;
@@ -33,6 +34,7 @@ interface SubmissionStore {
   saveDashboardDefault: (layout: DashboardWidget[]) => Promise<void>;
   saveNamedLayout: (name: string, layout: DashboardWidget[], id?: string) => Promise<NamedLayout | null>;
   switchLayout: (id: string) => Promise<void>;
+  clearActiveLayout: () => Promise<void>;
   renameLayout: (id: string, name: string) => Promise<void>;
   deleteLayout: (id: string) => Promise<void>;
   loadProposals: () => Promise<void>;
@@ -82,6 +84,7 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
   users: [],
   me: null,
   dashboardLayout: null,
+  baseLayout: null,
   dashboardDefault: null,
   dashboardLayouts: [],
   activeLayoutId: null,
@@ -114,10 +117,13 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
       const dflt = Array.isArray(data?.dashboardDefault) ? (data.dashboardDefault as DashboardWidget[]) : null;
       const layouts = Array.isArray(data?.dashboardLayouts) ? (data.dashboardLayouts as NamedLayout[]) : [];
       const activeId = typeof data?.activeLayoutId === 'string' ? data.activeLayoutId : null;
-      // If a named layout is active, prefer its layout as the working layout.
+      // `layout` is the MAIN (unnamed) dashboard — always preserved as baseLayout.
+      // If a named layout is active, surface ITS layout as the working layout, but
+      // keep baseLayout intact so clearing the active layout returns to the main view.
       const active = layouts.find((l) => l.id === activeId);
       set({
         dashboardLayout: active ? active.layout : layout,
+        baseLayout: layout,
         dashboardDefault: dflt,
         dashboardLayouts: layouts,
         activeLayoutId: activeId,
@@ -187,7 +193,8 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
     } catch { set({ savedPanels: prev }); }
   },
   saveDashboardLayout: async (layout) => {
-    set({ dashboardLayout: layout });
+    // This writes the MAIN (unnamed) dashboard layout — keep baseLayout in sync.
+    set({ dashboardLayout: layout, baseLayout: layout });
     try {
       await fetch('/api/me', {
         method: 'PATCH',
@@ -227,6 +234,18 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
       });
     } catch { /* keep optimistic */ }
     return entry;
+  },
+  clearActiveLayout: async () => {
+    // Return to the main (unnamed) dashboard. Named layouts are supplements,
+    // so deselecting them restores the base dashboardLayout/default.
+    if (get().activeLayoutId === null) return;
+    set({ activeLayoutId: null, dashboardLayout: get().baseLayout });
+    try {
+      await fetch('/api/me', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activeLayoutId: null }),
+      });
+    } catch { /* keep optimistic */ }
   },
   switchLayout: async (id) => {
     const target = get().dashboardLayouts.find((l) => l.id === id);
