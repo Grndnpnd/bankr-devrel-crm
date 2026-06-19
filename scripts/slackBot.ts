@@ -150,6 +150,7 @@ async function botIsInThread(channel: string, threadTs: string): Promise<boolean
 
 socket.on('message', async ({ event, ack }: any) => {
   await ack();
+  console.log(`[slackbot][msg-diag] message event received: channel_type=${event?.channel_type} thread_ts=${event?.thread_ts ?? '-'} ts=${event?.ts} subtype=${event?.subtype ?? '-'} text="${String(event?.text || '').slice(0, 40)}"`);
   if (!event || event.bot_id || event.user === botUserId) return;
   if (event.subtype) return; // ignore edits/joins/etc.
 
