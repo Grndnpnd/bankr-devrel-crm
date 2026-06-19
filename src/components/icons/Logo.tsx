@@ -35,7 +35,7 @@ const Logo: React.FC<LogoProps> = ({ collapsed = false, className = '' }) => {
       <img
         src="/brand/bankr-crm-banner.png"
         alt="Bankr CRM"
-        style={{ height: 26, width: 'auto', display: 'block' }}
+        style={{ height: 30, width: 'auto', display: 'block' }}
       />
     </div>
   );
