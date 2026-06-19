@@ -8,6 +8,7 @@ import {
 import { toChatRows, capRows } from '@/lib/chatData';
 import type { ToolDef } from '@/lib/llm';
 import { fetchTokenData, isContractAddress } from '@/lib/discover';
+import { enrichSubmission } from '@/lib/enrich';
 import { prisma } from '@/lib/prisma';
 import { EDITABLE_FIELDS, NEEDS_HELP_TAGS, isEditableField, allTrivial, snapshotCurrent, applyChangesToSubmission, resolveProposal, type Change } from '@/lib/proposedEdits';
 import { createSubmissionFromFields, findProjectMatch, type NewSubmissionFields, ingestText } from '@/lib/ingest';
@@ -211,6 +212,22 @@ export const AGENT_TOOLS: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'set_contract_address',
+      description:
+        'Set (or refresh) the onchain token contract address for an existing project, then pull its live token data from Bankr (volume, market cap, price). Use when the user gives a specific 0x… address (e.g. "set Acme\'s contract to 0x123…"). This attaches real onchain data and re-scores the project, so report back the matched token (symbol + volume + market cap) so the user can confirm it\'s the right token.',
+      parameters: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'the project name' },
+          contractAddress: { type: 'string', description: 'the 0x… token contract address to set' },
+        },
+        required: ['project', 'contractAddress'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'propose_edit',
       description:
         'Propose changes to a project card from a natural-language instruction (e.g. "update Solvr goals: add looking for partnerships; add flags Partnerships and GTM"). You resolve the project, the target field(s), and the operation. Trivial additive edits (append text / add flags) APPLY IMMEDIATELY; destructive (replace/remove) or multi-field or ambiguous edits are filed for human review. Always confirm your interpretation to the user in your reply. Editable fields: ' + Object.keys(EDITABLE_FIELDS).join(', ') + '. Needs-help flags must be one of: ' + NEEDS_HELP_TAGS.join(', ') + '.',
@@ -377,6 +394,7 @@ export async function runTool(name: string, args: any, submissions: Submission[]
     propose_edit: 'submissions.edit',
     resolve_proposal: 'submissions.edit',
     add_note: 'submissions.edit',
+    set_contract_address: 'submissions.enrich',
     create_scheduled_job: 'cron.manage',
     create_slack_report: 'cron.manage',
   };
@@ -663,6 +681,29 @@ export async function runTool(name: string, args: any, submissions: Submission[]
       status: res.status,
       message: `Proposal ${res.status}. ${action === 'approve' ? 'The change has been applied.' : 'The change was discarded.'} DO NOT call more tools — confirm to the user.`,
     }) };
+  }
+
+  if (name === 'set_contract_address') {
+    const project = (args?.project || '').trim();
+    const ca = (args?.contractAddress || '').trim();
+    if (!project || !ca) return { result: JSON.stringify({ error: 'need both project and contractAddress' }) };
+    if (!isContractAddress(ca)) return { result: JSON.stringify({ error: `"${ca}" is not a valid contract address (expected 0x… format)` }) };
+    const match = await findProjectMatch(project);
+    if (!match) return { result: JSON.stringify({ error: `no project matching "${project}"` }) };
+    try {
+      await enrichSubmission(match.id, ca);
+      // Read back what token actually got attached so the user can sanity-check it.
+      const tm = await prisma.tokenMatch.findUnique({ where: { submissionId: match.id } });
+      return { result: JSON.stringify({
+        ok: true,
+        project: match.project,
+        contractAddress: ca,
+        token: tm ? { symbol: tm.token, vol24h: tm.vol24h, marketCapUsd: tm.marketCapUsd, priceChange24h: tm.priceChange24h } : null,
+        message: `Set the contract address on "${match.project}" and pulled live data. Tell the user which token matched (symbol + volume + market cap) so they can confirm it's correct, then DO NOT call more tools.`,
+      }) };
+    } catch (e: any) {
+      return { result: JSON.stringify({ error: e?.message ?? 'could not set contract address (no token found for that address?)' }) };
+    }
   }
 
   if (name === 'add_note') {

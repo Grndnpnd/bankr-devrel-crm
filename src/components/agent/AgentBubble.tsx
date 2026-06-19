@@ -59,7 +59,7 @@ const AgentBubble: React.FC = () => {
       // If the agent ran any write tool, refresh the relevant data so the UI
       // reflects the change without a manual page reload.
       const ranTools: string[] = Array.isArray(data.toolTrace) ? data.toolTrace.map((t: any) => t?.name) : [];
-      const WRITE = ['create_submission', 'propose_edit', 'ingest_project', 'create_slack_report', 'create_scheduled_job', 'add_note', 'resolve_proposal'];
+      const WRITE = ['create_submission', 'propose_edit', 'ingest_project', 'create_slack_report', 'create_scheduled_job', 'add_note', 'resolve_proposal', 'set_contract_address'];
       if (ranTools.some((n) => WRITE.includes(n))) {
         const st = useSubmissionStore.getState();
         st.load();              // submissions (covers create/edit/ingest)
