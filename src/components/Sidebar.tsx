@@ -1,8 +1,8 @@
 'use client';
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Inbox, BarChart3, Settings, Shield, ClipboardCheck, ChevronLeft, ChevronRight } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { LayoutDashboard, Inbox, BarChart3, Settings, Shield, ClipboardCheck, ChevronLeft, ChevronRight, TerminalSquare, LayoutGrid, Plus } from 'lucide-react';
 import Logo from './icons/Logo';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import { can } from '@/lib/access';
@@ -13,6 +13,7 @@ const navItems: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/submissions', label: 'Submissions', icon: Inbox },
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
+  { to: '/terminal', label: 'Terminal', icon: TerminalSquare },
   { to: '/review', label: 'Review', icon: ClipboardCheck },
   { to: '/settings', label: 'Settings', icon: Settings },
   { to: '/admin', label: 'Admin', icon: Shield, adminOnly: true },
@@ -23,6 +24,10 @@ const Sidebar: React.FC = () => {
   const pathname = usePathname();
   const me = useSubmissionStore((st) => st.me);
   const pendingCount = useSubmissionStore((st) => st.proposals.length);
+  const dashboardLayouts = useSubmissionStore((st) => st.dashboardLayouts);
+  const activeLayoutId = useSubmissionStore((st) => st.activeLayoutId);
+  const switchLayout = useSubmissionStore((st) => st.switchLayout);
+  const router = useRouter();
   // "Admin" capability proxy: anyone who can manage users (ADMIN) sees the Admin page.
   const items = navItems.filter((i) => !i.adminOnly || can(me?.role, 'users.manage'));
 
@@ -100,6 +105,33 @@ const Sidebar: React.FC = () => {
             </Link>
           );
         })}
+        {/* Named dashboard layouts — nested under Dashboard */}
+        {!collapsed && dashboardLayouts.length > 0 && (
+          <div style={{ marginTop: 2, marginBottom: 4 }}>
+            {dashboardLayouts.map((l) => {
+              const isActive = pathname === '/' && activeLayoutId === l.id;
+              return (
+                <button
+                  key={l.id}
+                  onClick={() => { switchLayout(l.id); if (pathname !== '/') router.push('/'); }}
+                  className="flex items-center gap-2.5 rounded-md w-full transition-all duration-200"
+                  style={{
+                    padding: '0 4px 0 26px', height: 32, marginLeft: 8,
+                    backgroundColor: isActive ? '#222' : 'transparent',
+                    color: isActive ? '#F0F0F0' : '#8A8A8A',
+                    fontFamily: "'Inter', sans-serif", fontSize: 12.5, fontWeight: 500,
+                    border: 'none', cursor: 'pointer', textAlign: 'left',
+                  }}
+                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = '#1f1f1f'; }}
+                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                >
+                  <LayoutGrid size={14} style={{ color: isActive ? '#F5A623' : '#525252', flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </nav>
 
       <div className="px-2 pb-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>

@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { LayoutGrid, Check, RotateCcw, EyeOff, GripVertical, BookmarkPlus, Users, Trash2 } from 'lucide-react';
+import { LayoutGrid, Check, RotateCcw, EyeOff, GripVertical, BookmarkPlus, Users, Trash2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSubmissionStore, type DashboardWidget } from '@/store/useSubmissionStore';
 import AnalyticsPanel from '@/components/analytics/AnalyticsPanel';
@@ -68,7 +68,8 @@ const WidgetControls: React.FC<{
 
 /* ─── Dashboard Page ─── */
 const Dashboard: React.FC = () => {
-  const { dashboardLayout, dashboardDefault, loadDashboardLayout, saveDashboardLayout, saveDashboardDefault, savedPanels, togglePanelVisibility, removeSavedPanel } = useSubmissionStore();
+  const { dashboardLayout, dashboardDefault, loadDashboardLayout, saveDashboardLayout, saveDashboardDefault, savedPanels, togglePanelVisibility, removeSavedPanel, dashboardLayouts, activeLayoutId, saveNamedLayout, renameLayout, deleteLayout } = useSubmissionStore();
+  const activeLayout = dashboardLayouts.find((l) => l.id === activeLayoutId) || null;
   const panelIds = useMemo(() => savedPanels.map((p) => p.id), [savedPanels]);
   const panelById = useMemo(() => new Map(savedPanels.map((p) => [p.id, p])), [savedPanels]);
   const myPanels = useMemo(() => savedPanels.filter((p) => p.mine), [savedPanels]);
@@ -176,6 +177,19 @@ const Dashboard: React.FC = () => {
     await saveDashboardDefault(snapshot);
     toast.success('Saved as your default', { description: 'Reset will now return to this layout.' });
   };
+  const snapshotNow = () => resequence(visible).concat(hidden.map((h, i) => ({ ...h, order: visible.length + i })));
+  const saveAsLayout = async () => {
+    const name = window.prompt('Name this layout:', activeLayout ? `${activeLayout.name} copy` : 'My layout');
+    if (name === null) return; // cancelled
+    const entry = await saveNamedLayout(name, snapshotNow());
+    if (entry) { setEditing(false); toast.success(`Saved layout "${entry.name}"`, { description: 'Find it under Dashboard in the sidebar.' }); }
+  };
+  const updateActiveLayout = async () => {
+    if (!activeLayout) return;
+    await saveNamedLayout(activeLayout.name, snapshotNow(), activeLayout.id);
+    setEditing(false);
+    toast.success(`Updated "${activeLayout.name}"`);
+  };
 
   return (
     <div>
@@ -193,6 +207,14 @@ const Dashboard: React.FC = () => {
         </div>
         {editing ? (
           <div className="flex items-center gap-2">
+            {activeLayout && (
+              <button onClick={updateActiveLayout} title={`Update the "${activeLayout.name}" layout`} className="inline-flex items-center gap-1.5 rounded-md" style={{ height: 34, padding: '0 12px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid rgba(245,166,35,0.3)', color: '#F5A623' }}>
+                <Save size={14} /> Update “{activeLayout.name}”
+              </button>
+            )}
+            <button onClick={saveAsLayout} title="Save the current arrangement as a named layout" className="inline-flex items-center gap-1.5 rounded-md" style={{ height: 34, padding: '0 12px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#8A8A8A' }}>
+              <LayoutGrid size={14} /> Save as layout
+            </button>
             <button onClick={saveAsDefault} title="Save current layout as your reset point" className="inline-flex items-center gap-1.5 rounded-md" style={{ height: 34, padding: '0 12px', fontSize: 13, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: '#8A8A8A' }}>
               <BookmarkPlus size={14} /> Save as default
             </button>
@@ -257,6 +279,30 @@ const Dashboard: React.FC = () => {
             <span style={{ fontSize: 13, color: '#525252' }}>Everything's already on your dashboard.</span>
           )}
           <span style={{ fontSize: 12, color: '#525252' }}>{hidden.length} available</span>
+        </div>
+      )}
+
+      {/* Layout manager (edit mode) — rename / delete saved named layouts */}
+      {editing && dashboardLayouts.length > 0 && (
+        <div className="mb-5" style={{ padding: 12, borderRadius: 10, border: '1px dashed rgba(255,255,255,0.12)' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#525252', letterSpacing: '0.04em', textTransform: 'uppercase', marginBottom: 8 }}>
+            Saved layouts
+          </div>
+          <div className="flex flex-col gap-1.5">
+            {dashboardLayouts.map((l) => (
+              <div key={l.id} className="flex items-center justify-between" style={{ padding: '6px 10px', borderRadius: 8, backgroundColor: l.id === activeLayoutId ? 'rgba(245,166,35,0.1)' : '#1A1A1A', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <span style={{ fontSize: 13, color: '#F0F0F0' }}>{l.name}{l.id === activeLayoutId ? ' · active' : ''}</span>
+                <div className="flex items-center gap-1">
+                  <button onClick={async () => { const n = window.prompt('Rename layout:', l.name); if (n) await renameLayout(l.id, n); }} title="Rename" className="rounded p-1" style={{ color: '#8A8A8A', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                    Rename
+                  </button>
+                  <button onClick={async () => { if (window.confirm(`Delete layout "${l.name}"?`)) await deleteLayout(l.id); }} title="Delete" className="rounded p-1" style={{ color: '#E5544B', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

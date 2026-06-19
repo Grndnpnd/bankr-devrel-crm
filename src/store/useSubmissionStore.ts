@@ -6,6 +6,7 @@ interface TeamUser { email: string; name: string | null; role: string }
 interface Me { email: string; name: string | null; role: string }
 export interface TokenCandidate { tokenAddress: string; symbol: string | null; name: string | null; status: string | null; deployerX: string | null; feeX: string | null; identityMatch: boolean; projectMatch?: boolean; bankrDeployed: boolean; vol24h?: number | null; marketCapUsd?: number | null }
 export interface DashboardWidget { id: string; visible: boolean; span: number; order: number; height?: number | null }
+export interface NamedLayout { id: string; name: string; layout: DashboardWidget[] }
 export interface SavedPanel { id: string; spec: any; title: string; isPublic: boolean; mine: boolean; ownerName: string; createdAt: string }
 export interface ProposedEditDTO { id: string; submissionId: string; changes: any[]; rationale: string | null; status: string; source: string; proposedBy: string | null; createdAt: string; submission?: { id: string; project: string } }
 
@@ -15,6 +16,8 @@ interface SubmissionStore {
   me: Me | null;
   dashboardLayout: DashboardWidget[] | null;
   dashboardDefault: DashboardWidget[] | null;
+  dashboardLayouts: NamedLayout[];
+  activeLayoutId: string | null;
   savedPanels: SavedPanel[];
   proposals: ProposedEditDTO[];
   loaded: boolean;
@@ -28,6 +31,10 @@ interface SubmissionStore {
   saveDashboardLayout: (layout: DashboardWidget[]) => Promise<void>;
   setDashboardLayout: (layout: DashboardWidget[]) => void;
   saveDashboardDefault: (layout: DashboardWidget[]) => Promise<void>;
+  saveNamedLayout: (name: string, layout: DashboardWidget[], id?: string) => Promise<NamedLayout | null>;
+  switchLayout: (id: string) => Promise<void>;
+  renameLayout: (id: string, name: string) => Promise<void>;
+  deleteLayout: (id: string) => Promise<void>;
   loadProposals: () => Promise<void>;
   resolveProposal: (id: string, action: 'approve' | 'reject') => Promise<boolean>;
   loadSavedPanels: () => Promise<void>;
@@ -76,6 +83,8 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
   me: null,
   dashboardLayout: null,
   dashboardDefault: null,
+  dashboardLayouts: [],
+  activeLayoutId: null,
   savedPanels: [],
   proposals: [],
   loaded: false,
@@ -103,7 +112,16 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
       const data = await res.json();
       const layout = Array.isArray(data?.dashboardLayout) ? (data.dashboardLayout as DashboardWidget[]) : null;
       const dflt = Array.isArray(data?.dashboardDefault) ? (data.dashboardDefault as DashboardWidget[]) : null;
-      set({ dashboardLayout: layout, dashboardDefault: dflt });
+      const layouts = Array.isArray(data?.dashboardLayouts) ? (data.dashboardLayouts as NamedLayout[]) : [];
+      const activeId = typeof data?.activeLayoutId === 'string' ? data.activeLayoutId : null;
+      // If a named layout is active, prefer its layout as the working layout.
+      const active = layouts.find((l) => l.id === activeId);
+      set({
+        dashboardLayout: active ? active.layout : layout,
+        dashboardDefault: dflt,
+        dashboardLayouts: layouts,
+        activeLayoutId: activeId,
+      });
       // Panels now live in their own table; load them separately.
       await get().loadSavedPanels();
     } catch { /* keep defaults */ }
@@ -187,6 +205,62 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
         body: JSON.stringify({ dashboardDefault: layout }),
       });
     } catch { /* optimistic */ }
+  },
+
+  saveNamedLayout: async (name, layout, id) => {
+    const layouts = [...get().dashboardLayouts];
+    let entry: NamedLayout;
+    if (id) {
+      const i = layouts.findIndex((l) => l.id === id);
+      if (i === -1) return null;
+      entry = { ...layouts[i], name: name.trim() || layouts[i].name, layout };
+      layouts[i] = entry;
+    } else {
+      entry = { id: `layout_${Date.now().toString(36)}`, name: name.trim() || 'Untitled', layout };
+      layouts.push(entry);
+    }
+    set({ dashboardLayouts: layouts, activeLayoutId: entry.id, dashboardLayout: layout });
+    try {
+      await fetch('/api/me', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dashboardLayouts: layouts, activeLayoutId: entry.id }),
+      });
+    } catch { /* keep optimistic */ }
+    return entry;
+  },
+  switchLayout: async (id) => {
+    const target = get().dashboardLayouts.find((l) => l.id === id);
+    if (!target) return;
+    set({ activeLayoutId: id, dashboardLayout: target.layout });
+    try {
+      await fetch('/api/me', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ activeLayoutId: id }),
+      });
+    } catch { /* keep optimistic */ }
+  },
+  renameLayout: async (id, name) => {
+    const layouts = get().dashboardLayouts.map((l) => (l.id === id ? { ...l, name: name.trim() || l.name } : l));
+    set({ dashboardLayouts: layouts });
+    try {
+      await fetch('/api/me', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dashboardLayouts: layouts }),
+      });
+    } catch { /* keep optimistic */ }
+  },
+  deleteLayout: async (id) => {
+    const layouts = get().dashboardLayouts.filter((l) => l.id !== id);
+    const wasActive = get().activeLayoutId === id;
+    const nextActive = wasActive ? (layouts[0]?.id ?? null) : get().activeLayoutId;
+    const nextLayout = wasActive ? (layouts[0]?.layout ?? get().dashboardLayout) : get().dashboardLayout;
+    set({ dashboardLayouts: layouts, activeLayoutId: nextActive, dashboardLayout: nextLayout });
+    try {
+      await fetch('/api/me', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dashboardLayouts: layouts, activeLayoutId: nextActive }),
+      });
+    } catch { /* keep optimistic */ }
   },
 
   load: async () => {

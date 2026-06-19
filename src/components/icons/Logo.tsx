@@ -6,32 +6,37 @@ interface LogoProps {
   className?: string;
 }
 
+/**
+ * Bankr CRM brand mark. Expanded → the full BANKR CRM banner. Collapsed → the
+ * retro-TV monitor glyph alone (kept as SVG so it stays crisp at small size).
+ */
 const Logo: React.FC<LogoProps> = ({ collapsed = false, className = '' }) => {
+  if (collapsed) {
+    return (
+      <div className={`flex items-center justify-center ${className}`}>
+        {/* Retro TV monitor mark (echoes the banner's icon) */}
+        <svg width="26" height="26" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2.5" y="4.5" width="23" height="19" rx="2.5" fill="#ECE6D6" stroke="#0D0D0D" strokeWidth="1.5" />
+          <rect x="5" y="7" width="13" height="11" rx="1.5" fill="#F5613C" stroke="#0D0D0D" strokeWidth="1" />
+          {/* simple smiley echo */}
+          <rect x="8" y="10" width="1.8" height="1.8" fill="#F5C84B" />
+          <rect x="13.4" y="10" width="1.8" height="1.8" fill="#F5C84B" />
+          <path d="M8 13.6c1.6 1.6 4 1.6 5.6 0" stroke="#F5C84B" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+          {/* sliders */}
+          <line x1="21" y1="8" x2="21" y2="16" stroke="#0D0D0D" strokeWidth="1.2" />
+          <line x1="23.5" y1="8" x2="23.5" y2="16" stroke="#0D0D0D" strokeWidth="1.2" />
+        </svg>
+      </div>
+    );
+  }
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
-      <svg width="24" height="24" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-        {/* Amber dot */}
-        <circle cx="4" cy="14" r="3" fill="#F5A623" />
-        {/* B monogram */}
-        <path
-          d="M10 5h5.5c3.5 0 5.5 1.8 5.5 4.5 0 2-1.2 3.5-3 4.2v.1c2.2.5 3.8 2.2 3.8 4.8 0 3.2-2.3 5.4-6 5.4H10V5zm5 7.5c2 0 3.2-1 3.2-2.8 0-1.8-1.2-2.7-3.2-2.7H13.8v5.5H15zm.5 8.2c2.2 0 3.5-1.2 3.5-3.2 0-1.8-1.3-3-3.5-3H13.8v6.2H15.5z"
-          fill="#F0F0F0"
-        />
-      </svg>
-      {!collapsed && (
-        <span
-          style={{
-            fontFamily: "'Manrope', sans-serif",
-            fontSize: '22px',
-            fontWeight: 800,
-            lineHeight: 1,
-            letterSpacing: '-0.03em',
-            color: '#F0F0F0',
-          }}
-        >
-          Bankr
-        </span>
-      )}
+    <div className={`flex items-center ${className}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/brand/bankr-crm-banner.png"
+        alt="Bankr CRM"
+        style={{ height: 26, width: 'auto', display: 'block' }}
+      />
     </div>
   );
 };

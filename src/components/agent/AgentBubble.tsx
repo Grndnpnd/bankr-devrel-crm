@@ -113,8 +113,9 @@ const AgentBubble: React.FC = () => {
           {/* Header */}
           <div className="flex items-center justify-between" style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
             <div className="flex items-center gap-2.5">
-              <div className="flex items-center justify-center rounded-full" style={{ width: 30, height: 30, backgroundColor: 'rgba(245,166,35,0.14)' }}>
-                <Sparkles size={17} style={{ color: '#F5A623' }} />
+              <div className="flex items-center justify-center rounded-full overflow-hidden" style={{ width: 30, height: 30, backgroundColor: 'rgba(245,166,35,0.14)' }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/brand/agent-avatar.gif" alt="" style={{ width: 30, height: 30, objectFit: 'cover' }} />
               </div>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#F0F0F0', fontFamily: "'Manrope', sans-serif" }}>CRM Assistant</div>

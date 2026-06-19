@@ -43,6 +43,8 @@ model User {
   passwordHash String
   dashboardLayout Json?
   dashboardDefault Json?
+  dashboardLayouts Json?              // named layouts: [{ id, name, layout }]
+  activeLayoutId  String?             // which named layout is currently active
   savedPanels     Json?
   slackWebhook    String?            // per-user Slack incoming-webhook URL
   activities   OutreachActivity[]
