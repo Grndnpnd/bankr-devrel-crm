@@ -103,6 +103,8 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
     hideLowEffort: false,
     scoreMin: 0,
     scoreMax: 100,
+    outreachHasType: null,
+    outreachLastType: null,
   },
   sort: { key: 'score', direction: 'desc' as const },
 
@@ -454,6 +456,12 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
     if (state.filters.source) {
       filtered = filtered.filter((s) => s.source === state.filters.source);
     }
+    if (state.filters.outreachHasType) {
+      filtered = filtered.filter((s) => (s.outreach_types ?? []).includes(state.filters.outreachHasType as string));
+    }
+    if (state.filters.outreachLastType) {
+      filtered = filtered.filter((s) => (s.last_outreach_type ?? '') === state.filters.outreachLastType);
+    }
     if (state.filters.liveOnly) {
       filtered = filtered.filter((s) => (!!s.token && s.token.trim() !== '') || !!s.contract_address);
     }
@@ -502,6 +510,7 @@ export const applyDrilldownFilter = (partial: Partial<FilterState>) => {
     stage: [], tags: [], owner: null, source: null,
     liveOnly: false, reviewOnly: false, hideLowEffort: false,
     scoreMin: 0, scoreMax: 100,
+    outreachHasType: null, outreachLastType: null,
     ...partial,
   });
 };

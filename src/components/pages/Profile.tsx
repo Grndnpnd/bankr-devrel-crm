@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { sourceDisplayName } from '@/lib/labels';
 import { can } from '@/lib/access';
+import OutreachHistory from '@/components/profile/OutreachHistory';
 import { useParams, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -786,6 +787,9 @@ const Profile: React.FC = () => {
               )}
             </div>
           </motion.div>
+
+          {/* Outreach History */}
+          <OutreachHistory submissionId={submission.id} canEdit={!!(me && can(me.role, 'submissions.edit'))} />
 
           {/* ── Section 2: Onchain Signal + token enrichment ── */}
           <motion.div

@@ -144,6 +144,7 @@ model Submission {
   activities      OutreachActivity[]
   proposedEdits   ProposedEdit[]
   outboundMessages OutboundMessage[]
+  outreachLog     OutreachLog[]
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
@@ -174,6 +175,26 @@ model OutboundMessage {
 
   @@index([status])
   @@index([submissionId])
+}
+
+// Typed outreach history, distinct from the notes/activity timeline. Each entry has
+// a type (a core type or a persisted custom one), an optional detail/note, and a
+// date. Surfaced as its own "Outreach History" section on the card (most-recent
+// first), filterable on the Submissions page, and writable by UI / agent / Telegram.
+// Custom type labels are stored on AppConfig so they're shared + reusable.
+model OutreachLog {
+  id           String     @id @default(cuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  type         String     // core key (reddit_post, co_marketing, pr, agent_hours, telegram_group) or a custom label
+  detail       String?    @db.Text
+  occurredAt   DateTime   @default(now())
+  createdBy    String?    // user email or 'agent' / 'telegram'
+  createdAt    DateTime   @default(now())
+
+  @@index([submissionId])
+  @@index([type])
+  @@index([occurredAt])
 }
 
 model TokenMatch {
@@ -211,6 +232,7 @@ model AppConfig {
   id              String   @id @default("default")
   teamSlackWebhook String?              // admin-set team-wide Slack channel webhook
   capabilityOverrides Json?             // admin-edited role→capability overrides; null cells fall back to code defaults
+  customOutreachTypes Json?             // persisted custom outreach-type labels [{key,label}] added by users
   updatedAt       DateTime @updatedAt
   updatedBy       String?
 }

@@ -597,6 +597,10 @@ const Submissions: React.FC = () => {
 
   // Dropdown open states
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [outreachTypes, setOutreachTypes] = useState<{ key: string; label: string }[]>([]);
+  useEffect(() => {
+    fetch('/api/outreach-types').then((r) => r.ok ? r.json() : null).then((d) => { if (d?.types) setOutreachTypes(d.types); }).catch(() => {});
+  }, []);
 
   // Debounce local search into store
   useEffect(() => {
@@ -645,6 +649,8 @@ const Submissions: React.FC = () => {
     if (filters.reviewOnly) count++;
     if (filters.hideLowEffort) count++;
     if ((filters.scoreMin ?? 0) > 0 || (filters.scoreMax ?? 100) < 100) count++;
+    if (filters.outreachHasType) count++;
+    if (filters.outreachLastType) count++;
     return count;
   }, [filters]);
 
@@ -997,6 +1003,71 @@ const Submissions: React.FC = () => {
                 <Checkbox checked={filters.source === s} onChange={() => {}} size={14} />
                 {sourceDisplayName(s)}
               </button>
+            ))}
+          </div>
+        </Dropdown>
+
+        {/* Outreach Dropdown */}
+        <Dropdown
+          open={openDropdown === 'outreach'}
+          onClose={() => setOpenDropdown(null)}
+          width={220}
+          trigger={
+            <button
+              onClick={() => setOpenDropdown(openDropdown === 'outreach' ? null : 'outreach')}
+              className="inline-flex items-center gap-1.5 rounded-md transition-all duration-150 shrink-0"
+              style={{
+                height: 32,
+                padding: '0 12px',
+                backgroundColor: (filters.outreachHasType || filters.outreachLastType) ? 'rgba(124,58,237,0.15)' : '#222',
+                border: (filters.outreachHasType || filters.outreachLastType) ? '1px solid rgba(124,58,237,0.4)' : '1px solid transparent',
+                color: (filters.outreachHasType || filters.outreachLastType) ? '#7c3aed' : '#8A8A8A',
+                fontSize: '12px',
+                fontFamily: "'Inter', sans-serif",
+                fontWeight: 500,
+              }}
+            >
+              {(() => {
+                const l = (k: string) => outreachTypes.find((t) => t.key === k)?.label ?? k;
+                if (filters.outreachLastType) return `Latest: ${l(filters.outreachLastType)}`;
+                if (filters.outreachHasType) return `Has: ${l(filters.outreachHasType)}`;
+                return 'Outreach';
+              })()}
+              <ChevronDown size={12} />
+            </button>
+          }
+        >
+          <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+            <div style={{ padding: '8px 12px 4px', fontSize: 10.5, fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Has any outreach of type</div>
+            <button
+              className="block w-full text-left px-3 py-1.5"
+              style={{ fontSize: 12, color: !filters.outreachHasType ? '#7c3aed' : '#F0F0F0', backgroundColor: !filters.outreachHasType ? 'rgba(124,58,237,0.1)' : 'transparent' }}
+              onClick={() => setFilters({ outreachHasType: null })}
+            >Any</button>
+            {outreachTypes.map((t) => (
+              <button key={`has-${t.key}`}
+                className="block w-full text-left px-3 py-1.5 transition-colors duration-100"
+                style={{ fontSize: 12, color: filters.outreachHasType === t.key ? '#7c3aed' : '#F0F0F0', backgroundColor: filters.outreachHasType === t.key ? 'rgba(124,58,237,0.1)' : 'transparent' }}
+                onClick={() => setFilters({ outreachHasType: filters.outreachHasType === t.key ? null : t.key })}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#222'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = filters.outreachHasType === t.key ? 'rgba(124,58,237,0.1)' : 'transparent'; }}
+              >{t.label}</button>
+            ))}
+            <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', margin: '6px 0' }} />
+            <div style={{ padding: '4px 12px 4px', fontSize: 10.5, fontWeight: 700, color: '#525252', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Most recent outreach is</div>
+            <button
+              className="block w-full text-left px-3 py-1.5"
+              style={{ fontSize: 12, color: !filters.outreachLastType ? '#7c3aed' : '#F0F0F0', backgroundColor: !filters.outreachLastType ? 'rgba(124,58,237,0.1)' : 'transparent' }}
+              onClick={() => setFilters({ outreachLastType: null })}
+            >Any</button>
+            {outreachTypes.map((t) => (
+              <button key={`last-${t.key}`}
+                className="block w-full text-left px-3 py-1.5 transition-colors duration-100"
+                style={{ fontSize: 12, color: filters.outreachLastType === t.key ? '#7c3aed' : '#F0F0F0', backgroundColor: filters.outreachLastType === t.key ? 'rgba(124,58,237,0.1)' : 'transparent' }}
+                onClick={() => setFilters({ outreachLastType: filters.outreachLastType === t.key ? null : t.key })}
+                onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#222'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = filters.outreachLastType === t.key ? 'rgba(124,58,237,0.1)' : 'transparent'; }}
+              >{t.label}</button>
             ))}
           </div>
         </Dropdown>

@@ -5,6 +5,7 @@ export type SubmissionWithRelations = Prisma.SubmissionGetPayload<{
   include: {
     tokenMatch: true;
     activities: { include: { author: { select: { name: true; email: true } } } };
+    outreachLog: true;
   };
 }>;
 
@@ -21,6 +22,12 @@ export function serialize(s: SubmissionWithRelations) {
     founders: (s.founders as any) ?? [],
     location: s.location ?? "",
     telegram_target: s.telegramTarget ?? "",
+    outreach_log: (s.outreachLog ?? []).map((o: any) => ({
+      id: o.id, type: o.type, detail: o.detail ?? "", occurredAt: o.occurredAt, createdBy: o.createdBy ?? "",
+    })),
+    outreach_types: Array.from(new Set((s.outreachLog ?? []).map((o: any) => o.type))),
+    last_outreach_type: (s.outreachLog ?? [])[0]?.type ?? "",
+    last_outreach_at: (s.outreachLog ?? [])[0]?.occurredAt ?? null,
     accomplishments: s.accomplishments ?? "",
     problem: s.problem ?? "",
     solution: s.solution ?? "",
@@ -63,4 +70,5 @@ export function serialize(s: SubmissionWithRelations) {
 export const INCLUDE = {
   tokenMatch: true,
   activities: { include: { author: { select: { name: true, email: true } } } },
+  outreachLog: { orderBy: { occurredAt: "desc" } },
 } as const;

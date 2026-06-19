@@ -50,7 +50,7 @@ const Terminal: React.FC = () => {
       setTurns((prev) => [...prev, { role: 'assistant', content: data.answer || '', panelSpec: data.panelSpec ?? null }]);
 
       const ranTools: string[] = Array.isArray(data.toolTrace) ? data.toolTrace.map((t: any) => t?.name) : [];
-      const WRITE = ['create_submission', 'propose_edit', 'ingest_project', 'create_slack_report', 'create_scheduled_job', 'resolve_proposal', 'add_note', 'set_contract_address', 'send_telegram'];
+      const WRITE = ['create_submission', 'propose_edit', 'ingest_project', 'create_slack_report', 'create_scheduled_job', 'resolve_proposal', 'add_note', 'set_contract_address', 'send_telegram', 'log_outreach'];
       if (ranTools.some((n) => WRITE.includes(n))) {
         const st = useSubmissionStore.getState();
         st.load();

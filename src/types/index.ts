@@ -48,6 +48,10 @@ export interface Submission {
   founders: Founder[];
   location: string;
   telegram_target?: string;
+  outreach_log?: { id: string; type: string; detail: string; occurredAt: string; createdBy: string }[];
+  outreach_types?: string[];
+  last_outreach_type?: string;
+  last_outreach_at?: string | null;
   accomplishments: string;
   problem: string;
   solution: string;
@@ -88,6 +92,8 @@ export interface FilterState {
   hideLowEffort: boolean;
   scoreMin?: number;
   scoreMax?: number;
+  outreachHasType?: string | null;   // project has ANY outreach of this type
+  outreachLastType?: string | null;  // project's MOST RECENT outreach is this type
 }
 
 export interface SortConfig {

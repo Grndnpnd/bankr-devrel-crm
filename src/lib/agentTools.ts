@@ -10,6 +10,7 @@ import type { ToolDef } from '@/lib/llm';
 import { fetchTokenData, isContractAddress } from '@/lib/discover';
 import { enrichSubmission } from '@/lib/enrich';
 import { enqueueOutbound } from '@/lib/outbound';
+import { logOutreach } from '@/lib/outreach';
 import { prisma } from '@/lib/prisma';
 import { EDITABLE_FIELDS, NEEDS_HELP_TAGS, isEditableField, allTrivial, snapshotCurrent, applyChangesToSubmission, resolveProposal, type Change } from '@/lib/proposedEdits';
 import { createSubmissionFromFields, findProjectMatch, type NewSubmissionFields, ingestText } from '@/lib/ingest';
@@ -207,6 +208,23 @@ export const AGENT_TOOLS: ToolDef[] = [
           note: { type: 'string', description: 'the note text to log' },
         },
         required: ['project', 'note'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'log_outreach',
+      description:
+        'Record an outreach-history entry on a project (e.g. "log a Reddit post for Solvr", "mark that we did co-marketing with Acme", "log Agent Hours for Nimbus on Tuesday"). Outreach types include Reddit Post, Co-marketing, Press Release, Agent Hours, Telegram Group Chat, plus any custom types the team has added — and if you pass a type that doesn\'t exist yet (e.g. "Hackathon"), it is created and reused going forward. This is distinct from add_note: outreach entries are typed and filterable, notes are freeform.',
+      parameters: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'the project name' },
+          type: { type: 'string', description: 'outreach type — a known type label/key, or a new custom label' },
+          detail: { type: 'string', description: 'optional note about this outreach' },
+        },
+        required: ['project', 'type'],
       },
     },
   },
@@ -413,6 +431,7 @@ export async function runTool(name: string, args: any, submissions: Submission[]
     add_note: 'submissions.edit',
     set_contract_address: 'submissions.enrich',
     send_telegram: 'submissions.edit',
+    log_outreach: 'submissions.edit',
     create_scheduled_job: 'cron.manage',
     create_slack_report: 'cron.manage',
   };
@@ -698,6 +717,22 @@ export async function runTool(name: string, args: any, submissions: Submission[]
       ok: true,
       status: res.status,
       message: `Proposal ${res.status}. ${action === 'approve' ? 'The change has been applied.' : 'The change was discarded.'} DO NOT call more tools — confirm to the user.`,
+    }) };
+  }
+
+  if (name === 'log_outreach') {
+    const project = (args?.project || '').trim();
+    const type = (args?.type || '').trim();
+    if (!project || !type) return { result: JSON.stringify({ error: 'need both project and type' }) };
+    const match = await findProjectMatch(project);
+    if (!match) return { result: JSON.stringify({ error: `no project matching "${project}"` }) };
+    const out = await logOutreach({ submissionId: match.id, type, detail: args?.detail ?? null, createdBy: ctx.userEmail ?? 'agent' });
+    if (!out.ok) return { result: JSON.stringify({ error: out.error }) };
+    return { result: JSON.stringify({
+      ok: true,
+      project: match.project,
+      type: out.type.label,
+      message: `Logged "${out.type.label}" outreach on "${match.project}". Confirm to the user and DO NOT call more tools.`,
     }) };
   }
 
