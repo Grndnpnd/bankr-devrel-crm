@@ -50,7 +50,7 @@ const Terminal: React.FC = () => {
       setTurns((prev) => [...prev, { role: 'assistant', content: data.answer || '', panelSpec: data.panelSpec ?? null }]);
 
       const ranTools: string[] = Array.isArray(data.toolTrace) ? data.toolTrace.map((t: any) => t?.name) : [];
-      const WRITE = ['create_submission', 'propose_edit', 'ingest_project', 'create_slack_report', 'create_scheduled_job', 'resolve_proposal'];
+      const WRITE = ['create_submission', 'propose_edit', 'ingest_project', 'create_slack_report', 'create_scheduled_job', 'resolve_proposal', 'add_note'];
       if (ranTools.some((n) => WRITE.includes(n))) {
         const st = useSubmissionStore.getState();
         st.load();
@@ -66,8 +66,8 @@ const Terminal: React.FC = () => {
   return (
     <div className="flex flex-col" style={{ height: 'calc(100vh - 48px)' }}>
       {/* Header */}
-      <div className="flex items-center gap-3" style={{ padding: '16px 28px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-        <div className="rounded-full overflow-hidden" style={{ width: 38, height: 38, backgroundColor: 'rgba(245,166,35,0.14)' }}>
+      <div className="flex items-center gap-3" style={{ padding: '16px 28px', borderBottom: '1px solid rgba(255,255,255,0.07)', background: 'linear-gradient(90deg, rgba(124,58,237,0.16) 0%, rgba(124,58,237,0.04) 40%, transparent 100%)' }}>
+        <div className="rounded-full overflow-hidden" style={{ width: 38, height: 38, backgroundColor: 'rgba(124,58,237,0.18)' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/brand/agent-avatar.gif" alt="" style={{ width: 38, height: 38, objectFit: 'cover' }} />
         </div>
@@ -99,7 +99,7 @@ const Terminal: React.FC = () => {
             <div key={i} style={{ marginBottom: 18 }}>
               <div className="flex items-start gap-3" style={{ flexDirection: t.role === 'user' ? 'row-reverse' : 'row' }}>
                 {t.role === 'assistant' && (
-                  <div className="rounded-full overflow-hidden shrink-0" style={{ width: 30, height: 30, backgroundColor: 'rgba(245,166,35,0.14)', marginTop: 2 }}>
+                  <div className="rounded-full overflow-hidden shrink-0" style={{ width: 30, height: 30, backgroundColor: 'rgba(124,58,237,0.18)', marginTop: 2 }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src="/brand/agent-avatar.gif" alt="" style={{ width: 30, height: 30, objectFit: 'cover' }} />
                   </div>
@@ -110,8 +110,8 @@ const Terminal: React.FC = () => {
                   fontSize: 14,
                   lineHeight: 1.55,
                   whiteSpace: 'pre-wrap',
-                  backgroundColor: t.role === 'user' ? 'rgba(245,166,35,0.14)' : '#1A1A1A',
-                  border: t.role === 'user' ? '1px solid rgba(245,166,35,0.22)' : '1px solid rgba(255,255,255,0.07)',
+                  backgroundColor: t.role === 'user' ? 'rgba(124,58,237,0.16)' : '#1A1A1A',
+                  border: t.role === 'user' ? '1px solid rgba(124,58,237,0.28)' : '1px solid rgba(255,255,255,0.07)',
                   color: t.role === 'user' ? '#F0F0F0' : '#C9C9C9',
                 }}>
                   {t.content}
@@ -148,7 +148,7 @@ const Terminal: React.FC = () => {
           />
           <button onClick={() => send(input)} disabled={loading || !input.trim()}
             className="inline-flex items-center justify-center rounded-lg shrink-0"
-            style={{ height: 44, width: 44, backgroundColor: input.trim() ? '#F5A623' : '#1A1A1A', color: input.trim() ? '#0D0D0D' : '#525252', border: '1px solid rgba(255,255,255,0.1)' }}>
+            style={{ height: 44, width: 44, backgroundColor: input.trim() ? '#7c3aed' : '#1A1A1A', color: input.trim() ? '#F0F0F0' : '#525252', border: '1px solid rgba(255,255,255,0.1)' }}>
             {loading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
           </button>
         </div>

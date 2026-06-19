@@ -50,6 +50,9 @@ const Sidebar: React.FC = () => {
           height: '48px',
           padding: collapsed ? '0 16px' : '0 24px',
           borderBottom: '1px solid rgba(255,255,255,0.06)',
+          background: collapsed
+            ? 'transparent'
+            : 'linear-gradient(90deg, rgba(124,58,237,0.22) 0%, rgba(124,58,237,0.08) 70%, transparent 100%)',
         }}
       >
         <Logo collapsed={collapsed} />
@@ -58,7 +61,7 @@ const Sidebar: React.FC = () => {
       <nav className="flex-1 py-3 flex flex-col gap-0.5 px-2">
         {items.map((item) => {
           const active = isActiveFor(item.to);
-          return (
+          const link = (
             <Link
               key={item.to}
               href={item.to}
@@ -104,34 +107,40 @@ const Sidebar: React.FC = () => {
               )}
             </Link>
           );
+          // Named dashboard layouts render directly beneath the Dashboard item.
+          if (item.to === '/' && !collapsed && dashboardLayouts.length > 0) {
+            return (
+              <React.Fragment key="dashboard-with-layouts">
+                {link}
+                <div style={{ marginTop: 2, marginBottom: 4 }}>
+                  {dashboardLayouts.map((l) => {
+                    const isActive = pathname === '/' && activeLayoutId === l.id;
+                    return (
+                      <button
+                        key={l.id}
+                        onClick={() => { switchLayout(l.id); if (pathname !== '/') router.push('/'); }}
+                        className="flex items-center gap-2.5 rounded-md w-full transition-all duration-200"
+                        style={{
+                          padding: '0 4px 0 26px', height: 32, marginLeft: 8,
+                          backgroundColor: isActive ? '#222' : 'transparent',
+                          color: isActive ? '#F0F0F0' : '#8A8A8A',
+                          fontFamily: "'Inter', sans-serif", fontSize: 12.5, fontWeight: 500,
+                          border: 'none', cursor: 'pointer', textAlign: 'left',
+                        }}
+                        onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = '#1f1f1f'; }}
+                        onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = 'transparent'; }}
+                      >
+                        <LayoutGrid size={14} style={{ color: isActive ? '#F5A623' : '#525252', flexShrink: 0 }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </React.Fragment>
+            );
+          }
+          return link;
         })}
-        {/* Named dashboard layouts — nested under Dashboard */}
-        {!collapsed && dashboardLayouts.length > 0 && (
-          <div style={{ marginTop: 2, marginBottom: 4 }}>
-            {dashboardLayouts.map((l) => {
-              const isActive = pathname === '/' && activeLayoutId === l.id;
-              return (
-                <button
-                  key={l.id}
-                  onClick={() => { switchLayout(l.id); if (pathname !== '/') router.push('/'); }}
-                  className="flex items-center gap-2.5 rounded-md w-full transition-all duration-200"
-                  style={{
-                    padding: '0 4px 0 26px', height: 32, marginLeft: 8,
-                    backgroundColor: isActive ? '#222' : 'transparent',
-                    color: isActive ? '#F0F0F0' : '#8A8A8A',
-                    fontFamily: "'Inter', sans-serif", fontSize: 12.5, fontWeight: 500,
-                    border: 'none', cursor: 'pointer', textAlign: 'left',
-                  }}
-                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = '#1f1f1f'; }}
-                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.backgroundColor = 'transparent'; }}
-                >
-                  <LayoutGrid size={14} style={{ color: isActive ? '#F5A623' : '#525252', flexShrink: 0 }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.name}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
       </nav>
 
       <div className="px-2 pb-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>

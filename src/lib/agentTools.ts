@@ -195,6 +195,22 @@ export const AGENT_TOOLS: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'add_note',
+      description:
+        'Add an outreach note / contact-log entry to an existing project (e.g. "add a note to Solvr: just got off a call, need to follow up Thursday about GTM"). This logs a communication or reminder on the project timeline and is attributed to you. Use this for notes/reminders/call logs — NOT for editing the project\'s data fields (use propose_edit for field changes).',
+      parameters: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'the project name' },
+          note: { type: 'string', description: 'the note text to log' },
+        },
+        required: ['project', 'note'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'propose_edit',
       description:
         'Propose changes to a project card from a natural-language instruction (e.g. "update Solvr goals: add looking for partnerships; add flags Partnerships and GTM"). You resolve the project, the target field(s), and the operation. Trivial additive edits (append text / add flags) APPLY IMMEDIATELY; destructive (replace/remove) or multi-field or ambiguous edits are filed for human review. Always confirm your interpretation to the user in your reply. Editable fields: ' + Object.keys(EDITABLE_FIELDS).join(', ') + '. Needs-help flags must be one of: ' + NEEDS_HELP_TAGS.join(', ') + '.',
@@ -360,6 +376,7 @@ export async function runTool(name: string, args: any, submissions: Submission[]
     create_submission: 'submissions.edit',
     propose_edit: 'submissions.edit',
     resolve_proposal: 'submissions.edit',
+    add_note: 'submissions.edit',
     create_scheduled_job: 'cron.manage',
     create_slack_report: 'cron.manage',
   };
@@ -646,6 +663,29 @@ export async function runTool(name: string, args: any, submissions: Submission[]
       status: res.status,
       message: `Proposal ${res.status}. ${action === 'approve' ? 'The change has been applied.' : 'The change was discarded.'} DO NOT call more tools — confirm to the user.`,
     }) };
+  }
+
+  if (name === 'add_note') {
+    const project = (args?.project || '').trim();
+    const note = (args?.note || '').trim();
+    if (!project || !note) return { result: JSON.stringify({ error: 'need both project and note' }) };
+    if (!ctx.userId || ctx.role === 'GUEST') {
+      return { result: JSON.stringify({ error: 'notes must be added by a mapped CRM user; your account is not linked.' }) };
+    }
+    const match = await findProjectMatch(project);
+    if (!match) return { result: JSON.stringify({ error: `no project matching "${project}"` }) };
+    try {
+      await prisma.outreachActivity.create({
+        data: { submissionId: match.id, authorId: ctx.userId, body: note, kind: 'note' },
+      });
+      return { result: JSON.stringify({
+        ok: true,
+        project: match.project,
+        message: `Logged a note on "${match.project}". Confirm to the user and DO NOT call more tools.`,
+      }) };
+    } catch (e: any) {
+      return { result: JSON.stringify({ error: e?.message ?? 'failed to add note' }) };
+    }
   }
 
   if (name === 'propose_edit') {

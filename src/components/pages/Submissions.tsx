@@ -16,6 +16,7 @@ import {
   Plus,
   AlertTriangle,
   FileEdit,
+  Trash2,
 } from 'lucide-react';
 import { useSubmissionStore, useOwnerNames } from '@/store/useSubmissionStore';
 import SubmissionFormModal, { type SubmissionFormValues } from '@/components/SubmissionFormModal';
@@ -560,10 +561,12 @@ const Submissions: React.FC = () => {
     submissions: allSubs,
     filters,
     sort,
+    searchQuery,
     setFilters,
     setSort,
     updateStage,
     updateOwner,
+    deleteSubmission,
     filteredSubmissions,
     me,
     createSubmission,
@@ -584,7 +587,7 @@ const Submissions: React.FC = () => {
     return r.ok ? null : (r.error || 'failed');
   }, [createSubmission]);
 
-  const results = useMemo(() => filteredSubmissions(), [allSubs, filters, sort, filteredSubmissions]);
+  const results = useMemo(() => filteredSubmissions(), [allSubs, filters, sort, searchQuery, filteredSubmissions]);
 
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   const [rowsPerPage, setRowsPerPage] = useState(25);
@@ -701,6 +704,18 @@ const Submissions: React.FC = () => {
     },
     [selectedIds, updateOwner, clearAll]
   );
+
+  const handleBulkDelete = useCallback(async () => {
+    const n = selectedIds.size;
+    if (n === 0) return;
+    if (!window.confirm(`Delete ${n} submission${n > 1 ? 's' : ''}? This cannot be undone.`)) return;
+    const ids = Array.from(selectedIds);
+    const results = await Promise.all(ids.map((id) => deleteSubmission(id)));
+    const ok = results.filter(Boolean).length;
+    clearAll();
+    if (ok === n) toast.success(`Deleted ${ok} submission${ok > 1 ? 's' : ''}`);
+    else toast.error(`Deleted ${ok} of ${n} — ${n - ok} failed (admin only).`);
+  }, [selectedIds, deleteSubmission, clearAll]);
 
   /* ─── Render ─── */
   return (
@@ -1774,6 +1789,18 @@ const Submissions: React.FC = () => {
             </Dropdown>
 
             <div className="w-px h-6" style={{ backgroundColor: 'rgba(255,255,255,0.06)' }} />
+
+            {me?.role === 'ADMIN' && (
+              <button
+                onClick={handleBulkDelete}
+                className="inline-flex items-center gap-1.5 transition-colors duration-150"
+                style={{ fontSize: '12px', color: '#E5544B', fontFamily: "'Inter', sans-serif", fontWeight: 600 }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = '#ff7a70'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = '#E5544B'; }}
+              >
+                <Trash2 size={13} /> Delete
+              </button>
+            )}
 
             <button
               onClick={clearAll}

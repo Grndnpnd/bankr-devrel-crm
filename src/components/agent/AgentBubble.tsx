@@ -59,7 +59,7 @@ const AgentBubble: React.FC = () => {
       // If the agent ran any write tool, refresh the relevant data so the UI
       // reflects the change without a manual page reload.
       const ranTools: string[] = Array.isArray(data.toolTrace) ? data.toolTrace.map((t: any) => t?.name) : [];
-      const WRITE = ['create_submission', 'propose_edit', 'ingest_project', 'create_slack_report', 'create_scheduled_job'];
+      const WRITE = ['create_submission', 'propose_edit', 'ingest_project', 'create_slack_report', 'create_scheduled_job', 'add_note', 'resolve_proposal'];
       if (ranTools.some((n) => WRITE.includes(n))) {
         const st = useSubmissionStore.getState();
         st.load();              // submissions (covers create/edit/ingest)
@@ -90,9 +90,9 @@ const AgentBubble: React.FC = () => {
           style={{
             position: 'fixed', bottom: 24, right: 24, zIndex: 50,
             width: 56, height: 56, borderRadius: 28,
-            backgroundColor: '#F5A623', color: '#0D0D0D',
+            backgroundColor: '#7c3aed', color: '#F0F0F0',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 6px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(245,166,35,0.3)',
+            boxShadow: '0 6px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(124,58,237,0.4)',
             cursor: 'pointer',
           }}
         >
@@ -113,7 +113,7 @@ const AgentBubble: React.FC = () => {
           {/* Header */}
           <div className="flex items-center justify-between" style={{ padding: '14px 16px', borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
             <div className="flex items-center gap-2.5">
-              <div className="flex items-center justify-center rounded-full overflow-hidden" style={{ width: 30, height: 30, backgroundColor: 'rgba(245,166,35,0.14)' }}>
+              <div className="flex items-center justify-center rounded-full overflow-hidden" style={{ width: 30, height: 30, backgroundColor: 'rgba(124,58,237,0.18)' }}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src="/brand/agent-avatar.gif" alt="" style={{ width: 30, height: 30, objectFit: 'cover' }} />
               </div>
@@ -145,8 +145,8 @@ const AgentBubble: React.FC = () => {
                 <div style={{ display: 'flex', justifyContent: t.role === 'user' ? 'flex-end' : 'flex-start' }}>
                   <div style={{
                     maxWidth: '88%', padding: '9px 12px', borderRadius: 12, fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap',
-                    backgroundColor: t.role === 'user' ? 'rgba(245,166,35,0.14)' : '#1A1A1A',
-                    border: t.role === 'user' ? '1px solid rgba(245,166,35,0.22)' : '1px solid rgba(255,255,255,0.07)',
+                    backgroundColor: t.role === 'user' ? 'rgba(124,58,237,0.16)' : '#1A1A1A',
+                    border: t.role === 'user' ? '1px solid rgba(124,58,237,0.28)' : '1px solid rgba(255,255,255,0.07)',
                     color: t.role === 'user' ? '#F0F0F0' : '#C9C9C9',
                   }}>
                     {t.content}
@@ -158,7 +158,7 @@ const AgentBubble: React.FC = () => {
                     <AnalyticsPanel spec={t.panelSpec} compact />
                     <div className="flex items-center gap-2" style={{ marginTop: 10 }}>
                       <button onClick={() => savePanel(t.panelSpec!, false)} className="inline-flex items-center gap-1.5 rounded-md"
-                        style={{ height: 28, padding: '0 10px', fontSize: 12, fontWeight: 600, backgroundColor: '#F5A623', color: '#0D0D0D' }}>
+                        style={{ height: 28, padding: '0 10px', fontSize: 12, fontWeight: 600, backgroundColor: '#7c3aed', color: '#F0F0F0' }}>
                         <Plus size={12} /> Save
                       </button>
                       <button onClick={() => savePanel(t.panelSpec!, true)} className="inline-flex items-center gap-1.5 rounded-md"
@@ -190,7 +190,7 @@ const AgentBubble: React.FC = () => {
                 style={{ fontSize: 13, color: '#F0F0F0' }}
               />
               <button onClick={() => send()} disabled={busy || !input.trim()} className="flex items-center justify-center rounded-lg"
-                style={{ width: 30, height: 30, backgroundColor: input.trim() && !busy ? '#F5A623' : 'rgba(245,166,35,0.2)', cursor: input.trim() && !busy ? 'pointer' : 'not-allowed' }}>
+                style={{ width: 30, height: 30, backgroundColor: input.trim() && !busy ? '#7c3aed' : 'rgba(124,58,237,0.25)', cursor: input.trim() && !busy ? 'pointer' : 'not-allowed' }}>
                 {busy ? <Loader2 size={14} className="animate-spin" style={{ color: '#0D0D0D' }} /> : <Send size={13} style={{ color: input.trim() ? '#0D0D0D' : '#525252' }} />}
               </button>
             </div>
