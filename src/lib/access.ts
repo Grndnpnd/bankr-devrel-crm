@@ -55,7 +55,11 @@ const MATRIX: Record<Capability, Role[]> = {
 /** Does this role have this capability? Unknown role → false (fail closed). */
 export function can(role: string | null | undefined, capability: Capability): boolean {
   if (!role) return false;
-  const allowed = MATRIX[capability];
+  // ADMIN is hard-locked to every capability and can never be edited away — this
+  // prevents an admin from accidentally revoking users.manage and locking everyone
+  // out of the Admin page with no way to grant it back.
+  if (role === 'ADMIN') return true;
+  const allowed = effectiveMatrix()[capability];
   return !!allowed && (allowed as string[]).includes(role);
 }
 
@@ -65,4 +69,50 @@ export function capabilitiesFor(role: string | null | undefined): Capability[] {
   return (Object.keys(MATRIX) as Capability[]).filter((c) => can(role, c));
 }
 
+// ─── Runtime overrides ────────────────────────────────────────────────────────
+// The MATRIX above is the DEFAULT. An admin can override it from the Admin page;
+// overrides are stored in the DB and loaded into this in-memory cache so can()
+// stays synchronous (it's called from ~30 places, server + client). A null/empty
+// override means "use the default". ADMIN is always all-true regardless (see can()).
+
+let OVERRIDES: Partial<Record<Capability, Role[]>> | null = null;
+
+/** Replace the active overrides (call after loading from DB or receiving on the client). */
+export function setCapabilityOverrides(overrides: Partial<Record<Capability, Role[]>> | null): void {
+  OVERRIDES = overrides && typeof overrides === 'object' ? overrides : null;
+}
+
+/** The matrix actually in effect: defaults with any admin overrides applied per-capability. */
+export function effectiveMatrix(): Record<Capability, Role[]> {
+  if (!OVERRIDES) return MATRIX;
+  const merged = {} as Record<Capability, Role[]>;
+  for (const cap of Object.keys(MATRIX) as Capability[]) {
+    const ov = OVERRIDES[cap];
+    let roles = Array.isArray(ov) ? ov.filter((r): r is Role => (ROLES as string[]).includes(r)) : MATRIX[cap];
+    // ADMIN always present in every cell (hard-lock, mirrors can()).
+    if (!roles.includes('ADMIN')) roles = ['ADMIN', ...roles];
+    merged[cap] = roles;
+  }
+  return merged;
+}
+
+/** The default matrix (for the Admin UI's "reset to defaults"). */
+export function defaultMatrix(): Record<Capability, Role[]> {
+  return MATRIX;
+}
+
 export const isValidRole = (r: string): r is Role => (ROLES as string[]).includes(r);
+
+/** Human-readable labels + grouping for the Admin permissions editor. */
+export const CAPABILITY_META: { key: Capability; label: string; group: string; note?: string }[] = [
+  { key: 'submissions.view',   label: 'View submissions',        group: 'Pipeline' },
+  { key: 'submissions.edit',   label: 'Edit / create / delete',  group: 'Pipeline', note: 'includes bulk delete & adding notes' },
+  { key: 'submissions.enrich', label: 'Enrich (set contract / fetch token)', group: 'Pipeline' },
+  { key: 'analytics.use',      label: 'Use analytics & agent',   group: 'Analytics' },
+  { key: 'panels.create',      label: 'Create dashboard panels', group: 'Analytics' },
+  { key: 'cron.manage',        label: 'Manage scheduled jobs',   group: 'Automation' },
+  { key: 'import.run',         label: 'Run imports',             group: 'Data' },
+  { key: 'users.manage',       label: 'Manage users & roles',    group: 'Administration' },
+  { key: 'settings.scoring',   label: 'Edit scoring weights',    group: 'Administration' },
+  { key: 'settings.sources',   label: 'Manage import sources',   group: 'Administration' },
+];

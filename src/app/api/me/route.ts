@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession, createToken, setSessionCookie } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
+import { effectiveMatrix } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,8 @@ export async function GET() {
     select: { id: true, email: true, name: true, role: true, dashboardLayout: true, dashboardDefault: true, dashboardLayouts: true, activeLayoutId: true, savedPanels: true },
   });
   if (!user) return NextResponse.json({ error: "not found" }, { status: 404 });
-  return NextResponse.json(user);
+  // Ship the effective capability matrix so client-side can() reflects admin edits.
+  return NextResponse.json({ ...user, capabilityMatrix: effectiveMatrix() });
 }
 
 /** Update your own profile (name). Re-issues the session cookie so the new name shows immediately. */

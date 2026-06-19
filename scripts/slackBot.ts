@@ -99,6 +99,9 @@ async function handleQuestion(channel: string, threadTs: string | undefined, sla
   }
 
   const id = await resolveIdentity(slackUserId);
+  // Keep capability overrides fresh so the bot's can() checks reflect admin edits
+  // (the bot is a separate worker that never calls getSession).
+  try { await (await import('../src/lib/capabilityOverrides')).ensureCapabilityOverrides(); } catch { /* non-fatal */ }
   // Read the thread so multi-turn follow-ups work conversationally.
   const history: ToolMessage[] = await fetchThreadHistory(channel, threadTs, rawText);
 

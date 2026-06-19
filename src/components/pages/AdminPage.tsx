@@ -1,20 +1,22 @@
 'use client';
 import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Database, RefreshCw, Users } from 'lucide-react';
+import { Database, RefreshCw, Users, ShieldCheck } from 'lucide-react';
 import '@/components/settings/settings.css';
 import SourcesTab from '@/components/settings/SourcesTab';
 import CoreRefreshTab from '@/components/settings/CoreRefreshTab';
 import UsersTab from '@/components/settings/UsersTab';
+import PermissionsTab from '@/components/settings/PermissionsTab';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import { can } from '@/lib/access';
 
-type AdminTab = 'sources' | 'core-refresh' | 'users';
+type AdminTab = 'sources' | 'core-refresh' | 'users' | 'permissions';
 
 const TABS: { id: AdminTab; label: string; icon: React.ElementType; cap: Parameters<typeof can>[1] }[] = [
   { id: 'sources', label: 'Sources', icon: Database, cap: 'settings.sources' },
   { id: 'core-refresh', label: 'Core Refresh', icon: RefreshCw, cap: 'settings.sources' },
   { id: 'users', label: 'Users', icon: Users, cap: 'users.manage' },
+  { id: 'permissions', label: 'Permissions', icon: ShieldCheck, cap: 'users.manage' },
 ];
 
 const AdminPage: React.FC = () => {
@@ -63,6 +65,7 @@ const AdminPage: React.FC = () => {
         {safeActive === 'sources' && <SourcesTab />}
         {safeActive === 'core-refresh' && <CoreRefreshTab />}
         {safeActive === 'users' && <UsersTab />}
+        {safeActive === 'permissions' && <PermissionsTab />}
       </motion.div>
     </div>
   );

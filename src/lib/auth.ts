@@ -50,7 +50,11 @@ export async function verifyToken(token: string): Promise<SessionUser | null> {
 /** Read the current session in server components / route handlers. */
 export async function getSession(): Promise<SessionUser | null> {
   const token = cookies().get(COOKIE)?.value;
-  return token ? verifyToken(token) : null;
+  if (!token) return null;
+  // Keep the capability-override cache warm so can() reflects admin edits.
+  // (TTL-cached — not a DB hit on every call.)
+  try { await (await import("@/lib/capabilityOverrides")).ensureCapabilityOverrides(); } catch { /* non-fatal */ }
+  return verifyToken(token);
 }
 
 export async function setSessionCookie(token: string) {

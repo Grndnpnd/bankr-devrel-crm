@@ -184,6 +184,7 @@ model OutreachActivity {
 model AppConfig {
   id              String   @id @default("default")
   teamSlackWebhook String?              // admin-set team-wide Slack channel webhook
+  capabilityOverrides Json?             // admin-edited role→capability overrides; null cells fall back to code defaults
   updatedAt       DateTime @updatedAt
   updatedBy       String?
 }

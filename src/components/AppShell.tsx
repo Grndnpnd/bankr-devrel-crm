@@ -28,6 +28,19 @@ export default function AppShell({ me, children }: { me: SessionUser; children: 
     load();
     loadUsers();
     loadProposals();
+    // Sync client-side can() with the admin-edited capability matrix (app-wide,
+    // so gated UI on every page reflects current permissions).
+    (async () => {
+      try {
+        const res = await fetch('/api/me');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.capabilityMatrix) {
+          const { setCapabilityOverrides } = await import('@/lib/access');
+          setCapabilityOverrides(data.capabilityMatrix);
+        }
+      } catch { /* non-fatal — falls back to code defaults */ }
+    })();
   }, [me, setMe, load, loadUsers, loadProposals]);
 
   return (
