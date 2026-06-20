@@ -550,8 +550,13 @@ const UsersTab: React.FC = () => {
                               animate={{ opacity: 1, y: 0 }}
                               exit={{ opacity: 0, y: -4 }}
                               transition={{ duration: 0.1 }}
-                              className="absolute z-20 mt-1"
+                              className="absolute z-20"
                               style={{
+                                // Flip upward for the last 2 rows so the menu isn't clipped
+                                // by the table's overflow container.
+                                ...(i >= users.length - 2
+                                  ? { bottom: '100%', marginBottom: 4 }
+                                  : { top: '100%', marginTop: 4 }),
                                 backgroundColor: '#1A1A1A',
                                 border: '1px solid rgba(255,255,255,0.06)',
                                 borderRadius: '8px',

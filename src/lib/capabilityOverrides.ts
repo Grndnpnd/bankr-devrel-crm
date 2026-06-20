@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { setCapabilityOverrides, type Capability, type Role } from "@/lib/access";
+import { setCapabilityOverrides, setUserCapabilityOverrides, type Capability, type Role, type UserOverride } from "@/lib/access";
 
 /**
  * Loads the admin-edited capability overrides from AppConfig into the in-memory
@@ -18,6 +18,10 @@ async function doLoad(): Promise<void> {
     const raw = (cfg as any)?.capabilityOverrides;
     setCapabilityOverrides(
       raw && typeof raw === "object" ? (raw as Partial<Record<Capability, Role[]>>) : null
+    );
+    const rawUser = (cfg as any)?.userCapabilityOverrides;
+    setUserCapabilityOverrides(
+      rawUser && typeof rawUser === "object" ? (rawUser as Record<string, UserOverride>) : null
     );
   } catch {
     // On failure, leave whatever's cached (fail to current behavior, not open).

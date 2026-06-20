@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { LayoutGrid, Check, RotateCcw, EyeOff, GripVertical, BookmarkPlus, Users, Trash2, Save } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSubmissionStore, type DashboardWidget } from '@/store/useSubmissionStore';
+import { SupportDataProvider } from '@/components/dashboard/widgets/SupportWidgets';
 import AnalyticsPanel from '@/components/analytics/AnalyticsPanel';
 import DataCard from '@/components/DataCard';
 
@@ -67,8 +68,9 @@ const WidgetControls: React.FC<{
 };
 
 /* ─── Dashboard Page ─── */
-const Dashboard: React.FC = () => {
-  const { dashboardLayout, dashboardDefault, loadDashboardLayout, saveDashboardLayout, saveDashboardDefault, savedPanels, togglePanelVisibility, removeSavedPanel, dashboardLayouts, activeLayoutId, saveNamedLayout, renameLayout, deleteLayout } = useSubmissionStore();
+const DashboardInner: React.FC = () => {
+  const { dashboardLayout, dashboardDefault, loadDashboardLayout, saveDashboardLayout, saveDashboardDefault, savedPanels, togglePanelVisibility, removeSavedPanel, dashboardLayouts, activeLayoutId, saveNamedLayout, renameLayout, deleteLayout, userCapabilities } = useSubmissionStore();
+  const capsSet = useMemo(() => new Set(userCapabilities), [userCapabilities]);
   const activeLayout = dashboardLayouts.find((l) => l.id === activeLayoutId) || null;
   const panelIds = useMemo(() => savedPanels.map((p) => p.id), [savedPanels]);
   const panelById = useMemo(() => new Map(savedPanels.map((p) => [p.id, p])), [savedPanels]);
@@ -79,7 +81,7 @@ const Dashboard: React.FC = () => {
   // Load the saved layout once on mount.
   useEffect(() => { loadDashboardLayout(); }, [loadDashboardLayout]);
   // Keep the working copy in sync with the store (reconciled against the registry).
-  useEffect(() => { setDraft(reconcileLayout(dashboardLayout, panelIds)); }, [dashboardLayout, panelIds]);
+  useEffect(() => { setDraft(reconcileLayout(dashboardLayout, panelIds, capsSet)); }, [dashboardLayout, panelIds]);
 
   const ordered = useMemo(() => [...draft].sort((a, b) => a.order - b.order), [draft]);
   const visible = ordered.filter((w) => w.visible);
@@ -170,8 +172,8 @@ const Dashboard: React.FC = () => {
     await saveDashboardLayout(resequence(visible).concat(hidden.map((h, i) => ({ ...h, order: visible.length + i }))));
     setEditing(false);
   };
-  const cancel = () => { setDraft(reconcileLayout(dashboardLayout, panelIds)); setEditing(false); };
-  const reset = () => setDraft(reconcileLayout(dashboardDefault, panelIds));
+  const cancel = () => { setDraft(reconcileLayout(dashboardLayout, panelIds, capsSet)); setEditing(false); };
+  const reset = () => setDraft(reconcileLayout(dashboardDefault, panelIds, capsSet));
   const saveAsDefault = async () => {
     const snapshot = resequence(visible).concat(hidden.map((h, i) => ({ ...h, order: visible.length + i })));
     await saveDashboardDefault(snapshot);
@@ -418,5 +420,11 @@ const Dashboard: React.FC = () => {
     </div>
   );
 };
+
+const Dashboard: React.FC = () => (
+  <SupportDataProvider>
+    <DashboardInner />
+  </SupportDataProvider>
+);
 
 export default Dashboard;

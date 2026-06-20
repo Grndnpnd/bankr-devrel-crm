@@ -2,20 +2,27 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession, createToken, setSessionCookie } from "@/lib/auth";
 import { Prisma } from "@prisma/client";
-import { effectiveMatrix } from "@/lib/access";
+import { effectiveMatrix, capabilitiesForUser } from "@/lib/access";
+import { ensureCapabilityOverrides } from "@/lib/capabilityOverrides";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  await ensureCapabilityOverrides();  // make sure role + per-user overrides are loaded
   const user = await prisma.user.findUnique({
     where: { id: session.id },
     select: { id: true, email: true, name: true, role: true, dashboardLayout: true, dashboardDefault: true, dashboardLayouts: true, activeLayoutId: true, savedPanels: true },
   });
   if (!user) return NextResponse.json({ error: "not found" }, { status: 404 });
-  // Ship the effective capability matrix so client-side can() reflects admin edits.
-  return NextResponse.json({ ...user, capabilityMatrix: effectiveMatrix() });
+  // Ship the effective capability matrix (for client-side can()) AND this user's effective
+  // capabilities (role + per-user grants/revokes) so the dashboard can filter widgets.
+  return NextResponse.json({
+    ...user,
+    capabilityMatrix: effectiveMatrix(),
+    capabilities: capabilitiesForUser(user.role, user.id),
+  });
 }
 
 /** Update your own profile (name). Re-issues the session cookie so the new name shows immediately. */

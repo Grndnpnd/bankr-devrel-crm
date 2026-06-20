@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { getSession } from "@/lib/auth";
-import { can, effectiveMatrix, defaultMatrix, CAPABILITY_META, ROLES, ROLE_LABELS, type Capability, type Role } from "@/lib/access";
+import { can, effectiveMatrix, defaultMatrix, getUserCapabilityOverrides, CAPABILITY_META, ROLES, ROLE_LABELS, type Capability, type Role, type UserOverride } from "@/lib/access";
 import { reloadCapabilityOverrides } from "@/lib/capabilityOverrides";
 
 export const dynamic = "force-dynamic";
@@ -13,12 +13,20 @@ export async function GET() {
   if (!session || !can(session.role, "users.manage")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
+  await reloadCapabilityOverrides(); // ensure per-user overrides are fresh
+  const users = await prisma.user.findMany({
+    where: { isActive: true },
+    select: { id: true, email: true, name: true, role: true },
+    orderBy: { email: "asc" },
+  });
   return NextResponse.json({
     matrix: effectiveMatrix(),
     defaults: defaultMatrix(),
     capabilities: CAPABILITY_META,
     roles: ROLES,
     roleLabels: ROLE_LABELS,
+    users,
+    userOverrides: getUserCapabilityOverrides(),
   });
 }
 
@@ -33,6 +41,26 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const body = await req.json().catch(() => ({}));
+
+  // ── Per-user overrides path: body { userOverrides: { [userId]: {grant:[],revoke:[]} } } ──
+  if (body?.userOverrides && typeof body.userOverrides === "object") {
+    const validCaps = new Set(CAPABILITY_META.map((m) => m.key));
+    const cleanUser: Record<string, UserOverride> = {};
+    for (const [userId, ov] of Object.entries(body.userOverrides as Record<string, any>)) {
+      const grant = Array.isArray(ov?.grant) ? (ov.grant as string[]).filter((c) => validCaps.has(c as Capability)) as Capability[] : [];
+      const revoke = Array.isArray(ov?.revoke) ? (ov.revoke as string[]).filter((c) => validCaps.has(c as Capability)) as Capability[] : [];
+      // Drop empty entries so the store doesn't bloat with no-op users.
+      if (grant.length || revoke.length) cleanUser[userId] = { grant, revoke };
+    }
+    await prisma.appConfig.upsert({
+      where: { id: "default" },
+      update: { userCapabilityOverrides: cleanUser as unknown as Prisma.InputJsonValue, updatedBy: session.email },
+      create: { id: "default", userCapabilityOverrides: cleanUser as unknown as Prisma.InputJsonValue, updatedBy: session.email },
+    });
+    await reloadCapabilityOverrides();
+    return NextResponse.json({ ok: true, userOverrides: cleanUser });
+  }
+
   const input = body?.matrix;
   if (!input || typeof input !== "object") {
     return NextResponse.json({ error: "matrix required" }, { status: 400 });

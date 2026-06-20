@@ -232,6 +232,7 @@ model AppConfig {
   id              String   @id @default("default")
   teamSlackWebhook String?              // admin-set team-wide Slack channel webhook
   capabilityOverrides Json?             // admin-edited role→capability overrides; null cells fall back to code defaults
+  userCapabilityOverrides Json?         // per-user overrides: { [userId]: { grant: Capability[], revoke: Capability[] } }
   customOutreachTypes Json?             // persisted custom outreach-type labels [{key,label}] added by users
   updatedAt       DateTime @updatedAt
   updatedBy       String?

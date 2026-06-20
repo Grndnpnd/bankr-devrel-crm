@@ -10,15 +10,15 @@ import { can, type Capability } from '@/lib/access';
 interface NavItem { to: string; label: string; icon: React.ElementType; adminOnly?: boolean; cap?: Capability }
 
 const navItems: NavItem[] = [
-  // DevRel pillar — gated on devrel.view
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, cap: 'devrel.view' },
+  // Dashboard is for everyone — its CONTENTS adapt to the user's pillars (devrel widgets,
+  // support widgets, or a mix). No cap gate here.
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+  // DevRel pillar pages
   { to: '/submissions', label: 'Submissions', icon: Inbox, cap: 'devrel.view' },
   { to: '/analytics', label: 'Analytics', icon: BarChart3, cap: 'devrel.view' },
-  { to: '/terminal', label: 'Terminal', icon: TerminalSquare, cap: 'devrel.view' },
   { to: '/review', label: 'Review', icon: ClipboardCheck, cap: 'devrel.view' },
-  // Support pillar — gated on support.view
-  { to: '/support', label: 'Support', icon: LifeBuoy, cap: 'support.view' },
-  // Shared
+  // Shared — everyone gets Terminal (agent, incl. Plain later) + Settings
+  { to: '/terminal', label: 'Terminal', icon: TerminalSquare },
   { to: '/settings', label: 'Settings', icon: Settings },
   { to: '/admin', label: 'Admin', icon: Shield, adminOnly: true },
 ];

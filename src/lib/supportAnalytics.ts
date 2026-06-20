@@ -101,14 +101,41 @@ export async function computeSupportDashboard(range: SupportRange): Promise<Supp
   const volumeByChannel = Array.from(chanMap.entries()).map(([channel, count]) => ({ channel, count })).sort((a, b) => b.count - a.count);
 
   // ── Response / resolution times ──
+  // Primary source: Plain's thread-level first-inbound/outbound timing. Fallback: derive
+  // from the stored message timeline (first inbound → first outbound) for threads where
+  // Plain didn't populate the thread-level fields (common for AI-chat threads).
   const frtMins: number[] = [];
   const resHours: number[] = [];
+  const needFallbackIds: string[] = [];
   for (const t of created) {
     if (t.firstInboundAt && t.firstOutboundAt && t.firstOutboundAt > t.firstInboundAt) {
       frtMins.push((t.firstOutboundAt.getTime() - t.firstInboundAt.getTime()) / 60000);
+    } else {
+      needFallbackIds.push(t.id);
     }
     if (t.status === "DONE" && t.statusChangedAt && t.plainCreatedAt && t.statusChangedAt > t.plainCreatedAt) {
       resHours.push((t.statusChangedAt.getTime() - t.plainCreatedAt.getTime()) / 3600000);
+    }
+  }
+
+  // Fallback first-response from message timeline for threads missing thread-level timing.
+  if (needFallbackIds.length) {
+    const msgs = await prisma.supportMessage.findMany({
+      where: { threadId: { in: needFallbackIds }, direction: { in: ["inbound", "outbound"] } },
+      select: { threadId: true, direction: true, occurredAt: true },
+      orderBy: { occurredAt: "asc" },
+    });
+    const byThread = new Map<string, { firstIn?: Date; firstOut?: Date }>();
+    for (const m of msgs) {
+      const e = byThread.get(m.threadId) ?? {};
+      if (m.direction === "inbound" && !e.firstIn) e.firstIn = m.occurredAt;
+      if (m.direction === "outbound" && !e.firstOut) e.firstOut = m.occurredAt;
+      byThread.set(m.threadId, e);
+    }
+    for (const e of byThread.values()) {
+      if (e.firstIn && e.firstOut && e.firstOut > e.firstIn) {
+        frtMins.push((e.firstOut.getTime() - e.firstIn.getTime()) / 60000);
+      }
     }
   }
 

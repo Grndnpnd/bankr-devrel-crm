@@ -14,6 +14,7 @@ interface SubmissionStore {
   submissions: Submission[];
   users: TeamUser[];
   me: Me | null;
+  userCapabilities: string[];
   dashboardLayout: DashboardWidget[] | null;
   baseLayout: DashboardWidget[] | null;
   dashboardDefault: DashboardWidget[] | null;
@@ -28,6 +29,7 @@ interface SubmissionStore {
   sort: SortConfig;
 
   setMe: (me: Me | null) => void;
+  setUserCapabilities: (caps: string[]) => void;
   loadDashboardLayout: () => Promise<void>;
   saveDashboardLayout: (layout: DashboardWidget[]) => Promise<void>;
   setDashboardLayout: (layout: DashboardWidget[]) => void;
@@ -83,6 +85,7 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
   submissions: [],
   users: [],
   me: null,
+  userCapabilities: [],
   dashboardLayout: null,
   baseLayout: null,
   dashboardDefault: null,
@@ -109,6 +112,7 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
   sort: { key: 'score', direction: 'desc' as const },
 
   setMe: (me) => set({ me }),
+  setUserCapabilities: (caps) => set({ userCapabilities: caps }),
   setDashboardLayout: (layout) => set({ dashboardLayout: layout }),
   loadDashboardLayout: async () => {
     try {

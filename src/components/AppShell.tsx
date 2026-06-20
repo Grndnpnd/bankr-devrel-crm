@@ -39,6 +39,9 @@ export default function AppShell({ me, children }: { me: SessionUser; children: 
           const { setCapabilityOverrides } = await import('@/lib/access');
           setCapabilityOverrides(data.capabilityMatrix);
         }
+        if (Array.isArray(data?.capabilities)) {
+          useSubmissionStore.getState().setUserCapabilities(data.capabilities);
+        }
       } catch { /* non-fatal — falls back to code defaults */ }
     })();
   }, [me, setMe, load, loadUsers, loadProposals]);

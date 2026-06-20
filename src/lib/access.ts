@@ -74,6 +74,40 @@ export function can(role: string | null | undefined, capability: Capability): bo
   return !!allowed && (allowed as string[]).includes(role);
 }
 
+// ─── Per-user overrides ───────────────────────────────────────────────────────
+// Layered ON TOP of the role result: a user can be GRANTED a capability their role
+// lacks, or REVOKED one their role has. Stored per-user and cached in-memory so the
+// check stays synchronous. ADMIN is still always all-true (can't be revoked).
+export interface UserOverride { grant?: Capability[]; revoke?: Capability[] }
+let USER_OVERRIDES: Record<string, UserOverride> = {};
+
+export function setUserCapabilityOverrides(overrides: Record<string, UserOverride> | null): void {
+  USER_OVERRIDES = overrides && typeof overrides === 'object' ? overrides : {};
+}
+export function getUserCapabilityOverrides(): Record<string, UserOverride> {
+  return USER_OVERRIDES;
+}
+
+/**
+ * Capability check that respects per-user grants/revokes layered over the role default.
+ * Use this wherever a userId is available; can(role, cap) remains for role-only checks.
+ */
+export function canUser(role: string | null | undefined, userId: string | null | undefined, capability: Capability): boolean {
+  if (role === 'ADMIN') return true;  // admin is absolute, never revocable
+  const base = can(role, capability);
+  if (!userId) return base;
+  const ov = USER_OVERRIDES[userId];
+  if (!ov) return base;
+  if (ov.revoke?.includes(capability)) return false;  // revoke wins over everything (except ADMIN)
+  if (ov.grant?.includes(capability)) return true;
+  return base;
+}
+
+/** All capabilities a specific user effectively has (role + their overrides). */
+export function capabilitiesForUser(role: string | null | undefined, userId: string | null | undefined): Capability[] {
+  return (Object.keys(MATRIX) as Capability[]).filter((c) => canUser(role, userId, c));
+}
+
 /** All capabilities a role has — handy for sending to the client. */
 export function capabilitiesFor(role: string | null | undefined): Capability[] {
   if (!role) return [];
