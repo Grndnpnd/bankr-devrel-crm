@@ -40,7 +40,6 @@ const THREAD_FIELDS = `
   title
   previewText
   status
-  statusDetail { type }
   priority
   createdAt { iso8601 }
   statusChangedAt { iso8601 }
@@ -89,7 +88,7 @@ function normalizeThreadNode(n: any): any {
     title: n.title ?? null,
     previewText: n.previewText ?? null,
     status: n.status ?? null,
-    statusDetail: n.statusDetail ? { type: n.statusDetail.type ?? null } : null,
+    statusDetail: null,
     priority: n.priority,
     createdAt: n.createdAt?.iso8601 ?? null,
     statusChangedAt: n.statusChangedAt?.iso8601 ?? null,
