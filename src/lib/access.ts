@@ -20,6 +20,10 @@ export const ROLE_LABELS: Record<Role, string> = {
 
 /** Every gated action in the app. Group by area for readability. */
 export type Capability =
+  // Pillar visibility (which sections a role can see at all)
+  | 'devrel.view'           // see the DevRel pipeline pillar (dashboard, submissions, etc.)
+  | 'support.view'          // see the Support pillar (support dashboard, threads)
+  | 'support.manage'        // act on support threads (assign, status, notes) — for later
   // Submissions / pipeline
   | 'submissions.view'
   | 'submissions.edit'      // create/edit/delete submissions, add activity
@@ -36,10 +40,17 @@ export type Capability =
   | 'import.run';
 
 /**
- * The access matrix. SUPPORT and ENGINEERING currently mirror DEVREL — they share
- * the same operational access. Peel them apart later by flipping cells here.
+ * The access matrix. Pillar visibility is the new separation: DEVREL sees the DevRel
+ * pillar, SUPPORT sees the Support pillar, ADMIN + ENGINEERING see both (adjust in the
+ * Admin → Permissions UI as the team shakes out). The operational caps below still
+ * mostly mirror across roles; tighten per-cell later as needed.
  */
 const MATRIX: Record<Capability, Role[]> = {
+  // Pillar visibility
+  'devrel.view':       ['ADMIN', 'DEVREL', 'ENGINEERING'],
+  'support.view':      ['ADMIN', 'SUPPORT', 'ENGINEERING'],
+  'support.manage':    ['ADMIN', 'SUPPORT'],
+  // Submissions / pipeline (DevRel operational)
   'submissions.view':  ['ADMIN', 'DEVREL', 'SUPPORT', 'ENGINEERING'],
   'submissions.edit':  ['ADMIN', 'DEVREL', 'SUPPORT', 'ENGINEERING'],
   'submissions.enrich':['ADMIN', 'DEVREL', 'SUPPORT', 'ENGINEERING'],
@@ -105,6 +116,9 @@ export const isValidRole = (r: string): r is Role => (ROLES as string[]).include
 
 /** Human-readable labels + grouping for the Admin permissions editor. */
 export const CAPABILITY_META: { key: Capability; label: string; group: string; note?: string }[] = [
+  { key: 'devrel.view',        label: 'View DevRel pillar',      group: 'Pillars', note: 'the project pipeline, dashboard, submissions' },
+  { key: 'support.view',       label: 'View Support pillar',     group: 'Pillars', note: 'support dashboard & threads' },
+  { key: 'support.manage',     label: 'Manage support threads',  group: 'Pillars', note: 'assign / status / notes' },
   { key: 'submissions.view',   label: 'View submissions',        group: 'Pipeline' },
   { key: 'submissions.edit',   label: 'Edit / create / delete',  group: 'Pipeline', note: 'includes bulk delete & adding notes' },
   { key: 'submissions.enrich', label: 'Enrich (set contract / fetch token)', group: 'Pipeline' },

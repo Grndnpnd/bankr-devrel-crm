@@ -1,2 +1,14 @@
+import { getSession } from '@/lib/auth';
+import { redirect } from 'next/navigation';
+import { can } from '@/lib/access';
 import Submissions from '@/components/pages/Submissions';
-export default function Page() { return <Submissions />; }
+
+export const dynamic = 'force-dynamic';
+
+export default async function Page() {
+  const session = await getSession();
+  if (session && !can(session.role, 'devrel.view')) {
+    redirect(can(session.role, 'support.view') ? '/support' : '/login');
+  }
+  return <Submissions />;
+}

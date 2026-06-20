@@ -2,19 +2,23 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Inbox, BarChart3, Settings, Shield, ClipboardCheck, ChevronLeft, ChevronRight, TerminalSquare, LayoutGrid, Plus } from 'lucide-react';
+import { LayoutDashboard, Inbox, BarChart3, Settings, Shield, ClipboardCheck, ChevronLeft, ChevronRight, TerminalSquare, LayoutGrid, Plus, LifeBuoy } from 'lucide-react';
 import Logo from './icons/Logo';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
-import { can } from '@/lib/access';
+import { can, type Capability } from '@/lib/access';
 
-interface NavItem { to: string; label: string; icon: React.ElementType; adminOnly?: boolean }
+interface NavItem { to: string; label: string; icon: React.ElementType; adminOnly?: boolean; cap?: Capability }
 
 const navItems: NavItem[] = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/submissions', label: 'Submissions', icon: Inbox },
-  { to: '/analytics', label: 'Analytics', icon: BarChart3 },
-  { to: '/terminal', label: 'Terminal', icon: TerminalSquare },
-  { to: '/review', label: 'Review', icon: ClipboardCheck },
+  // DevRel pillar — gated on devrel.view
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard, cap: 'devrel.view' },
+  { to: '/submissions', label: 'Submissions', icon: Inbox, cap: 'devrel.view' },
+  { to: '/analytics', label: 'Analytics', icon: BarChart3, cap: 'devrel.view' },
+  { to: '/terminal', label: 'Terminal', icon: TerminalSquare, cap: 'devrel.view' },
+  { to: '/review', label: 'Review', icon: ClipboardCheck, cap: 'devrel.view' },
+  // Support pillar — gated on support.view
+  { to: '/support', label: 'Support', icon: LifeBuoy, cap: 'support.view' },
+  // Shared
   { to: '/settings', label: 'Settings', icon: Settings },
   { to: '/admin', label: 'Admin', icon: Shield, adminOnly: true },
 ];
@@ -29,8 +33,13 @@ const Sidebar: React.FC = () => {
   const switchLayout = useSubmissionStore((st) => st.switchLayout);
   const clearActiveLayout = useSubmissionStore((st) => st.clearActiveLayout);
   const router = useRouter();
-  // "Admin" capability proxy: anyone who can manage users (ADMIN) sees the Admin page.
-  const items = navItems.filter((i) => !i.adminOnly || can(me?.role, 'users.manage'));
+  // Hide nav items the user lacks access to: admin items need users.manage; pillar
+  // items need their capability; uncapped items (Settings) always show.
+  const items = navItems.filter((i) => {
+    if (i.adminOnly && !can(me?.role, 'users.manage')) return false;
+    if (i.cap && !can(me?.role, i.cap)) return false;
+    return true;
+  });
 
   const isActiveFor = (to: string) =>
     to === '/' ? pathname === '/' : pathname.startsWith(to);
