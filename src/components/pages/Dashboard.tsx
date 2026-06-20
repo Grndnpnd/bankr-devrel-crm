@@ -84,7 +84,29 @@ const DashboardInner: React.FC = () => {
   useEffect(() => { setDraft(reconcileLayout(dashboardLayout, panelIds, capsSet)); }, [dashboardLayout, panelIds]);
 
   const ordered = useMemo(() => [...draft].sort((a, b) => a.order - b.order), [draft]);
-  const visible = ordered.filter((w) => w.visible);
+
+  // Pillar view filter — only meaningful for users who can see BOTH pillars (e.g. admin,
+  // engineering, or someone granted both). Lets them focus the dashboard on one pillar or
+  // see everything. Doesn't alter the saved layout — it's a view filter only.
+  const hasDevrel = capsSet.has('devrel.view');
+  const hasSupport = capsSet.has('support.view');
+  const bothPillars = hasDevrel && hasSupport;
+  const [pillarView, setPillarView] = useState<'all' | 'devrel' | 'support'>('all');
+  const widgetPillar = (id: string): 'devrel' | 'support' | undefined => widgetById(id)?.pillar;
+
+  const visible = useMemo(() => {
+    if (pillarView === 'all') return ordered.filter((w) => w.visible);
+    // Focused on one pillar: show that pillar's widgets that are visible in the layout OR
+    // default-visible (so a stale saved layout that predates support widgets still shows
+    // them when you switch to the Support view). Other-pillar widgets are hidden.
+    return ordered.filter((w) => {
+      const p = widgetPillar(w.id);
+      if (p && p !== pillarView) return false;
+      if (!p) return w.visible; // pillar-less (saved panels): respect layout
+      const def = widgetById(w.id);
+      return w.visible || !!def?.defaultVisible;
+    });
+  }, [ordered, pillarView]);
   const hidden = ordered.filter((w) => !w.visible);
 
   const update = (id: string, patch: Partial<DashboardWidget>) =>
@@ -197,14 +219,24 @@ const DashboardInner: React.FC = () => {
     <div>
       {/* Header / edit toggle */}
       <div className="flex items-center justify-between mb-5">
-        <div>
+        <div className="flex items-center gap-3">
           <h1 style={{ fontFamily: "'Manrope', sans-serif", fontSize: 22, fontWeight: 700, color: '#F0F0F0' }}>
             Dashboard
           </h1>
-          {editing && (
-            <p style={{ fontSize: 12, color: '#8A8A8A', marginTop: 2 }}>
-              Drag the handle to reorder, pick S/M/L or drag the right edge to resize, and hide widgets you don't need.
-            </p>
+          {/* Pillar view toggle — only for users with both pillars */}
+          {bothPillars && !editing && (
+            <div className="flex items-center" style={{ backgroundColor: '#141414', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, padding: 2 }}>
+              {([['all', 'All'], ['devrel', 'DevRel'], ['support', 'Support']] as const).map(([key, label]) => (
+                <button key={key} onClick={() => setPillarView(key)}
+                  style={{
+                    padding: '4px 12px', fontSize: 12, fontWeight: 600, borderRadius: 6, border: 'none', cursor: 'pointer',
+                    backgroundColor: pillarView === key ? '#F5A623' : 'transparent',
+                    color: pillarView === key ? '#0D0D0D' : '#8A8A8A',
+                  }}>
+                  {label}
+                </button>
+              ))}
+            </div>
           )}
         </div>
         {editing ? (

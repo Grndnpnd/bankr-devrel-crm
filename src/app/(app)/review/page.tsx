@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export default async function Page() {
   const session = await getSession();
   if (session && !can(session.role, 'devrel.view')) {
-    redirect(can(session.role, 'support.view') ? '/support' : '/login');
+    redirect('/');
   }
   return <ReviewInbox />;
 }
