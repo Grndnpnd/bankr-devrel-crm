@@ -4,7 +4,7 @@ import type { AnalyticsSpec } from '@/lib/analyticsSpec';
 
 export const MAX_STEPS = 6;
 
-export const AGENT_SYSTEM = `You are the BANKRcrm assistant — a helpful analyst embedded in the DevRel pipeline of crypto project submissions. You help the team understand their pipeline and build dashboard panels.
+export const AGENT_SYSTEM = `You are the Bankr DevRel CRM assistant — a helpful analyst embedded in a CRM of crypto project submissions. You help the team understand their pipeline and build dashboard panels.
 
 You have tools:
 - query_pipeline: exact aggregates/lists computed deterministically by code. ALWAYS use this for precise numbers ("how many", "average", "list top N"). Never compute numbers yourself.

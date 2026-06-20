@@ -187,3 +187,56 @@ export function rankCandidates(
   );
   return out;
 }
+
+// ── Creator fees (Bankr public Doppler fees API) ──────────────────────────────
+// GET /public/doppler/token-fees/{addr}?days=N → daily WETH earnings + lifetime
+// totals + claimable/claimed. Unauthenticated, cached 2 min server-side. This is
+// the ONLY source of fee data + any multi-day window — the discover API is 24h only.
+
+export interface TokenFees {
+  tokenAddress: string;
+  symbol: string | null;
+  windowDays: number;
+  feesWindowWeth: number;        // summed dailyEarnings over the requested window
+  lifetimeEarnedWeth: number | null;
+  claimableWeth: number | null;
+  claimedWeth: number | null;
+  dailyEarnings: { date: string; weth: number }[];
+  bestDay: { date: string; weth: number } | null;
+}
+
+export async function fetchTokenFees(ca: string, days = 7): Promise<TokenFees | null> {
+  const addr = ca.trim();
+  if (!isContractAddress(addr)) throw new Error("Invalid contract address (expected 0x + 40 hex chars).");
+  const d = Math.min(Math.max(Math.round(days), 1), 90);
+  const res = await fetch(`https://api.bankr.bot/public/doppler/token-fees/${addr}?days=${d}`, {
+    headers: { accept: "application/json" },
+    cache: "no-store",
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`Fees API error (HTTP ${res.status}).`);
+  const data = await res.json().catch(() => null);
+  if (!data) return null;
+
+  const num = (v: any): number => { const n = parseFloat(String(v)); return isNaN(n) ? 0 : n; };
+  const daily: { date: string; weth: number }[] = Array.isArray(data.dailyEarnings)
+    ? data.dailyEarnings.map((e: any) => ({ date: String(e.date), weth: num(e.weth) }))
+    : [];
+  const feesWindowWeth = daily.reduce((sum, e) => sum + e.weth, 0);
+  const tok = Array.isArray(data.tokens) ? data.tokens[0] : null;
+  const bestDay = data.lifetimeBestDay && data.lifetimeBestDay.date
+    ? { date: String(data.lifetimeBestDay.date), weth: num(data.lifetimeBestDay.weth) }
+    : null;
+
+  return {
+    tokenAddress: addr,
+    symbol: tok?.symbol ?? null,
+    windowDays: d,
+    feesWindowWeth,
+    lifetimeEarnedWeth: data.lifetimeEarnedWeth != null ? num(data.lifetimeEarnedWeth) : null,
+    claimableWeth: data.totals?.claimableWeth != null ? num(data.totals.claimableWeth) : null,
+    claimedWeth: data.totals?.claimedWeth != null ? num(data.totals.claimedWeth) : null,
+    dailyEarnings: daily,
+    bestDay,
+  };
+}

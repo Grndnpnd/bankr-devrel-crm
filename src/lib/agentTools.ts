@@ -7,7 +7,7 @@ import {
 } from '@/lib/analyticsSpec';
 import { toChatRows, capRows } from '@/lib/chatData';
 import type { ToolDef } from '@/lib/llm';
-import { fetchTokenData, isContractAddress } from '@/lib/discover';
+import { fetchTokenData, fetchTokenFees, isContractAddress } from '@/lib/discover';
 import { enrichSubmission } from '@/lib/enrich';
 import { enqueueOutbound } from '@/lib/outbound';
 import { logOutreach, listOutreachTypes } from '@/lib/outreach';
@@ -115,12 +115,14 @@ export const AGENT_TOOLS: ToolDef[] = [
     function: {
       name: 'get_token_data',
       description:
-        'Fetch LIVE onchain data for a project\'s token from the Bankr discover API (current 24h volume, market cap, price change). Provide either a project name (we look up its stored contract address) or a contract address directly. Use for "what is X\'s volume right now" — this is real-time, not the cached snapshot.',
+        'Fetch LIVE onchain data for a project\'s token. Volume/market-cap/price come from the Bankr discover API and are 24-HOUR figures (there is no multi-day volume available). Creator FEES come from the Bankr fees API and DO support a multi-day window (set includeFees:true and days, e.g. days:7 for 7-day fees). So: "Basemate 7-day fees" → includeFees:true, days:7; "X\'s volume" → 24h volume. Provide a project name (we resolve its stored contract address) or a contract address directly.',
       parameters: {
         type: 'object',
         properties: {
           project: { type: 'string', description: 'project name (we resolve its contract address)' },
           contractAddress: { type: 'string', description: '0x… address, if known directly' },
+          includeFees: { type: 'boolean', description: 'also fetch creator fees (WETH) over a day window' },
+          days: { type: 'number', description: 'fee window in days (1–90, default 7); only applies to fees, not volume' },
         },
         required: [],
       },
@@ -518,8 +520,21 @@ export async function runTool(name: string, args: any, submissions: Submission[]
     }
     try {
       const t = await fetchTokenData(ca);
-      if (!t) return { result: JSON.stringify({ found: false, note: 'no live token data for that address' }) };
-      return { result: JSON.stringify({ found: true, live: true, token: t }) };
+      const wantFees = !!args?.includeFees;
+      const days = Math.min(Math.max(Math.round(Number(args?.days) || 7), 1), 90);
+      let fees: any = null;
+      if (wantFees) {
+        try {
+          const f = await fetchTokenFees(ca, days);
+          if (f) fees = { windowDays: f.windowDays, feesWindowWeth: f.feesWindowWeth, lifetimeEarnedWeth: f.lifetimeEarnedWeth, claimableWeth: f.claimableWeth, claimedWeth: f.claimedWeth };
+        } catch { /* fees optional; don't fail the whole call */ }
+      }
+      if (!t && !fees) return { result: JSON.stringify({ found: false, note: 'no live token data for that address' }) };
+      return { result: JSON.stringify({
+        found: true, live: true, token: t,
+        ...(wantFees ? { fees, feesNote: fees ? `fees are WETH over ${days}d` : 'no fee data for this token' } : {}),
+        volumeNote: 'volume/market-cap are 24h only; no multi-day volume is available from the API',
+      }) };
     } catch (e: any) {
       return { result: JSON.stringify({ error: e?.message ?? 'discover API error' }) };
     }
