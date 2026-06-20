@@ -92,6 +92,17 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
       }
     },
   },
+  plain_reconcile: {
+    type: 'plain_reconcile',
+    label: 'Reconcile Plain support',
+    description: 'Page through Plain threads via the API and upsert them (with message timelines) into the support tables. Backfills history and catches any webhook gaps; resumes from a saved cursor each run and loops once complete.',
+    run: async () => {
+      const { reconcilePlain } = await import('@/lib/plainBackfill');
+      const r = await reconcilePlain();
+      // The cursor is persisted via this return (stored as lastResult by the runner).
+      return r;
+    },
+  },
   slack_report: {
     type: 'slack_report',
     label: 'Scheduled Slack report',
@@ -119,11 +130,12 @@ export const jobTypeList = () =>
  * in CoreJobState purely for display + due-checking. The custom cron harness
  * (CronJob table) remains for ad-hoc admin jobs.
  */
-export const CORE_TYPES = ['refresh_onchain', 'refresh_sheet'];
+export const CORE_TYPES = ['refresh_onchain', 'refresh_sheet', 'plain_reconcile'];
 
 export const CORE_JOBS: { type: string; name: string; intervalMs: number }[] = [
   { type: 'refresh_onchain', name: 'Refresh all data', intervalMs: 15 * 60_000 },
   { type: 'refresh_sheet', name: 'Refresh sheet submissions', intervalMs: 30 * 60_000 },
+  { type: 'plain_reconcile', name: 'Reconcile Plain support', intervalMs: 10 * 60_000 },
 ];
 
 /** Run the hard-coded core jobs whose interval has elapsed. */
