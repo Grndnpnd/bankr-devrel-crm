@@ -15,7 +15,7 @@ export async function GET() {
   }
   await reloadCapabilityOverrides(); // ensure per-user overrides are fresh
   const users = await prisma.user.findMany({
-    where: { isActive: true },
+    where: { active: true },
     select: { id: true, email: true, name: true, role: true },
     orderBy: { email: "asc" },
   });
