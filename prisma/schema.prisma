@@ -262,3 +262,90 @@ model ImportLog {
 
   @@index([createdAt])
 }
+
+// ─── SUPPORT PILLAR (Plain) ───────────────────────────────────────────────────
+// Separate from the DevRel submission pipeline. Fed by Plain webhooks (real-time).
+// Every Plain event embeds the full thread, so each webhook is a complete upsert of
+// the thread's current state; message events also append a SupportMessage.
+
+// A Plain customer (the person who opened the support thread).
+model SupportCustomer {
+  id           String          @id  // Plain customer id (c_...)
+  email        String?
+  externalId   String?
+  fullName     String?
+  shortName    String?
+  threads      SupportThread[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([email])
+}
+
+// A Plain support thread (a ticket / conversation). Upserted on every thread event.
+model SupportThread {
+  id             String           @id  // Plain thread id (th_...)
+  externalId     String?
+  title          String?
+  previewText    String?
+  status         String           @default("TODO")  // TODO | SNOOZED | DONE | UNKNOWN_THREAD_STATUS
+  statusDetail   String?          // e.g. DONE_MANUALLY_SET, WAITING_FOR_CUSTOMER
+  priority       Int              @default(2)        // 0 urgent, 1 high, 2 normal, 3 low
+  // assignee — Plain assignee can be a user OR a machine (AI) user
+  assigneeId     String?
+  assigneeType   String?          // user | machineUser | null
+  assigneeName   String?
+  // labels — flattened to keys + names for fast topic analytics
+  labelNames     String[]         @default([])
+  // channel / source of the thread's traffic
+  channel        String?          // EMAIL | CHAT | SLACK | API | MS_TEAMS | DISCORD
+  // timing (Plain computes these for us on the thread object — powers response/resolution analytics)
+  firstInboundAt  DateTime?
+  firstOutboundAt DateTime?
+  lastInboundAt   DateTime?
+  lastOutboundAt  DateTime?
+  statusChangedAt DateTime?
+  // customer relation
+  customerId     String?
+  customer       SupportCustomer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  messages       SupportMessage[]
+  plainCreatedAt DateTime?        // original createdAt from Plain
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([status])
+  @@index([priority])
+  @@index([assigneeId])
+  @@index([plainCreatedAt])
+  @@index([customerId])
+}
+
+// A single message in a support thread's timeline. Appended on message events.
+// (Stored in S2 onward; the table exists from S1 so the relation is stable.)
+model SupportMessage {
+  id           String        @id  // Plain timelineEntryId
+  threadId     String
+  thread       SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  direction    String        // inbound | outbound | note
+  channel      String?       // EMAIL | CHAT | SLACK | API | ...
+  authorType   String?       // customer | user | machineUser | system
+  authorId     String?
+  body         String?       @db.Text
+  occurredAt   DateTime      @default(now())
+  createdAt    DateTime      @default(now())
+
+  @@index([threadId])
+  @@index([occurredAt])
+}
+
+// Dedup ledger for Plain webhook deliveries. Plain retries (same event id) AND its AI
+// agent double-fires logically-identical messages ~6s apart with DIFFERENT event ids
+// (learned in Gamal). So we dedup on BOTH the event id and a content hash with a TTL.
+model SupportWebhookEvent {
+  id          String   @id  // Plain event id
+  contentHash String?  // sha256(threadId + body) for content-level dedup
+  eventType   String?
+  receivedAt  DateTime @default(now())
+
+  @@index([contentHash, receivedAt])
+}
