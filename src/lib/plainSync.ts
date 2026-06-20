@@ -54,14 +54,20 @@ function iso(d: any): Date | null {
   return isNaN(dt.getTime()) ? null : dt;
 }
 
-// channel inference from the message-info or event type
-function channelFromThread(thread: any): string | null {
-  return (
-    thread?.lastInboundMessageInfo?.messageSource ||
-    thread?.firstInboundMessageInfo?.messageSource ||
-    thread?.lastOutboundMessageInfo?.messageSource ||
-    null
-  );
+// Channel — derive from the EVENT TYPE (reliable) rather than the thread's messageInfo
+// union (which serializes as an enum discriminator like UNKNOWN_..._MESSAGE_SOURCE).
+// On thread-only events (no message), we leave channel untouched so a prior message
+// event's value isn't overwritten with null.
+const CHANNEL_BY_EVENT: Record<string, string> = {
+  'thread.email_received': 'EMAIL', 'thread.email_sent': 'EMAIL',
+  'thread.chat_received': 'CHAT', 'thread.chat_sent': 'CHAT',
+  'thread.slack_message_received': 'SLACK', 'thread.slack_message_sent': 'SLACK',
+  'thread.discord_message_received': 'DISCORD', 'thread.discord_message_sent': 'DISCORD',
+  'thread.ms_teams_message_received': 'MS_TEAMS', 'thread.ms_teams_message_sent': 'MS_TEAMS',
+};
+
+function channelFromEvent(eventType: string): string | null {
+  return CHANNEL_BY_EVENT[eventType] ?? null;
 }
 
 // ── Customer upsert ───────────────────────────────────────────────────────────
@@ -88,13 +94,15 @@ async function upsertCustomer(customer: any): Promise<string | null> {
 }
 
 // ── Thread upsert (the heart of it) ───────────────────────────────────────────
-export async function upsertThreadFromPayload(thread: any): Promise<void> {
+export async function upsertThreadFromPayload(thread: any, eventType?: string): Promise<void> {
   if (!thread?.id) return;
   const customerId = await upsertCustomer(thread.customer);
   const { assigneeId, assigneeType, assigneeName } = assigneeFields(thread.assignee);
   const statusDetailType = thread.statusDetail?.type ?? null;
+  const channel = eventType ? channelFromEvent(eventType) : null;
 
-  const data = {
+  // Common fields set on every event.
+  const base = {
     externalId: thread.externalId ?? null,
     title: thread.title ?? null,
     previewText: thread.previewText ?? null,
@@ -105,7 +113,6 @@ export async function upsertThreadFromPayload(thread: any): Promise<void> {
     assigneeType,
     assigneeName,
     labelNames: labelNames(thread.labels),
-    channel: channelFromThread(thread),
     firstInboundAt: iso(thread.firstInboundMessageInfo?.timestamp),
     firstOutboundAt: iso(thread.firstOutboundMessageInfo?.timestamp),
     lastInboundAt: iso(thread.lastInboundMessageInfo?.timestamp),
@@ -114,11 +121,15 @@ export async function upsertThreadFromPayload(thread: any): Promise<void> {
     plainCreatedAt: iso(thread.createdAt),
     customerId,
   };
+  // Only include channel when we actually derived one (a message event), so thread-only
+  // events (status/label/assignment changes) don't wipe a previously-known channel.
+  const update = channel ? { ...base, channel } : base;
+  const create = { id: thread.id, ...base, channel: channel ?? null };
 
   await prisma.supportThread.upsert({
     where: { id: thread.id },
-    create: { id: thread.id, ...data },
-    update: data,
+    create,
+    update,
   });
 }
 
@@ -145,7 +156,7 @@ export async function appendMessageFromPayload(eventType: string, payload: any):
 
   const body =
     msg.markdownContent ?? msg.textContent ?? msg.text ?? msg.resolvedText ?? msg.textContent ?? msg.markdown ?? null;
-  const channel = channelFromThread(thread) || (payload.email ? "EMAIL" : payload.slackMessage ? "SLACK" : payload.chat ? "CHAT" : payload.discordMessage ? "DISCORD" : null);
+  const channel = channelFromEvent(eventType);
   const createdBy = msg.createdBy;
   const authorType = createdBy?.actorType ?? null;
   const authorId = createdBy?.userId ?? createdBy?.machineUserId ?? createdBy?.customerId ?? null;

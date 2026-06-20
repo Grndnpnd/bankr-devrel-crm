@@ -77,7 +77,7 @@ export async function POST(req: Request) {
 
     // Upsert the thread state from any event that carries a thread.
     if (payload.thread) {
-      await upsertThreadFromPayload(payload.thread);
+      await upsertThreadFromPayload(payload.thread, eventType);
     }
 
     // Append the message on message events.

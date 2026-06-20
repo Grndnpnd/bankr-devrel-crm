@@ -89,9 +89,13 @@ export async function computeSupportDashboard(range: SupportRange): Promise<Supp
   }
 
   // ── Volume by channel ──
+  const KNOWN_CHANNELS = new Set(["EMAIL", "CHAT", "SLACK", "DISCORD", "MS_TEAMS", "API"]);
   const chanMap = new Map<string, number>();
   for (const t of created) {
-    const c = t.channel || "unknown";
+    // Normalize: anything not a recognized channel (incl. Plain's messageInfo enum
+    // discriminators from before the channel-mapping fix) buckets as "Unknown".
+    const raw = (t.channel || "").toUpperCase();
+    const c = KNOWN_CHANNELS.has(raw) ? raw : "Unknown";
     chanMap.set(c, (chanMap.get(c) ?? 0) + 1);
   }
   const volumeByChannel = Array.from(chanMap.entries()).map(([channel, count]) => ({ channel, count })).sort((a, b) => b.count - a.count);
