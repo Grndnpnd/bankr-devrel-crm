@@ -2,7 +2,7 @@ import { chatWithTools, type ToolMessage } from '@/lib/llm';
 import { AGENT_TOOLS, runTool } from '@/lib/agentTools';
 import type { AnalyticsSpec } from '@/lib/analyticsSpec';
 
-export const MAX_STEPS = 6;
+export const MAX_STEPS = 10;
 
 export const AGENT_SYSTEM = `You are the BANKRcrm assistant — a helpful analyst embedded in the DevRel pipeline of crypto project submissions. You help the team understand their pipeline and build dashboard panels.
 
@@ -111,8 +111,29 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunResult> {
     }
   }
 
+  // Ran out of steps. The agent likely gathered what it needs but didn't summarize.
+  // Force ONE final answer with tools disabled so it MUST produce prose from what it has,
+  // rather than discarding the work with a canned bail.
+  try {
+    const remaining = DEADLINE - Date.now();
+    if (remaining > 4_000) {
+      messages.push({
+        role: 'user',
+        content:
+          'You are out of tool calls. Answer now in plain text using ONLY the data you already gathered above. ' +
+          'Give the best answer you can — include partial results and note any gaps (e.g. a token with no indexed history). Do not ask to continue.',
+      });
+      const finalRes = await chatWithTools(messages, [], { timeoutMs: Math.min(remaining, 20_000) });
+      if (finalRes.ok && finalRes.content) {
+        return { answer: finalRes.content, panelSpec: builtPanel, toolTrace, capped: true };
+      }
+    }
+  } catch { /* fall through to the canned message */ }
+
   return {
-    answer: "I did a few steps but didn't fully wrap that up — try narrowing the question.",
+    answer: builtPanel
+      ? "Here's the panel I built — I ran out of steps to add more."
+      : "I gathered some data but ran out of steps to finish — try a narrower question.",
     panelSpec: builtPanel, toolTrace, capped: true,
   };
 }

@@ -468,6 +468,29 @@ const findProject = (submissions: Submission[], q: string): Submission | undefin
     || submissions.find((s) => s.project?.toLowerCase().includes(needle));
 };
 
+/**
+ * Resolve a project's contract address. The agent's chat context is privacy-trimmed and
+ * intentionally omits contract_address, so we look it up directly from the DB by project
+ * name (exact, then contains). Returns the stored 0x address or null.
+ */
+async function resolveProjectCA(projName: string): Promise<{ ca: string | null; project: string | null }> {
+  const q = (projName || '').trim();
+  if (!q) return { ca: null, project: null };
+  const { prisma } = await import('@/lib/prisma');
+  let sub = await prisma.submission.findFirst({
+    where: { project: { equals: q, mode: 'insensitive' } },
+    include: { tokenMatch: true },
+  });
+  if (!sub) {
+    sub = await prisma.submission.findFirst({
+      where: { project: { contains: q, mode: 'insensitive' } },
+      include: { tokenMatch: true },
+    });
+  }
+  if (!sub) return { ca: null, project: null };
+  return { ca: (sub as any).tokenMatch?.contractAddress?.trim() || null, project: sub.project };
+};
+
 /** Execute a tool call by name. Async because some tools hit external APIs. */
 export interface ToolContext { userId: string; userEmail?: string; role?: string }
 
@@ -543,9 +566,9 @@ export async function runTool(name: string, args: any, submissions: Submission[]
     let ca: string | undefined = args?.contractAddress?.trim();
     const projName = args?.project;
     if (!ca && projName) {
-      const s = findProject(submissions, projName);
-      ca = (s as any)?.contract_address?.trim();
-      if (!ca) return { result: JSON.stringify({ error: `no stored contract address for "${projName}" — provide one or enrich the project first` }) };
+      const r = await resolveProjectCA(projName);
+      ca = r.ca ?? undefined;
+      if (!ca) return { result: JSON.stringify({ error: `no stored contract address for "${projName}" — set one on the project first` }) };
     }
     if (!ca || !isContractAddress(ca)) {
       return { result: JSON.stringify({ error: 'need a valid contract address or a project with one on file' }) };
@@ -592,11 +615,11 @@ export async function runTool(name: string, args: any, submissions: Submission[]
 
   if (name === 'get_token_data') {
     let ca: string | undefined = args?.contractAddress?.trim();
-    let projName = args?.project;
+    const projName = args?.project;
     if (!ca && projName) {
-      const s = findProject(submissions, projName);
-      ca = (s as any)?.contract_address?.trim();
-      if (!ca) return { result: JSON.stringify({ error: `no stored contract address for "${projName}" — provide one or enrich the project first` }) };
+      const r = await resolveProjectCA(projName);
+      ca = r.ca ?? undefined;
+      if (!ca) return { result: JSON.stringify({ error: `no stored contract address for "${projName}" — set one on the project first` }) };
     }
     if (!ca || !isContractAddress(ca)) {
       return { result: JSON.stringify({ error: 'need a valid contract address or a project with one on file' }) };
