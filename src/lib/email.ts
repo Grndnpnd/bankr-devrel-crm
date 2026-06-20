@@ -19,7 +19,7 @@ export interface SendResult {
 }
 
 const apiKey = process.env.RESEND_API_KEY;
-const fromAddress = process.env.EMAIL_FROM || "Bankr DevRel <onboarding@resend.dev>";
+const fromAddress = process.env.EMAIL_FROM || "BANKRcrm <onboarding@resend.dev>";
 
 const resend = apiKey ? new Resend(apiKey) : null;
 

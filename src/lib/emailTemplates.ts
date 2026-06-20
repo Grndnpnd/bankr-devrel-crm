@@ -11,13 +11,13 @@ function shell(title: string, bodyHtml: string): string {
   return `<!doctype html>
 <html><body style="margin:0;padding:0;background:${BG};font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#F0F0F0;">
   <div style="max-width:520px;margin:0 auto;padding:32px 24px;">
-    <div style="font-size:20px;font-weight:700;color:${BRAND};margin-bottom:24px;">Bankr DevRel</div>
+    <div style="font-size:20px;font-weight:700;color:${BRAND};margin-bottom:24px;">BANKRcrm</div>
     <div style="background:${CARD};border:1px solid rgba(255,255,255,0.06);border-radius:12px;padding:28px;">
       <h1 style="font-size:18px;font-weight:700;margin:0 0 16px;color:#F0F0F0;">${title}</h1>
       ${bodyHtml}
     </div>
     <div style="font-size:11px;color:#525252;margin-top:20px;text-align:center;">
-      Bankr DevRel CRM · internal team tool
+      BANKRcrm · internal team tool
     </div>
   </div>
 </body></html>`;
@@ -37,7 +37,7 @@ export function inviteEmail(p: InviteEmailParams): { subject: string; html: stri
   const roleLabel = p.role === "ADMIN" ? "Admin" : p.role === "SUPPORT" ? "Support" : p.role === "ENGINEERING" ? "Engineering" : "DevRel";
   const inviter = p.invitedBy ? ` by ${p.invitedBy}` : "";
 
-  const html = shell("You've been added to the Bankr DevRel CRM", `
+  const html = shell("You've been added to BANKRcrm", `
     <p style="font-size:14px;line-height:1.6;color:#C9C9C9;margin:0 0 16px;">${greeting}</p>
     <p style="font-size:14px;line-height:1.6;color:#C9C9C9;margin:0 0 20px;">
       You've been added${inviter} as <strong style="color:#F0F0F0;">${roleLabel}</strong>. Use the temporary password below to sign in, then change it under Settings → Account.
@@ -56,7 +56,7 @@ export function inviteEmail(p: InviteEmailParams): { subject: string; html: stri
 
   const text = `${greeting}
 
-You've been added${inviter} to the Bankr DevRel CRM as ${roleLabel}.
+You've been added${inviter} to BANKRcrm as ${roleLabel}.
 
 Email: ${p.email}
 Temporary password: ${p.tempPassword}
@@ -65,5 +65,5 @@ Sign in: ${p.loginUrl}
 
 After signing in, change your password under Settings → Account. If your email works with Google sign-in, you can use that instead.`;
 
-  return { subject: "Your Bankr DevRel CRM access", html, text };
+  return { subject: "Your BANKRcrm access", html, text };
 }

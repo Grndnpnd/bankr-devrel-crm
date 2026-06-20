@@ -57,7 +57,7 @@ function LoginForm() {
           </svg>
           <span style={{ fontFamily: "'Manrope', sans-serif", fontSize: 22, fontWeight: 800, letterSpacing: '-0.03em' }}>Bankr</span>
         </div>
-        <div style={{ fontSize: 12, color: '#525252', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 22 }}>DevRel · Intake</div>
+        <div style={{ fontSize: 12, color: '#525252', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 22 }}>BANKRcrm</div>
 
         <label style={lab}>Email</label>
         <input style={field} value={email} autoComplete="username" onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} />
