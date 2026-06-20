@@ -7,7 +7,7 @@ import {
 } from '@/lib/analyticsSpec';
 import { toChatRows, capRows } from '@/lib/chatData';
 import type { ToolDef } from '@/lib/llm';
-import { fetchTokenData, fetchTokenFees, isContractAddress } from '@/lib/discover';
+import { fetchTokenData, fetchTokenFees, fetchOhlcv, dailyVolumeBuckets, searchLaunches, isContractAddress } from '@/lib/discover';
 import { enrichSubmission } from '@/lib/enrich';
 import { enqueueOutbound } from '@/lib/outbound';
 import { logOutreach, listOutreachTypes } from '@/lib/outreach';
@@ -113,9 +113,41 @@ export const AGENT_TOOLS: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'get_token_history',
+      description:
+        'Fetch TIME-SERIES price/volume history (OHLCV candles) for a token over a window — this is how you answer "7-day volume", "daily volume trend", "is volume up or down this week", "30-day high". Provide a project name or contract address. timeframe is "hour" or "day"; for a 7-day total use timeframe:"hour", limit:168 (then I sum volume). For a 30-day daily view use timeframe:"day", limit:30. Returns total volume over the window, per-candle data, price change across the window, and high/low. NOTE: returns empty if the pool isn\'t indexed upstream (very new tokens).',
+      parameters: {
+        type: 'object',
+        properties: {
+          project: { type: 'string', description: 'project name (resolves its contract address)' },
+          contractAddress: { type: 'string', description: '0x… address, if known directly' },
+          timeframe: { type: 'string', enum: ['hour', 'day'], description: 'candle size (hour or day)' },
+          limit: { type: 'number', description: 'number of candles, max 168 (168 hours = 7 days)' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_launches',
+      description:
+        'Look up token launches by deployer wallet OR by token name/symbol via Bankr. Pass a 0x wallet address to get everything that wallet has launched ("what has 0x… launched"); pass a name/symbol to find matching launches. Returns launch type, token address, deployer/fee-recipient X handles, tweet, and timestamp. Use for "what tokens did this wallet deploy" or "find launches named X".',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'a 0x wallet address, or a token name/symbol' },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_token_data',
       description:
-        'Fetch LIVE onchain data for a project\'s token. Volume/market-cap/price come from the Bankr discover API and are 24-HOUR figures (there is no multi-day volume available). Creator FEES come from the Bankr fees API and DO support a multi-day window (set includeFees:true and days, e.g. days:7 for 7-day fees). So: "Basemate 7-day fees" → includeFees:true, days:7; "X\'s volume" → 24h volume. Provide a project name (we resolve its stored contract address) or a contract address directly.',
+        'Fetch a LIVE onchain snapshot for a project\'s token from Bankr discover — price, market cap, and volume at 5m/1h/6h/24h windows. For multi-day volume totals (e.g. 7-day) use get_token_history instead. Creator FEES support a multi-day window here (set includeFees:true and days, e.g. days:7). So: "X\'s current volume" → this tool; "X\'s 7-day volume" → get_token_history; "X\'s 7-day fees" → this tool with includeFees:true, days:7. Provide a project name (we resolve its stored contract address) or a contract address directly.',
       parameters: {
         type: 'object',
         properties: {
@@ -507,6 +539,57 @@ export async function runTool(name: string, args: any, submissions: Submission[]
     return { result: JSON.stringify({ owners: workload }) };
   }
 
+  if (name === 'get_token_history') {
+    let ca: string | undefined = args?.contractAddress?.trim();
+    const projName = args?.project;
+    if (!ca && projName) {
+      const s = findProject(submissions, projName);
+      ca = (s as any)?.contract_address?.trim();
+      if (!ca) return { result: JSON.stringify({ error: `no stored contract address for "${projName}" — provide one or enrich the project first` }) };
+    }
+    if (!ca || !isContractAddress(ca)) {
+      return { result: JSON.stringify({ error: 'need a valid contract address or a project with one on file' }) };
+    }
+    const timeframe: 'hour' | 'day' = args?.timeframe === 'hour' ? 'hour' : 'day';
+    const limit = Math.min(Math.max(Math.round(Number(args?.limit) || (timeframe === 'hour' ? 168 : 30)), 1), 168);
+    try {
+      const o = await fetchOhlcv(ca, timeframe, limit);
+      if (!o || !o.candles.length) {
+        return { result: JSON.stringify({ found: false, note: 'no OHLCV data — pool not indexed upstream (often very new tokens)' }) };
+      }
+      const windowLabel = timeframe === 'hour' ? `${limit}h (${(limit / 24).toFixed(1)}d)` : `${limit}d`;
+      const daily = timeframe === 'hour' ? dailyVolumeBuckets(o.candles) : o.candles.map((c) => ({ date: c.date.slice(0, 10), volume: c.volume }));
+      return { result: JSON.stringify({
+        found: true, window: windowLabel, timeframe,
+        totalVolumeUsd: Math.round(o.totalVolume),
+        priceChangePct: o.priceChangePct != null ? Number(o.priceChangePct.toFixed(2)) : null,
+        high: o.high, low: o.low,
+        dailyVolume: daily,
+        note: `volume summed over ${windowLabel}; ${o.candles.length} ${timeframe} candles`,
+      }) };
+    } catch (e: any) {
+      return { result: JSON.stringify({ error: e?.message ?? 'OHLCV API error' }) };
+    }
+  }
+
+  if (name === 'search_launches') {
+    const q = (args?.query || '').trim();
+    if (!q) return { result: JSON.stringify({ error: 'need a wallet address or token name' }) };
+    try {
+      const r = await searchLaunches(q);
+      const isWallet = isContractAddress(q);
+      const primary = isWallet ? r.byDeployer : r.tokens;
+      return { result: JSON.stringify({
+        query: q, mode: isWallet ? 'by_deployer' : 'by_name',
+        count: primary.length,
+        launches: primary.slice(0, 25),
+        ...(isWallet ? {} : { byDeployerCount: r.byDeployer.length }),
+      }) };
+    } catch (e: any) {
+      return { result: JSON.stringify({ error: e?.message ?? 'launch search error' }) };
+    }
+  }
+
   if (name === 'get_token_data') {
     let ca: string | undefined = args?.contractAddress?.trim();
     let projName = args?.project;
@@ -533,7 +616,7 @@ export async function runTool(name: string, args: any, submissions: Submission[]
       return { result: JSON.stringify({
         found: true, live: true, token: t,
         ...(wantFees ? { fees, feesNote: fees ? `fees are WETH over ${days}d` : 'no fee data for this token' } : {}),
-        volumeNote: 'volume/market-cap are 24h only; no multi-day volume is available from the API',
+        volumeNote: 'token shows 5m/1h/6h/24h volume windows; for multi-day totals (e.g. 7-day) use get_token_history',
       }) };
     } catch (e: any) {
       return { result: JSON.stringify({ error: e?.message ?? 'discover API error' }) };

@@ -13,10 +13,22 @@ export interface DiscoverToken {
   feeRecipientXUsername?: string | null;
   imageUri?: string | null;
   lastPriceUsd?: number | null;
+  lastPriceEth?: number | null;
   marketCapUsd?: number | null;
+  // multi-window volume (all present in the discover payload — was previously only capturing 24h)
+  vol5m?: number | null;
+  vol1h?: number | null;
+  vol6h?: number | null;
+  vol24h?: number | null;
+  // multi-window price change
+  priceChange5m?: number | null;
+  priceChange1h?: number | null;
+  priceChange6h?: number | null;
   priceChange24h?: number | null;
   txCount24h?: number | null;
-  vol24h?: number | null;
+  poolId?: string | null;          // Uniswap pool hash — join key for OHLCV
+  lastTradeAt?: string | null;
+  deployedAt?: string | null;
   websiteUrl?: string | null;
 }
 
@@ -239,4 +251,118 @@ export async function fetchTokenFees(ca: string, days = 7): Promise<TokenFees | 
     dailyEarnings: daily,
     bestDay,
   };
+}
+
+// ── OHLCV time-series ─────────────────────────────────────────────────────────
+// GET /discover/{addr}/ohlcv?timeframe=hour|day&limit=N (max 168). Each candle is
+// [unixSeconds, open, high, low, close, volumeUsd]. This is the ONLY time-series
+// surface — "7-day volume" = timeframe=hour&limit=168, sum the volume column.
+// Returns {ohlcv:[]} if the pool isn't indexed upstream (very new pools).
+
+export interface Candle { ts: number; date: string; open: number; high: number; low: number; close: number; volume: number; }
+
+export interface OhlcvResult {
+  timeframe: "hour" | "day";
+  candles: Candle[];
+  totalVolume: number;       // summed volume over the returned window
+  firstPrice: number | null;
+  lastPrice: number | null;
+  priceChangePct: number | null;
+  high: number | null;
+  low: number | null;
+}
+
+export async function fetchOhlcv(ca: string, timeframe: "hour" | "day" = "day", limit = 30): Promise<OhlcvResult | null> {
+  const addr = ca.trim();
+  if (!isContractAddress(addr)) throw new Error("Invalid contract address (expected 0x + 40 hex chars).");
+  const tf = timeframe === "hour" ? "hour" : "day";
+  const lim = Math.min(Math.max(Math.round(limit), 1), 168);
+  const res = await fetch(`https://api.bankr.bot/discover/${addr}/ohlcv?timeframe=${tf}&limit=${lim}`, {
+    headers: { accept: "application/json" },
+    cache: "no-store",
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`OHLCV API error (HTTP ${res.status}).`);
+  const data = await res.json().catch(() => null);
+  const rows: any[] = Array.isArray(data?.ohlcv) ? data.ohlcv : [];
+  const candles: Candle[] = rows
+    .filter((r) => Array.isArray(r) && r.length >= 6)
+    .map((r) => ({
+      ts: Number(r[0]),
+      date: new Date(Number(r[0]) * 1000).toISOString(),
+      open: Number(r[1]), high: Number(r[2]), low: Number(r[3]), close: Number(r[4]), volume: Number(r[5]),
+    }));
+  if (!candles.length) {
+    return { timeframe: tf, candles: [], totalVolume: 0, firstPrice: null, lastPrice: null, priceChangePct: null, high: null, low: null };
+  }
+  const totalVolume = candles.reduce((s, c) => s + (isFinite(c.volume) ? c.volume : 0), 0);
+  const firstPrice = candles[0].open;
+  const lastPrice = candles[candles.length - 1].close;
+  const priceChangePct = firstPrice ? ((lastPrice - firstPrice) / firstPrice) * 100 : null;
+  const high = Math.max(...candles.map((c) => c.high));
+  const low = Math.min(...candles.map((c) => c.low));
+  return { timeframe: tf, candles, totalVolume, firstPrice, lastPrice, priceChangePct, high, low };
+}
+
+/** Roll hourly candles into per-day volume buckets (for "7-day daily breakdown" from hourly data). */
+export function dailyVolumeBuckets(candles: Candle[]): { date: string; volume: number }[] {
+  const map = new Map<string, number>();
+  for (const c of candles) {
+    const day = c.date.slice(0, 10);
+    map.set(day, (map.get(day) ?? 0) + (isFinite(c.volume) ? c.volume : 0));
+  }
+  return Array.from(map.entries()).map(([date, volume]) => ({ date, volume })).sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
+// ── Deployer / launch lookup ──────────────────────────────────────────────────
+// GET /token-launches/search?q=<wallet|name>. Auto-routes: a wallet populates
+// groups.byDeployer; a name/symbol populates groups.tokens. 120 req/min.
+
+export interface LaunchRecord {
+  launchType: string | null;
+  tokenName: string | null;
+  tokenSymbol: string | null;
+  tokenAddress: string | null;
+  deployerAddress: string | null;
+  deployerXUsername: string | null;
+  feeRecipientAddress: string | null;
+  feeRecipientXUsername: string | null;
+  tweetUrl: string | null;
+  timestamp: number | null;
+  unclaimedFeesUsd: number | null;  // point-in-time, often null (doppler only)
+}
+
+function mapLaunch(r: any): LaunchRecord {
+  return {
+    launchType: r?.launchType ?? null,
+    tokenName: r?.tokenName ?? null,
+    tokenSymbol: r?.tokenSymbol ?? null,
+    tokenAddress: r?.tokenAddress ?? null,
+    deployerAddress: r?.deployer?.walletAddress ?? null,
+    deployerXUsername: r?.deployer?.xUsername ?? null,
+    feeRecipientAddress: r?.feeRecipient?.walletAddress ?? null,
+    feeRecipientXUsername: r?.feeRecipient?.xUsername ?? null,
+    tweetUrl: r?.tweetUrl ?? null,
+    timestamp: typeof r?.timestamp === "number" ? r.timestamp : null,
+    unclaimedFeesUsd: r?.unclaimedFees?.usdValue != null ? Number(r.unclaimedFees.usdValue) : null,
+  };
+}
+
+export interface LaunchSearchResult {
+  query: string;
+  byDeployer: LaunchRecord[];   // launches by this wallet (when q is a wallet)
+  tokens: LaunchRecord[];       // launches matching a name/symbol
+}
+
+export async function searchLaunches(q: string): Promise<LaunchSearchResult> {
+  const query = q.trim();
+  const res = await fetch(`https://api.bankr.bot/token-launches/search?q=${encodeURIComponent(query)}`, {
+    headers: { accept: "application/json" },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`Launch search API error (HTTP ${res.status}).`);
+  const data = await res.json().catch(() => null);
+  const tokens = Array.isArray(data?.groups?.tokens?.results) ? data.groups.tokens.results.map(mapLaunch) : [];
+  const byDeployer = Array.isArray(data?.groups?.byDeployer?.results) ? data.groups.byDeployer.results.map(mapLaunch) : [];
+  return { query, byDeployer, tokens };
 }
