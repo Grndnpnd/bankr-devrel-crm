@@ -11,7 +11,7 @@ export type Metric = 'count' | 'sum' | 'avg' | 'min' | 'max';
 
 // Fields the spec may group by or display (categorical / short).
 export const GROUPABLE_FIELDS = [
-  'stage', 'source', 'owner', 'needs_help', 'low_effort', 'needs_review',
+  'stage', 'source', 'owner', 'needs_help', 'low_effort', 'needs_review', 'location',
 ] as const;
 // Numeric fields available for metrics.
 export const NUMERIC_FIELDS = ['score', 'vol_24h', 'market_cap', 'fees_24h', 'price_change_24h'] as const;
@@ -22,10 +22,10 @@ export const FILTERABLE_FIELDS = [
 // Columns a table panel may show.
 export const TABLE_COLUMNS = [
   'project', 'stage', 'owner', 'score', 'vol_24h', 'market_cap', 'token',
-  'source', 'needs_help', 'submitted_at', 'one_liner',
+  'source', 'needs_help', 'submitted_at', 'one_liner', 'location',
 ] as const;
 
-export type FilterOp = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'has' | 'is_empty' | 'not_empty';
+export type FilterOp = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'contains_any' | 'has' | 'is_empty' | 'not_empty';
 
 export interface SpecFilter {
   field: string;
@@ -79,7 +79,7 @@ export function validateSpec(raw: any): SpecValidation {
   const filters: SpecFilter[] = Array.isArray(raw.filters)
     ? raw.filters
         .filter((f: any) => f && inSet(f.field, FILTERABLE_FIELDS) &&
-          ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'has', 'is_empty', 'not_empty'].includes(f.op))
+          ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'contains_any', 'has', 'is_empty', 'not_empty'].includes(f.op))
         .map((f: any) => ({ field: f.field, op: f.op, value: f.value }))
     : [];
 
@@ -121,6 +121,12 @@ function applyFilters(subs: Submission[], filters: SpecFilter[]): Submission[] {
         case 'lt': return typeof v === 'number' && v < Number(f.value);
         case 'lte': return typeof v === 'number' && v <= Number(f.value);
         case 'contains': return String(v).toLowerCase().includes(String(f.value).toLowerCase());
+        case 'contains_any': {
+          // value is a comma-separated list; match if the field contains ANY of them.
+          const needles = String(f.value ?? '').split(',').map((x) => x.trim().toLowerCase()).filter(Boolean);
+          const hay = String(v).toLowerCase();
+          return needles.some((n) => hay.includes(n));
+        }
         case 'has': return Array.isArray(v) && v.map(String).map((x) => x.toLowerCase()).includes(String(f.value).toLowerCase());
         case 'is_empty': return v == null || v === '' || (Array.isArray(v) && v.length === 0);
         case 'not_empty': return !(v == null || v === '' || (Array.isArray(v) && v.length === 0));

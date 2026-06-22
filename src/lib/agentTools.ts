@@ -50,8 +50,8 @@ export const AGENT_TOOLS: ToolDef[] = [
               type: 'object',
               properties: {
                 field: { type: 'string', enum: [...FILTERABLE_FIELDS] },
-                op: { type: 'string', enum: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'has', 'is_empty', 'not_empty'] },
-                value: {},
+                op: { type: 'string', enum: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'contains_any', 'has', 'is_empty', 'not_empty'] },
+                value: { description: 'for contains_any, a comma-separated list (e.g. "Singapore,Hong Kong,Japan") matching if the field contains ANY of them — useful for region/location filters' },
               },
               required: ['field', 'op'],
             },
@@ -441,8 +441,8 @@ export const AGENT_TOOLS: ToolDef[] = [
               type: 'object',
               properties: {
                 field: { type: 'string', enum: [...FILTERABLE_FIELDS] },
-                op: { type: 'string', enum: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'has', 'is_empty', 'not_empty'] },
-                value: {},
+                op: { type: 'string', enum: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'contains_any', 'has', 'is_empty', 'not_empty'] },
+                value: { description: 'for contains_any, a comma-separated list (e.g. "Singapore,Hong Kong,Japan") matching if the field contains ANY of them — useful for region/location filters' },
               },
               required: ['field', 'op'],
             },
