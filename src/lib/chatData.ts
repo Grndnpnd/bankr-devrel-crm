@@ -13,6 +13,7 @@ export interface ChatRow {
   project: string;
   stage: string;
   owner: string;
+  location: string;                      // city/country the team is based (for geo queries)
   score: number;
   needs_help: string[];
   source: string;
@@ -46,6 +47,7 @@ export function toChatRows(subs: Submission[], maxOutreachPerRow = 5): ChatRow[]
       project: s.project,
       stage: s.stage,
       owner: s.owner || '(unassigned)',
+      location: s.location || '',
       score: s.score,
       needs_help: s.needs_help ?? [],
       source: s.source,
