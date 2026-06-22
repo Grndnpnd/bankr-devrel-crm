@@ -10,20 +10,62 @@ export type PanelType = 'stat' | 'bar' | 'pie' | 'table';
 export type Metric = 'count' | 'sum' | 'avg' | 'min' | 'max';
 
 // Fields the spec may group by or display (categorical / short).
-export const GROUPABLE_FIELDS = [
-  'stage', 'source', 'owner', 'needs_help', 'low_effort', 'needs_review', 'location',
-] as const;
-// Numeric fields available for metrics.
-export const NUMERIC_FIELDS = ['score', 'vol_24h', 'market_cap', 'fees_24h', 'price_change_24h'] as const;
-// Fields usable in filters (categorical + numeric + a few flags).
-export const FILTERABLE_FIELDS = [
-  ...GROUPABLE_FIELDS, ...NUMERIC_FIELDS, 'token', 'contract_address',
-] as const;
-// Columns a table panel may show.
-export const TABLE_COLUMNS = [
-  'project', 'stage', 'owner', 'score', 'vol_24h', 'market_cap', 'token',
-  'source', 'needs_help', 'submitted_at', 'one_liner', 'location',
-] as const;
+/**
+ * CANONICAL FIELD CATALOG — the single source of truth for what can be paneled.
+ * Each entry declares a field on the Submission object plus how it can be used. The
+ * allowlists below are DERIVED from this, so exposing a new field = one catalog entry
+ * (no more patching four separate arrays). `derived` fields are computed in getField.
+ *
+ * kind: 'categorical' (group/filter as text) | 'numeric' (metrics + compare) |
+ *       'date' (filter/column) | 'array' (group/has-filter/column) | 'text' (filter/column) |
+ *       'bool' (filter/column)
+ */
+export interface FieldDef {
+  key: string;
+  label: string;
+  kind: 'categorical' | 'numeric' | 'date' | 'array' | 'text' | 'bool';
+  groupable?: boolean;
+  filterable?: boolean;
+  columnable?: boolean;
+  metric?: boolean;       // usable as a numeric metricField
+  derived?: boolean;      // computed in getField rather than read directly
+}
+
+export const FIELD_CATALOG: FieldDef[] = [
+  { key: 'project',            label: 'Project',           kind: 'text',        filterable: true, columnable: true },
+  { key: 'stage',              label: 'Stage',             kind: 'categorical', groupable: true, filterable: true, columnable: true },
+  { key: 'owner',              label: 'Owner',             kind: 'categorical', groupable: true, filterable: true, columnable: true },
+  { key: 'source',             label: 'Source',            kind: 'categorical', groupable: true, filterable: true, columnable: true },
+  { key: 'location',           label: 'Location',          kind: 'text',        groupable: true, filterable: true, columnable: true },
+  { key: 'needs_help',         label: 'Needs Help',        kind: 'array',       groupable: true, filterable: true, columnable: true },
+  { key: 'score',              label: 'Score',             kind: 'numeric',     filterable: true, columnable: true, metric: true },
+  { key: 'vol_24h',            label: '24h Volume',        kind: 'numeric',     filterable: true, columnable: true, metric: true },
+  { key: 'market_cap',         label: 'Market Cap',        kind: 'numeric',     filterable: true, columnable: true, metric: true },
+  { key: 'fees_24h',           label: '24h Fees',          kind: 'numeric',     filterable: true, columnable: true, metric: true },
+  { key: 'price_change_24h',   label: '24h Price Change',  kind: 'numeric',     filterable: true, columnable: true, metric: true },
+  { key: 'token',              label: 'Token',             kind: 'text',        filterable: true, columnable: true },
+  { key: 'contract_address',   label: 'Contract Address',  kind: 'text',        filterable: true },
+  { key: 'submitted_at',       label: 'Submitted',         kind: 'date',        filterable: true, columnable: true },
+  { key: 'one_liner',          label: 'One-liner',         kind: 'text',        columnable: true },
+  { key: 'low_effort',         label: 'Low Effort',        kind: 'bool',        groupable: true, filterable: true, columnable: true },
+  { key: 'needs_review',       label: 'Needs Review',      kind: 'bool',        groupable: true, filterable: true, columnable: true },
+  // Outreach (some direct on Submission, some derived from the outreach arrays)
+  { key: 'outreach_types',     label: 'Outreach Types',    kind: 'array',       groupable: true, filterable: true, columnable: true },
+  { key: 'last_outreach_type', label: 'Last Outreach Type',kind: 'categorical', groupable: true, filterable: true, columnable: true },
+  { key: 'last_outreach_at',   label: 'Last Outreach Date',kind: 'date',        filterable: true, columnable: true },
+  { key: 'last_contact',       label: 'Last Contact',      kind: 'date',        filterable: true, columnable: true, derived: true },
+  { key: 'contact_count',      label: 'Contact Count',     kind: 'numeric',     filterable: true, columnable: true, metric: true, derived: true },
+  { key: 'has_token',          label: 'Has Token',         kind: 'bool',        groupable: true, filterable: true, columnable: true, derived: true },
+];
+
+const byCap = (pred: (f: FieldDef) => boolean | undefined) => FIELD_CATALOG.filter(pred).map((f) => f.key);
+
+export const GROUPABLE_FIELDS = byCap((f) => f.groupable) as readonly string[];
+export const NUMERIC_FIELDS = byCap((f) => f.metric) as readonly string[];
+export const FILTERABLE_FIELDS = byCap((f) => f.filterable) as readonly string[];
+export const TABLE_COLUMNS = byCap((f) => f.columnable) as readonly string[];
+/** For surfacing to the agent/UI: every field + its label + kind. */
+export const PANEL_FIELDS = FIELD_CATALOG.map((f) => ({ key: f.key, label: f.label, kind: f.kind }));
 
 export type FilterOp = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'contains_any' | 'has' | 'is_empty' | 'not_empty';
 
@@ -102,7 +144,23 @@ export function validateSpec(raw: any): SpecValidation {
 
 // ── Execution ──────────────────────────────────────────────
 
-const getField = (s: Submission, field: string): unknown => (s as any)[field];
+const getField = (s: Submission, field: string): unknown => {
+  // Derived fields computed from the Submission's nested data, so panels resolve the same
+  // values whether run against chat rows or live Submission objects.
+  switch (field) {
+    case 'last_contact': {
+      const acts = ((s as any).outreach ?? []).filter((a: any) => a?.type !== 'system');
+      const dates = acts.map((a: any) => a.timestamp).filter(Boolean).sort();
+      return dates.length ? dates[dates.length - 1] : null;
+    }
+    case 'contact_count':
+      return ((s as any).outreach ?? []).filter((a: any) => a?.type !== 'system').length;
+    case 'has_token':
+      return !!((s as any).token || (s as any).contract_address);
+    default:
+      return (s as any)[field];
+  }
+};
 
 const numVal = (s: Submission, field: string): number => {
   const v = getField(s, field);
