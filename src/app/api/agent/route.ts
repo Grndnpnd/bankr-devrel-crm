@@ -5,7 +5,7 @@ import { llmConfigured, type ToolMessage } from "@/lib/llm";
 import { agentRun } from "@/lib/agentRun";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 180;
 
 export async function POST(req: Request) {
   try {
@@ -34,7 +34,7 @@ async function handle(req: Request) {
     history,
     submissions,
     ctx: { userId: session.id, userEmail: session.email, role: session.role },
-    budgetMs: 55_000,
+    budgetMs: 170_000,
   });
 
   if (result.error) {

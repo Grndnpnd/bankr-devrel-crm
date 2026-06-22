@@ -103,7 +103,7 @@ export interface ToolChatResult {
 export async function chatWithTools(messages: ToolMessage[], tools: ToolDef[], opts?: { temperature?: number; model?: string; timeoutMs?: number }): Promise<ToolChatResult> {
   if (!KEY) return { ok: false, error: 'LLM gateway not configured' };
   const ctl = new AbortController();
-  const timeout = setTimeout(() => ctl.abort(), opts?.timeoutMs ?? 30_000);
+  const timeout = setTimeout(() => ctl.abort(), opts?.timeoutMs ?? 90_000);
   try {
     const res = await fetch(`${BASE}/v1/chat/completions`, {
       method: 'POST',

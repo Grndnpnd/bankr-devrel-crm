@@ -75,7 +75,7 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunResult> {
 
   let builtPanel: AnalyticsSpec | null = null;
   const toolTrace: { name: string; args: any }[] = [];
-  const DEADLINE = Date.now() + (input.budgetMs ?? 55_000);
+  const DEADLINE = Date.now() + (input.budgetMs ?? 170_000);
 
   for (let step = 0; step < MAX_STEPS; step++) {
     const remaining = DEADLINE - Date.now();
@@ -87,7 +87,7 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunResult> {
         panelSpec: builtPanel, toolTrace, capped: true,
       };
     }
-    const res = await chatWithTools(messages, AGENT_TOOLS, { timeoutMs: Math.min(remaining, 30_000) });
+    const res = await chatWithTools(messages, AGENT_TOOLS, { timeoutMs: Math.min(remaining, 90_000) });
     if (!res.ok) {
       return { answer: '', panelSpec: builtPanel, toolTrace, error: res.error ?? 'assistant unavailable' };
     }
@@ -125,7 +125,7 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunResult> {
           'You are out of tool calls. Answer now in plain text using ONLY the data you already gathered above. ' +
           'Give the best answer you can — include partial results and note any gaps (e.g. a token with no indexed history). Do not ask to continue.',
       });
-      const finalRes = await chatWithTools(messages, [], { timeoutMs: Math.min(remaining, 20_000) });
+      const finalRes = await chatWithTools(messages, [], { timeoutMs: Math.min(remaining, 30_000) });
       if (finalRes.ok && finalRes.content) {
         return { answer: finalRes.content, panelSpec: builtPanel, toolTrace, capped: true };
       }
