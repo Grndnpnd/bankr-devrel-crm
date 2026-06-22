@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, Plus, Users } from 'lucide-react';
+import { toast } from 'sonner';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import { toChatRows, capRows } from '@/lib/chatData';
 import AnalyticsPanel from '@/components/analytics/AnalyticsPanel';
@@ -20,15 +21,25 @@ const SUGGESTIONS = [
 ];
 
 const Terminal: React.FC = () => {
-  const [turns, setTurns] = useState<Turn[]>([]);
+  const { submissions, load, addSavedPanel, terminalTurns, setTerminalTurns } = useSubmissionStore();
+  const turns = terminalTurns;
+  const setTurns = (updater: Turn[] | ((prev: Turn[]) => Turn[])) =>
+    setTerminalTurns(typeof updater === 'function' ? (updater as (p: Turn[]) => Turn[])(useSubmissionStore.getState().terminalTurns as Turn[]) : updater);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { submissions, load } = useSubmissionStore();
 
   useEffect(() => { if (!submissions.length) load(); }, [submissions.length, load]);
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' }); }, [turns, loading]);
+
+  const savePanel = useCallback(async (spec: AnalyticsSpec, share: boolean) => {
+    const res = await addSavedPanel(spec, share);
+    if (!res) { toast.error('Could not save panel'); return; }
+    toast.success('Panel saved', {
+      description: share ? 'Shared with the team — add it from your dashboard’s Customize → Add container.' : 'Saved — add it from your dashboard’s Customize → Add container.',
+    });
+  }, [addSavedPanel]);
 
   const send = useCallback(async (text: string) => {
     const q = text.trim();
@@ -75,6 +86,12 @@ const Terminal: React.FC = () => {
           <div style={{ fontSize: 18, fontWeight: 700, color: '#F0F0F0', fontFamily: "'Manrope', sans-serif" }}>Terminal</div>
           <div style={{ fontSize: 12.5, color: '#8A8A8A' }}>Full-screen workspace for the CRM assistant — ask, analyze, create, ingest.</div>
         </div>
+        {turns.length > 0 && (
+          <button onClick={() => { setTerminalTurns([]); setError(null); }}
+            style={{ marginLeft: 'auto', height: 30, padding: '0 12px', fontSize: 12.5, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, color: '#8A8A8A', cursor: 'pointer' }}>
+            New conversation
+          </button>
+        )}
       </div>
 
       {/* Conversation */}
@@ -119,6 +136,16 @@ const Terminal: React.FC = () => {
                     <div style={{ marginTop: 12 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#F0F0F0', marginBottom: 8 }}>{t.panelSpec.title}</div>
                       <AnalyticsPanel spec={t.panelSpec} compact />
+                      <div className="flex items-center gap-2" style={{ marginTop: 10 }}>
+                        <button onClick={() => savePanel(t.panelSpec!, false)} className="inline-flex items-center gap-1.5 rounded-md"
+                          style={{ height: 28, padding: '0 10px', fontSize: 12, fontWeight: 600, backgroundColor: '#7c3aed', color: '#F0F0F0', border: 'none', cursor: 'pointer' }}>
+                          <Plus size={12} /> Save to dashboard
+                        </button>
+                        <button onClick={() => savePanel(t.panelSpec!, true)} className="inline-flex items-center gap-1.5 rounded-md"
+                          style={{ height: 28, padding: '0 10px', fontSize: 12, fontWeight: 600, backgroundColor: 'transparent', border: '1px solid rgba(255,255,255,0.12)', color: '#8A8A8A', cursor: 'pointer' }}>
+                          <Users size={12} /> Save &amp; share
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>

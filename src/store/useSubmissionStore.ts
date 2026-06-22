@@ -15,6 +15,7 @@ interface SubmissionStore {
   users: TeamUser[];
   me: Me | null;
   userCapabilities: string[];
+  terminalTurns: { role: 'user' | 'assistant'; content: string; panelSpec?: any }[];
   dashboardLayout: DashboardWidget[] | null;
   baseLayout: DashboardWidget[] | null;
   dashboardDefault: DashboardWidget[] | null;
@@ -30,6 +31,7 @@ interface SubmissionStore {
 
   setMe: (me: Me | null) => void;
   setUserCapabilities: (caps: string[]) => void;
+  setTerminalTurns: (turns: { role: 'user' | 'assistant'; content: string; panelSpec?: any }[]) => void;
   loadDashboardLayout: () => Promise<void>;
   saveDashboardLayout: (layout: DashboardWidget[]) => Promise<void>;
   setDashboardLayout: (layout: DashboardWidget[]) => void;
@@ -86,6 +88,7 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
   users: [],
   me: null,
   userCapabilities: [],
+  terminalTurns: [],
   dashboardLayout: null,
   baseLayout: null,
   dashboardDefault: null,
@@ -113,6 +116,7 @@ export const useSubmissionStore = create<SubmissionStore>((set, get) => ({
 
   setMe: (me) => set({ me }),
   setUserCapabilities: (caps) => set({ userCapabilities: caps }),
+  setTerminalTurns: (turns) => set({ terminalTurns: turns }),
   setDashboardLayout: (layout) => set({ dashboardLayout: layout }),
   loadDashboardLayout: async () => {
     try {
