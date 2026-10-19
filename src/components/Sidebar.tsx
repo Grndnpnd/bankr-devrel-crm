@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Inbox, BarChart3, Settings, Shield, ClipboardCheck, ChevronLeft, ChevronRight, TerminalSquare, LayoutGrid, Plus, LifeBuoy } from 'lucide-react';
+import { LayoutDashboard, Inbox, BarChart3, Settings, Shield, ClipboardCheck, ChevronLeft, ChevronRight, TerminalSquare, LayoutGrid, Plus, LifeBuoy, Layers } from 'lucide-react';
 import Logo from './icons/Logo';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import { can, type Capability } from '@/lib/access';
@@ -13,6 +13,8 @@ const navItems: NavItem[] = [
   // Dashboard is for everyone — its CONTENTS adapt to the user's pillars (devrel widgets,
   // support widgets, or a mix). No cap gate here.
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+  // Artifacts are for everyone: what you made, what's shared with you, what the team shares.
+  { to: '/artifacts', label: 'Artifacts', icon: Layers },
   // DevRel pillar pages
   { to: '/submissions', label: 'Submissions', icon: Inbox, cap: 'devrel.view' },
   { to: '/analytics', label: 'Analytics', icon: BarChart3, cap: 'devrel.view' },

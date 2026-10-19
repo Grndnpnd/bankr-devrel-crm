@@ -5,9 +5,11 @@ import { COOKIE } from "./lib/constants";
 // Routes that bypass the session-cookie check. /api/ingest is service-to-service
 // (Telegram bot, etc.) — it's NOT unprotected, it enforces its own bearer-token
 // auth (INGEST_API_KEY) inside the route; it just can't also require a session cookie.
-const PUBLIC = ["/login", "/api/auth/login", "/api/auth/google", "/api/ingest", "/api/outbound", "/api/outreach-log", "/api/plain-webhook"];
+// /api/artifacts and /api/mcp take a session cookie OR a personal access token (Claude,
+// scripts) and check either themselves.
+const PUBLIC = ["/login", "/api/auth/login", "/api/auth/google", "/api/ingest", "/api/outbound", "/api/outreach-log", "/api/plain-webhook", "/api/artifacts", "/api/mcp", "/.well-known"];
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (PUBLIC.some((p) => pathname.startsWith(p)) || pathname.startsWith("/_next")) {
     return NextResponse.next();

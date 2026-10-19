@@ -7,7 +7,8 @@ import { logOutreach, listOutreachTypes } from "@/lib/outreach";
 export const dynamic = "force-dynamic";
 
 /** List a project's outreach history, most-recent first. */
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const params = await ctx.params;
   const session = await getSession();
   if (!session || !can(session.role, "submissions.view")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -20,7 +21,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 }
 
 /** Add an outreach entry. Body: { type, detail?, occurredAt? } */
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const params = await ctx.params;
   const session = await getSession();
   if (!session || !can(session.role, "submissions.edit")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });

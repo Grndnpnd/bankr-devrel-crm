@@ -49,6 +49,9 @@ model User {
   slackWebhook    String?            // per-user Slack incoming-webhook URL
   activities   OutreachActivity[]
   panels       SharedPanel[]
+  artifacts    Artifact[]
+  artifactShares ArtifactShare[]
+  apiTokens    ApiToken[]
   createdAt    DateTime           @default(now())
 }
 
@@ -234,6 +237,7 @@ model AppConfig {
   capabilityOverrides Json?             // admin-edited role→capability overrides; null cells fall back to code defaults
   userCapabilityOverrides Json?         // per-user overrides: { [userId]: { grant: Capability[], revoke: Capability[] } }
   customOutreachTypes Json?             // persisted custom outreach-type labels [{key,label}] added by users
+  llmConfig       Json?                 // { provider, models: { agent, extract, report } } — Settings → Models
   updatedAt       DateTime @updatedAt
   updatedBy       String?
 }
@@ -349,4 +353,103 @@ model SupportWebhookEvent {
   receivedAt  DateTime @default(now())
 
   @@index([contentHash, receivedAt])
+}
+
+// ───────────────────────── Artifacts ─────────────────────────
+// HTML pages (Claude artifacts, dashboards, docs) stored with full version history,
+// shared per user or with the whole team, rendered in a sandboxed frame with a
+// window.claude shim (db / user / artifact / downloads / sample) backed by ArtifactDoc.
+
+enum ArtifactVisibility {
+  PRIVATE   // owner + explicit shares
+  TEAM      // every active user can view
+}
+
+enum ArtifactLevel {
+  VIEW      // read the page and its shared data
+  INTERACT  // also write shared data (claude.ai "Contributor")
+  EDIT      // also publish new versions, change metadata (claude.ai "Editor")
+}
+
+model Artifact {
+  id             String             @id @default(cuid())
+  title          String
+  description    String?
+  kind           String             @default("page")   // page | dashboard | doc | deck
+  tags           String[]           @default([])
+  html           String                                 // current version's HTML (denormalized)
+  currentVersion Int                @default(1)
+  sourceUrl      String?                                // e.g. https://claude.ai/artifact/…
+  capabilities   Json?                                  // declared runtime capabilities (db rules etc.)
+  visibility     ArtifactVisibility @default(PRIVATE)
+  ownerId        String
+  owner          User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  versions       ArtifactVersion[]
+  shares         ArtifactShare[]
+  docs           ArtifactDoc[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([ownerId])
+  @@index([visibility])
+  @@index([sourceUrl])
+}
+
+model ArtifactVersion {
+  id          String   @id @default(cuid())
+  artifactId  String
+  artifact    Artifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  version     Int
+  html        String
+  note        String?
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@unique([artifactId, version])
+}
+
+model ArtifactShare {
+  id         String        @id @default(cuid())
+  artifactId String
+  artifact   Artifact      @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  level      ArtifactLevel @default(VIEW)
+  createdAt  DateTime      @default(now())
+
+  @@unique([artifactId, userId])
+  @@index([userId])
+}
+
+/// One document of an artifact's `db` store (claude.ai db capability semantics).
+model ArtifactDoc {
+  id          String    @id @default(cuid())
+  artifactId  String
+  artifact    Artifact  @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  path        String                     // full document path, e.g. "tasks/t1"
+  collection  String                     // parent collection path, e.g. "tasks"
+  docId       String                     // last segment
+  data        Json
+  version     Int       @default(1)
+  leaseHolder String?
+  leaseUntil  DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([artifactId, path])
+  @@index([artifactId, collection])
+}
+
+/// Personal access tokens — how a user's Claude (MCP connector) acts as them.
+model ApiToken {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name       String
+  prefix     String                      // first chars, shown in the UI
+  tokenHash  String    @unique           // sha256 of the full token
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
 }

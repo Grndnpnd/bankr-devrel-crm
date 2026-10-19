@@ -7,7 +7,8 @@ import { enqueueOutbound } from "@/lib/outbound";
 export const dynamic = "force-dynamic";
 
 /** Set/clear a project's Telegram target. Body: { target: string | null } */
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const params = await ctx.params;
   const session = await getSession();
   if (!session || !can(session.role, "submissions.edit")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -19,7 +20,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 }
 
 /** Queue an outbound Telegram message to this project. Body: { message: string } */
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const params = await ctx.params;
   const session = await getSession();
   if (!session || !can(session.role, "submissions.edit")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });

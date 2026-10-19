@@ -49,7 +49,7 @@ export async function verifyToken(token: string): Promise<SessionUser | null> {
 
 /** Read the current session in server components / route handlers. */
 export async function getSession(): Promise<SessionUser | null> {
-  const token = cookies().get(COOKIE)?.value;
+  const token = (await cookies()).get(COOKIE)?.value;
   if (!token) return null;
   // Keep the capability-override cache warm so can() reflects admin edits.
   // (TTL-cached — not a DB hit on every call.)
@@ -58,7 +58,7 @@ export async function getSession(): Promise<SessionUser | null> {
 }
 
 export async function setSessionCookie(token: string) {
-  cookies().set(COOKIE, token, {
+  (await cookies()).set(COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
@@ -68,5 +68,5 @@ export async function setSessionCookie(token: string) {
 }
 
 export async function clearSessionCookie() {
-  cookies().delete(COOKIE);
+  (await cookies()).delete(COOKIE);
 }

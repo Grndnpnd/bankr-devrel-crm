@@ -6,7 +6,8 @@ import { can, isValidRole } from "@/lib/access";
 export const dynamic = "force-dynamic";
 
 /** Update a team member (admin). Body: { role?, active?, name?, password? }. */
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const params = await ctx.params;
   const session = await getSession();
   if (!session || !can(session.role, "users.manage")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const b = await req.json().catch(() => ({}));

@@ -14,7 +14,8 @@ export const dynamic = "force-dynamic";
  *   or  { auto: true } to discover the CA via token-launches search
  *       (founder X handle, project X handle, then known wallet).
  */
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const params = await ctx.params;
   const session = await getSession();
   if (!session || !can(session.role, "submissions.enrich")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -53,7 +54,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 }
 
 /** Clear a submission's token contract address / onchain match. */
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const params = await ctx.params;
   const session = await getSession();
   if (!session || !can(session.role, "submissions.enrich")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });

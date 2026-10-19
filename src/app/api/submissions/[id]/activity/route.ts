@@ -6,7 +6,8 @@ import { serialize, INCLUDE } from "@/lib/serialize";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const params = await ctx.params;
   const session = await getSession();
   if (!session || !can(session.role, "submissions.edit")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });

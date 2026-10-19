@@ -5,7 +5,8 @@ import { getSession } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 
 /** PATCH: update a panel I own. Body: { isPublic?, title? }. */
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const params = await ctx.params;
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const panel = await prisma.sharedPanel.findUnique({ where: { id: params.id } });
@@ -31,7 +32,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 }
 
 /** DELETE: remove a panel I own. */
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const params = await ctx.params;
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   const panel = await prisma.sharedPanel.findUnique({ where: { id: params.id } });

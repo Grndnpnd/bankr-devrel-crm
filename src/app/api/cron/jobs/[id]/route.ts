@@ -13,7 +13,8 @@ function ownsOrAdmin(session: any, job: { createdBy: string | null }) {
 }
 
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const params = await ctx.params;
   const session = await getSession();
   if (!session || !can(session.role, "cron.manage")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const job = await prisma.cronJob.findUnique({ where: { id: params.id } });
@@ -38,7 +39,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   return NextResponse.json(updated);
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const params = await ctx.params;
   const session = await getSession();
   if (!session || !can(session.role, "cron.manage")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const job = await prisma.cronJob.findUnique({ where: { id: params.id } });
@@ -49,7 +51,8 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
 }
 
 // Run a job immediately (manual trigger from the UI).
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const params = await ctx.params;
   const session = await getSession();
   if (!session || !can(session.role, "cron.manage")) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const job = await prisma.cronJob.findUnique({ where: { id: params.id } });

@@ -8,13 +8,15 @@ import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const params = await ctx.params;
   const row = await prisma.submission.findUnique({ where: { id: params.id }, include: INCLUDE });
   if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
   return NextResponse.json(serialize(row));
 }
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const params = await ctx.params;
   const session = await getSession();
   if (!session || !can(session.role, "submissions.edit")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -78,7 +80,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   return NextResponse.json(serialize(row));
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const params = await ctx.params;
   const session = await getSession();
   if (session?.role !== "ADMIN") {
     return NextResponse.json({ error: "admin only" }, { status: 403 });

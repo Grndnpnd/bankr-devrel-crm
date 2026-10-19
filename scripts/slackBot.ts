@@ -23,7 +23,7 @@ if (!APP_TOKEN || !BOT_TOKEN) {
   process.exit(1);
 }
 if (!llmConfigured()) {
-  console.error('[slackbot] LLM not configured (BANKR_LLM_* env) — the agent cannot run.');
+  console.error('[slackbot] LLM not configured (set OLLAMA_API_KEY, BANKR_LLM_KEY or OPENAI_API_KEY) — the agent cannot run.');
   process.exit(1);
 }
 

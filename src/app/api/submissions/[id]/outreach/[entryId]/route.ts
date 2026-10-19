@@ -5,7 +5,8 @@ import { can } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
-export async function DELETE(_req: Request, { params }: { params: { id: string; entryId: string } }) {
+export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string; entryId: string }> }) {
+  const params = await ctx.params;
   const session = await getSession();
   if (!session || !can(session.role, "submissions.edit")) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });

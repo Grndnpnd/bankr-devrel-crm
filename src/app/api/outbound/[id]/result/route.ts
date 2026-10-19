@@ -21,7 +21,8 @@ function authorized(req: Request): boolean {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const params = await ctx.params;
   if (!authorized(req)) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   let body: any;
   try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON body" }, { status: 400 }); }

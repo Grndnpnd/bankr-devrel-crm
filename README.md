@@ -22,10 +22,10 @@ Three services, one repo, one Postgres database:
 
 ## Tech stack
 
-- **Next.js 14** (App Router) + React + Zustand (`src/store/useSubmissionStore.ts`)
-- **Postgres** + **Prisma 5** (`prisma/schema.prisma`)
+- **Next.js 16** (App Router, `src/proxy.ts` is the auth gate) + React 19 + Zustand (`src/store/useSubmissionStore.ts`)
+- **Postgres** + **Prisma 6** (`prisma/schema.prisma`)
 - **Auth:** JWT cookie sessions (`jose`) + Google OAuth sign-in
-- **LLM:** OpenAI/Anthropic-compatible gateway, model selected by env (`BANKR_LLM_MODEL`) — never hard-coded, so models can be swapped without a deploy
+- **LLM:** `src/lib/llm.ts` — Ollama Cloud, the Bankr gateway, or any OpenAI-compatible endpoint; model per task (agent / extract / report) set in Settings → Models, no deploy needed
 - **Slack:** `@slack/socket-mode` + `@slack/web-api`
 - **Integrations:** Google Sheets (`googleapis`), Plain (support inbox), Resend (email, dormant)
 
@@ -41,10 +41,12 @@ Set as **Railway shared/project variables** so all three services see them.
 - `APP_URL` — public app URL (OAuth redirects, links)
 - `NODE_ENV`
 
-**LLM gateway**
-- `BANKR_LLM_BASE_URL` — gateway base URL
-- `BANKR_LLM_KEY` — gateway API key
-- `BANKR_LLM_MODEL` — model string (e.g. `gemini-3-flash`)
+**LLM** (any one provider; pick the provider and a model per task in Settings → Models)
+- `OLLAMA_API_KEY` — Ollama Cloud (`https://ollama.com/v1`). Set `OLLAMA_BASE_URL=http://host:11434/v1` for a self-hosted Ollama (no key needed)
+- `BANKR_LLM_KEY`, `BANKR_LLM_BASE_URL`, `BANKR_LLM_MODEL` — the Bankr LLM gateway (still supported)
+- `OPENAI_BASE_URL`, `OPENAI_API_KEY`, `OPENAI_MODEL` — any other OpenAI-compatible endpoint
+- Optional overrides: `LLM_PROVIDER`, `LLM_MODEL`, `LLM_MODEL_AGENT` / `_EXTRACT` / `_REPORT`
+- Defaults on Ollama: agent `kimi-k3`, extraction `gpt-oss:120b` (holds strict JSON), reports `kimi-k3`
 
 **Google OAuth + Sheets**
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` — OAuth sign-in
@@ -85,7 +87,7 @@ Useful scripts:
 | `npm run slack:bot` | Run the Slack bot worker (what the slack-bot service runs) |
 | `npm run migrate:roles` | One-off role migration |
 
-> **Node version:** Railway currently runs Node 18; `resend` wants Node 20+ (warning only today). Pin Node 20 on the services if a dependency starts hard-requiring it.
+> **Node version:** `engines.node` pins 22.x; Railway builds with Railpack (`railway*.json`). Moving to Prisma 7 needs Node 22.12+ locally.
 
 > **`prisma generate`:** the client is generated on `postinstall` and `build`. If editing in an environment that can't reach Prisma's binary host, `tsc` will report `@prisma/client has no exported member 'Prisma'/'PrismaClient'` and Prisma input types degrade to `any` — real type errors then only surface at the Railway build. Verify locally with:
 > ```bash
@@ -122,6 +124,24 @@ Capabilities are checked via `can(role, capability)` in `src/lib/access.ts`. Key
 Agent **write** tools are gated: create_submission / propose_edit / ingest_project / resolve_proposal → `submissions.edit`; create_scheduled_job / create_slack_report → `cron.manage`. Read tools are open to any agent user. (This is also how the Slack bot enforces "unmapped user = read-only" — an unmapped Slack user gets a sentinel role that fails every `can()` check, so reads work and writes are refused.)
 
 ---
+
+## Artifacts
+
+HTML pages (Claude artifacts, dashboards, docs) live in the `Artifact` table with full version history (`ArtifactVersion`), per-person sharing (`ArtifactShare`: view / use / edit) or team-wide visibility, and a document store (`ArtifactDoc`).
+
+- `/artifacts` is the library (All · Mine · Shared with me · Team); `/artifacts/:id` shows one with versions, sharing, details, download.
+- Pages render from `/api/artifacts/:id/render`, served with `Content-Security-Policy: sandbox …` (no `allow-same-origin`), so page code gets an opaque origin: no cookies, no app API.
+- `src/lib/artifactShim.ts` injects a `window.claude` that matches claude.ai's runtime contract (0.2.66): `claude.use("db" | "user" | "artifact" | "downloads" | "sample" | "permissions")`; other capabilities resolve `null`. Calls go by `postMessage` to `ArtifactFrame`, which relays them to `/api/artifacts/:id/bridge` with the viewer's session. `db` follows claude.ai's path grammar, access levels and declared `rules`, including private `data/users/<id>/` subtrees. `sample()` uses the app's report model.
+- REST: `GET/POST /api/artifacts`, `GET/PATCH/DELETE /api/artifacts/:id` (`html` in a PATCH saves a new version; `{restoreVersion: n}` restores), `/versions`, `/shares`. They take a session cookie or a personal token.
+
+## Claude connector (MCP)
+
+`/api/mcp` is a stateless Streamable HTTP MCP server. Each person creates a token in **Settings → Claude** (`ApiToken`, stored as a SHA-256) and adds it to Claude Code (`claude mcp add --transport http …`) or Desktop (via `mcp-remote`). The connection acts as that person with their access:
+
+- artifact tools: `whoami`, `list_artifacts` (scope all/mine/shared/team), `get_artifact`, `publish_artifact` (re-publishing the same `source_url` adds a version), `update_artifact`, `list_people`, `share_artifact`, `read_artifact_data`, `write_artifact_data`
+- every CRM agent tool except `build_panel`, gated by the same capability checks as the in-app agent
+
+claude.ai custom connectors need OAuth, which is the next step; token auth covers Claude Code, Desktop and scripts today.
 
 ## The agent
 
