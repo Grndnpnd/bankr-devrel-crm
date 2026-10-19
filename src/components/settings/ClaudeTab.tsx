@@ -49,7 +49,16 @@ export default function ClaudeTab() {
 
   const token = fresh ?? '<your token>';
   const claudeCode = `claude mcp add --transport http artifact-hub ${mcpUrl} --header "Authorization: Bearer ${token}"`;
-  const desktopJson = JSON.stringify({ mcpServers: { 'artifact-hub': { command: 'npx', args: ['-y', 'mcp-remote', mcpUrl, '--header', `Authorization: Bearer ${token}`] } } }, null, 2);
+  // The header value rides in env: Claude Desktop on Windows doesn't escape spaces inside args.
+  const desktopJson = JSON.stringify({
+    mcpServers: {
+      'artifact-hub': {
+        command: 'npx',
+        args: ['-y', 'mcp-remote', mcpUrl, '--header', 'Authorization:${AUTH_HEADER}'],
+        env: { AUTH_HEADER: `Bearer ${token}` },
+      },
+    },
+  }, null, 2);
 
   return (
     <div className="flex flex-col gap-5" style={{ maxWidth: 760 }}>
