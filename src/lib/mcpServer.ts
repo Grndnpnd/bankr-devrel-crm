@@ -26,6 +26,7 @@ Artifacts: HTML pages, dashboards and docs, each with version history, sharing a
 - To bring a claude.ai artifact here, read its full HTML and call publish_artifact with source_url set to its claude.ai link; publishing the same source_url again adds a version instead of a duplicate. Pass its declared capabilities (e.g. {"db":{"rules":[...]},"user":{}}) so its data rules carry over.
 - "What's been shared with me" is list_artifacts with scope "shared" (or "team").
 - Large pages: get_artifact returns metadata by default; ask for include_html only when you need the source.
+- Supporting files (images, JSON, video) a page loads by relative path are uploaded with PUT {hub}/api/artifacts/{id}/files?path=<relative path> (raw bytes, same Bearer token); get_artifact lists them.
 CRM tools (query_pipeline, get_submission_detail, ...) read and change the pipeline as this user; destructive edits are queued for human review, never applied directly.`;
 
 // CRM tools that only make sense inside the web UI.
@@ -194,10 +195,11 @@ async function callArtifactTool(user: SessionUser, name: string, args: any) {
         }
       }
       const docCount = await prisma.artifactDoc.count({ where: { artifactId: a.id } });
+      const files = await prisma.artifactFile.findMany({ where: { artifactId: a.id }, select: { path: true, size: true, contentType: true }, orderBy: { path: 'asc' } });
       return text({
         id: a.id, title: a.title, description: a.description, kind: a.kind, tags: a.tags,
         version: a.currentVersion, access: level, team_visible: a.visibility === 'TEAM',
-        source_url: a.sourceUrl, capabilities: a.capabilities, data_documents: docCount,
+        source_url: a.sourceUrl, capabilities: a.capabilities, data_documents: docCount, files,
         size_bytes: Buffer.byteLength(a.html), url: artifactUrl(a.id), updated: a.updatedAt,
         ...(html !== undefined ? { html } : {}),
       });

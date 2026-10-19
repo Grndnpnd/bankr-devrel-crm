@@ -387,6 +387,7 @@ model Artifact {
   versions       ArtifactVersion[]
   shares         ArtifactShare[]
   docs           ArtifactDoc[]
+  files          ArtifactFile[]
   createdAt      DateTime           @default(now())
   updatedAt      DateTime           @updatedAt
 
@@ -437,6 +438,21 @@ model ArtifactDoc {
 
   @@unique([artifactId, path])
   @@index([artifactId, collection])
+}
+
+/// A file published beside the page (images, JSON, video), served at its relative path.
+model ArtifactFile {
+  id          String   @id @default(cuid())
+  artifactId  String
+  artifact    Artifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
+  path        String                     // e.g. "gray/s01_shadow.jpg"
+  contentType String
+  size        Int
+  sha256      String
+  data        Bytes
+  updatedAt   DateTime @updatedAt
+
+  @@unique([artifactId, path])
 }
 
 /// Personal access tokens — how a user's Claude (MCP connector) acts as them.
