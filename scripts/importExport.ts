@@ -1,7 +1,7 @@
 /**
  * Import an export folder of claude.ai artifacts into the hub, owned by one user.
  *
- *   DATABASE_URL=… npx tsx scripts/importExport.ts <export dir> <owner email> [--team] [--only slug,slug]
+ *   DATABASE_URL=… npx tsx scripts/importExport.ts <export dir> <owner email> [--team] [--only slug,slug] [--editor email]
  *
  * The folder holds manifest.json (one entry per artifact: slug, title, url, capabilities,
  * html_file, files), <slug>.html, files/<slug>/<relative path>, and optional
@@ -27,6 +27,9 @@ async function main() {
   const team = rest.includes('--team');
   const onlyIdx = rest.indexOf('--only');
   const only = onlyIdx >= 0 ? new Set(rest[onlyIdx + 1].split(',')) : null;
+  const edIdx = rest.indexOf('--editor');
+  const editor = edIdx >= 0 ? await prisma.user.findFirst({ where: { email: { equals: rest[edIdx + 1], mode: 'insensitive' } } }) : null;
+  if (edIdx >= 0 && !editor) throw new Error(`no user with email ${rest[edIdx + 1]}`);
 
   const owner = await prisma.user.findFirst({ where: { email: { equals: email, mode: 'insensitive' } } });
   if (!owner) throw new Error(`no user with email ${email}`);
@@ -36,7 +39,7 @@ async function main() {
   for (const e of manifest) {
     if (only && !only.has(e.slug)) continue;
     const html = fs.readFileSync(path.join(dir, e.html_file), 'utf8');
-    const kind = /storyboard/i.test(e.title) ? 'deck' : /watch|telemetry|cup/i.test(e.title) ? 'dashboard' : 'page';
+    const kind = e.typed ? 'doc' : /storyboard/i.test(e.title) ? 'deck' : /watch|telemetry|cup/i.test(e.title) ? 'dashboard' : 'page';
     const existing = await prisma.artifact.findFirst({ where: { ownerId: owner.id, sourceUrl: e.url } });
     const art = existing
       ? await updateArtifact(existing.id, viewer, 'owner', { html, title: e.title, capabilities: e.capabilities ?? undefined, note: 'Re-imported from claude.ai' })
@@ -44,6 +47,14 @@ async function main() {
           html, title: e.title, kind, sourceUrl: e.url, capabilities: e.capabilities ?? undefined,
           tags: ['claude.ai'], visibility: team ? 'TEAM' : 'PRIVATE', note: 'Imported from claude.ai',
         });
+
+    if (editor && editor.id !== owner.id) {
+      await prisma.artifactShare.upsert({
+        where: { artifactId_userId: { artifactId: art.id, userId: editor.id } },
+        update: { level: 'EDIT' },
+        create: { artifactId: art.id, userId: editor.id, level: 'EDIT' },
+      });
+    }
 
     let files = 0, bytes = 0;
     for (const rel of e.files ?? []) {
