@@ -489,6 +489,7 @@ model Team {
   color       String       @default("#F5A623")
   members     TeamMember[]
   tasks       Task[]
+  wallets     Wallet[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 }
@@ -569,4 +570,49 @@ model PushSubscription {
   createdAt  DateTime  @default(now())
 
   @@index([userId])
+}
+
+// ───────────────────────── Wallet balance watch ─────────────────────────
+// Reimbursement (and other) wallets: the cron reads ETH + USDC every 5 minutes, keeps a
+// history, and alerts the wallet's team when a balance stays below its alert level.
+
+model Wallet {
+  id            String          @id @default(cuid())
+  label         String
+  chain         String          @default("base")   // base | ethereum
+  address       String                             // 0x…, lowercase
+  teamId        String?
+  team          Team?           @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  // Alert when below *Alert for 2 readings in a row; clear when back at or above *Clear
+  // (defaults to 1.25 × alert). Null = don't watch that asset.
+  ethAlert      Float?
+  ethClear      Float?
+  usdcAlert     Float?
+  usdcClear     Float?
+  ethState      String          @default("ok")     // ok | low
+  usdcState     String          @default("ok")
+  ethBelow      Int             @default(0)        // consecutive readings below the alert level
+  usdcBelow     Int             @default(0)
+  lastEth       Float?
+  lastUsdc      Float?
+  lastCheckedAt DateTime?
+  lastError     String?
+  active        Boolean         @default(true)
+  createdById   String?
+  readings      WalletReading[]
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@unique([chain, address])
+}
+
+model WalletReading {
+  id       String   @id @default(cuid())
+  walletId String
+  wallet   Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  eth      Float?
+  usdc     Float?
+  at       DateTime @default(now())
+
+  @@index([walletId, at])
 }

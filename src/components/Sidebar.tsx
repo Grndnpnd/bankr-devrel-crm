@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Inbox, BarChart3, Settings, Shield, ClipboardCheck, ChevronLeft, ChevronRight, TerminalSquare, LayoutGrid, Plus, LifeBuoy, Layers, CheckSquare } from 'lucide-react';
+import { LayoutDashboard, Inbox, BarChart3, Settings, Shield, ClipboardCheck, ChevronLeft, ChevronRight, TerminalSquare, LayoutGrid, Plus, LifeBuoy, Layers, CheckSquare, Wallet } from 'lucide-react';
 import Logo from './icons/Logo';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import { can, type Capability } from '@/lib/access';
@@ -15,6 +15,7 @@ const navItems: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   // Artifacts are for everyone: what you made, what's shared with you, what the team shares.
   { to: '/tasks', label: 'Tasks', icon: CheckSquare, cap: 'tasks.use' },
+  { to: '/wallets', label: 'Wallets', icon: Wallet, cap: 'tasks.use' },
   { to: '/artifacts', label: 'Artifacts', icon: Layers },
   // DevRel pillar pages
   { to: '/submissions', label: 'Submissions', icon: Inbox, cap: 'devrel.view' },

@@ -14,6 +14,7 @@ export const NOTIFICATION_KINDS: { kind: string; label: string }[] = [
   { kind: 'task.done', label: 'A task I created is done' },
   { kind: 'task.due', label: 'One of my tasks is due within a day' },
   { kind: 'team.added', label: 'I am added to a team' },
+  { kind: 'wallet.low', label: 'A watched wallet runs low (or recovers)' },
 ];
 
 export interface NotifyInput {

@@ -112,6 +112,15 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
       return remindDueTasks();
     },
   },
+  wallet_watch: {
+    type: 'wallet_watch',
+    label: 'Wallet balance watch',
+    description: 'Read ETH + USDC for every watched wallet, keep 30 days of history, and alert the wallet team when a balance stays low.',
+    run: async () => {
+      const { checkAllWallets } = await import('@/lib/wallets');
+      return checkAllWallets();
+    },
+  },
   slack_report: {
     type: 'slack_report',
     label: 'Scheduled Slack report',
@@ -139,7 +148,7 @@ export const jobTypeList = () =>
  * in CoreJobState purely for display + due-checking. The custom cron harness
  * (CronJob table) remains for ad-hoc admin jobs.
  */
-export const CORE_TYPES = ['refresh_onchain', 'refresh_sheet', 'plain_reconcile', 'task_reminders'];
+export const CORE_TYPES = ['refresh_onchain', 'refresh_sheet', 'plain_reconcile', 'task_reminders', 'wallet_watch'];
 
 // The DevRel sources (Google Sheet submissions, onchain token data) are off by default since the
 // pivot to community + support: the sheet is no longer the source of truth. Their tooling stays —
@@ -149,6 +158,7 @@ export const CORE_JOBS: { type: string; name: string; intervalMs: number; defaul
   { type: 'refresh_sheet', name: 'Import sheet submissions', intervalMs: 30 * 60_000, defaultEnabled: false },
   { type: 'plain_reconcile', name: 'Reconcile Plain support', intervalMs: 10 * 60_000, defaultEnabled: true },
   { type: 'task_reminders', name: 'Task due reminders', intervalMs: 15 * 60_000, defaultEnabled: true },
+  { type: 'wallet_watch', name: 'Wallet balance watch', intervalMs: 5 * 60_000, defaultEnabled: true },
 ];
 
 export const coreJobEnabled = (core: { defaultEnabled: boolean }, state?: { enabled: boolean | null } | null) =>

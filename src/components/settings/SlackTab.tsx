@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Slack, Check, Loader2, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import DataCard from '@/components/DataCard';
+import SlackAppCard from '@/components/settings/SlackAppCard';
 
 const isWebhook = (s: string) => /^https:\/\/hooks\.slack\.com\//.test(s.trim());
 
@@ -65,6 +66,7 @@ const SlackTab: React.FC = () => {
 
   return (
     <div style={{ maxWidth: 640 }} className="flex flex-col gap-5">
+      <SlackAppCard />
       <DataCard delay={0}>
         <div className="flex items-center gap-2.5 mb-1">
           <Slack size={18} style={{ color: '#F5A623' }} />

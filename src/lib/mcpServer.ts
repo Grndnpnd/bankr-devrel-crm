@@ -13,6 +13,7 @@ import { can } from '@/lib/access';
 import type { SessionUser } from '@/lib/auth';
 import { AGENT_TOOLS, runTool } from '@/lib/agentTools';
 import { loadChatContext, type ChatRow } from '@/lib/chatData';
+import { TASK_TOOLS, TASK_TOOL_NAMES, callTaskTool } from '@/lib/mcpTaskTools';
 import {
   atLeast, createArtifact, dbDelete, dbGet, dbQuery, dbSet, DbError, listArtifacts, openArtifact,
   setShares, updateArtifact, viewerKey, type DbCtx, type ListScope,
@@ -27,6 +28,7 @@ Artifacts: HTML pages, dashboards and docs, each with version history, sharing a
 - "What's been shared with me" is list_artifacts with scope "shared" (or "team").
 - Large pages: get_artifact returns metadata by default; ask for include_html only when you need the source.
 - Supporting files (images, JSON, video) a page loads by relative path are uploaded with PUT {hub}/api/artifacts/{id}/files?path=<relative path> (raw bytes, same Bearer token); get_artifact lists them.
+Tasks: my_tasks / list_tasks / create_task / update_task work the team's task board (create_task with no team or assignee assigns it to this user); my_notifications shows what needs them.
 CRM tools (query_pipeline, get_submission_detail, ...) read and change the pipeline as this user; destructive edits are queued for human review, never applied directly.`;
 
 // CRM tools that only make sense inside the web UI.
@@ -297,13 +299,15 @@ export function buildMcpServer(user: SessionUser) {
       }))
     : [];
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [...ARTIFACT_TOOLS, ...crmTools] as any }));
+  const taskTools = can(user.role, 'tasks.use') ? TASK_TOOLS : [];
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [...ARTIFACT_TOOLS, ...taskTools, ...crmTools] as any }));
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const name = req.params.name;
     const args = (req.params.arguments ?? {}) as Record<string, unknown>;
     try {
       if (ARTIFACT_TOOL_NAMES.has(name)) return await callArtifactTool(user, name, args);
+      if (TASK_TOOL_NAMES.has(name)) return taskTools.length ? await callTaskTool(user, name, args) : failure('Task tools need the tasks.use capability.');
       if (!crmAllowed || UI_ONLY.has(name) || !crmTools.some((t) => t.name === name)) return failure(`Unknown tool ${name}`);
       const exec = await runTool(name, args, (await chatRows()) as any, { userId: user.id, userEmail: user.email, role: user.role });
       return text(exec.result);

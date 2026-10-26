@@ -23,6 +23,8 @@ const TASK_INCLUDE = {
 export type TaskRow = Prisma.TaskGetPayload<{ include: typeof TASK_INCLUDE }>;
 
 export interface Actor { id: string; name?: string | null; email?: string }
+/** Automations (wallet watch, integrations) act as this; it's never a real user. */
+export const SYSTEM: Actor = { id: 'system', name: 'CRM automation' };
 const who = (a: Actor) => a.name || a.email || 'Someone';
 
 export interface TaskInput {
@@ -88,7 +90,7 @@ export async function getTask(id: string) {
   return prisma.task.findUnique({ where: { id }, include: TASK_INCLUDE });
 }
 
-export async function createTask(actor: Actor, input: TaskInput): Promise<{ task: TaskRow; existed: boolean }> {
+export async function createTask(actor: Actor, input: TaskInput, opts: { silent?: boolean } = {}): Promise<{ task: TaskRow; existed: boolean }> {
   if (!input.title) throw new Error('a task needs a title');
   const source = (input.source || 'app').slice(0, 30);
   if (input.sourceRef) {
@@ -104,13 +106,13 @@ export async function createTask(actor: Actor, input: TaskInput): Promise<{ task
       title: data.title as string,
       source,
       sourceRef: input.sourceRef || null,
-      createdById: actor.id,
+      createdById: actor.id === SYSTEM.id ? null : actor.id,
       position: input.position ?? (first ? first.position - 1 : 0),
       completedAt: data.status === 'DONE' ? new Date() : null,
     },
     include: TASK_INCLUDE,
   });
-  await announce(actor, null, task);
+  if (!opts.silent) await announce(actor, null, task);
   return { task, existed: false };
 }
 

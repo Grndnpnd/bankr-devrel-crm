@@ -6,8 +6,8 @@ import { COOKIE } from "./lib/constants";
 // (Telegram bot, etc.) — it's NOT unprotected, it enforces its own bearer-token
 // auth (INGEST_API_KEY) inside the route; it just can't also require a session cookie.
 // /api/artifacts and /api/mcp take a session cookie OR a personal access token (Claude,
-// scripts) and check either themselves.
-const PUBLIC = ["/login", "/api/auth/login", "/api/auth/google", "/api/ingest", "/api/outbound", "/api/outreach-log", "/api/plain-webhook", "/api/artifacts", "/api/mcp", "/.well-known", "/_runtime", "/api/runtime", "/sw.js", "/manifest.webmanifest", "/icons/"];
+// scripts) and check either themselves. Slack's endpoints verify Slack's request signature.
+const PUBLIC = ["/login", "/api/auth/login", "/api/auth/google", "/api/ingest", "/api/outbound", "/api/outreach-log", "/api/plain-webhook", "/api/artifacts", "/api/mcp", "/.well-known", "/_runtime", "/api/runtime", "/sw.js", "/manifest.webmanifest", "/icons/", "/api/slack/events", "/api/slack/interactions"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
