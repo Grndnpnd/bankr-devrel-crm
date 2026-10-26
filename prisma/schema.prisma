@@ -90,6 +90,7 @@ model CronJob {
 model CoreJobState {
   id          String    @id @default(cuid())
   type        String    @unique          // "refresh_onchain" | "refresh_sheet"
+  enabled     Boolean?                    // admin override; null = the job's default (CORE_JOBS.defaultEnabled)
   lastRunAt   DateTime?
   lastStatus  String?                     // "ok" | "error" | "running"
   lastResult  Json?

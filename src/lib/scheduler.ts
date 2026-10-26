@@ -132,11 +132,17 @@ export const jobTypeList = () =>
  */
 export const CORE_TYPES = ['refresh_onchain', 'refresh_sheet', 'plain_reconcile'];
 
-export const CORE_JOBS: { type: string; name: string; intervalMs: number }[] = [
-  { type: 'refresh_onchain', name: 'Refresh all data', intervalMs: 15 * 60_000 },
-  { type: 'refresh_sheet', name: 'Refresh sheet submissions', intervalMs: 30 * 60_000 },
-  { type: 'plain_reconcile', name: 'Reconcile Plain support', intervalMs: 10 * 60_000 },
+// The DevRel sources (Google Sheet submissions, onchain token data) are off by default since the
+// pivot to community + support: the sheet is no longer the source of truth. Their tooling stays —
+// "Run now", manual import, and the toggle in Settings → Core Refresh still work.
+export const CORE_JOBS: { type: string; name: string; intervalMs: number; defaultEnabled: boolean }[] = [
+  { type: 'refresh_onchain', name: 'Refresh onchain token data', intervalMs: 15 * 60_000, defaultEnabled: false },
+  { type: 'refresh_sheet', name: 'Import sheet submissions', intervalMs: 30 * 60_000, defaultEnabled: false },
+  { type: 'plain_reconcile', name: 'Reconcile Plain support', intervalMs: 10 * 60_000, defaultEnabled: true },
 ];
+
+export const coreJobEnabled = (core: { defaultEnabled: boolean }, state?: { enabled: boolean | null } | null) =>
+  state?.enabled ?? core.defaultEnabled;
 
 /** Run the hard-coded core jobs whose interval has elapsed. */
 async function runDueCoreJobs(now: Date): Promise<any[]> {
@@ -145,6 +151,7 @@ async function runDueCoreJobs(now: Date): Promise<any[]> {
     const handler = JOB_HANDLERS[core.type];
     if (!handler) continue;
     const state = await prisma.coreJobState.findUnique({ where: { type: core.type } });
+    if (!coreJobEnabled(core, state)) continue;
     const due = !state?.lastRunAt || (now.getTime() - new Date(state.lastRunAt).getTime()) >= core.intervalMs;
     if (!due) continue;
     // Reserve: stamp lastRunAt now so an overlapping tick won't double-fire.

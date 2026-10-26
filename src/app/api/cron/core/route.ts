@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSession } from "@/lib/auth";
 import { can } from "@/lib/access";
-import { CORE_JOBS, runCoreJobNow } from "@/lib/scheduler";
+import { CORE_JOBS, coreJobEnabled, runCoreJobNow } from "@/lib/scheduler";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -24,6 +24,7 @@ export async function GET() {
       lastRunAt: st?.lastRunAt ?? null,
       lastStatus: st?.lastStatus ?? null,
       lastError: st?.lastError ?? null,
+      enabled: coreJobEnabled(c, st),
     };
   });
   return NextResponse.json({ jobs });
@@ -34,6 +35,12 @@ export async function POST(req: Request) {
   if (!session || !gate(session.role)) return NextResponse.json({ error: "forbidden" }, { status: 403 });
   const b = await req.json().catch(() => ({}));
   const type = String(b?.type || "");
+  // { type, enabled } switches a job's schedule on/off; { type } alone runs it now.
+  if (typeof b?.enabled === "boolean") {
+    if (!CORE_JOBS.some((c) => c.type === type)) return NextResponse.json({ ok: false, error: "unknown core job" }, { status: 400 });
+    await prisma.coreJobState.upsert({ where: { type }, update: { enabled: b.enabled }, create: { type, enabled: b.enabled } });
+    return NextResponse.json({ ok: true, enabled: b.enabled });
+  }
   const r = await runCoreJobNow(type);
   return NextResponse.json(r, { status: r.ok ? 200 : 400 });
 }

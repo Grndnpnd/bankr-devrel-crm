@@ -11,6 +11,7 @@ interface CoreJob {
   lastRunAt: string | null;
   lastStatus: string | null;
   lastError: string | null;
+  enabled: boolean;
 }
 
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleString() : 'never');
@@ -45,6 +46,19 @@ const CoreRefreshTab: React.FC = () => {
     } finally { setBusyType(null); }
   };
 
+  const toggle = async (job: CoreJob) => {
+    setBusyType(job.type);
+    try {
+      const res = await fetch('/api/cron/core', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: job.type, enabled: !job.enabled }),
+      });
+      if (res.ok) toast.success(`${job.name} ${job.enabled ? 'paused' : 'scheduled'}`);
+      else toast.error('Could not change the schedule');
+      load();
+    } finally { setBusyType(null); }
+  };
+
   if (loading) return <div style={{ color: '#525252', fontSize: 13, padding: 20 }}>Loading…</div>;
 
   return (
@@ -56,7 +70,7 @@ const CoreRefreshTab: React.FC = () => {
           </div>
           <div>
             <h3 style={{ fontFamily: "'Manrope', sans-serif", fontSize: 16, fontWeight: 600, color: '#F0F0F0' }}>Core Data Refresh</h3>
-            <p style={{ fontSize: 12, color: '#8A8A8A' }}>Always-on system jobs that keep the CRM fed. Run on fixed schedules — not editable or deletable.</p>
+            <p style={{ fontSize: 12, color: '#8A8A8A' }}>System jobs that keep the CRM fed, on fixed intervals. Pause one to take it off the schedule; Run now still works.</p>
           </div>
         </div>
 
@@ -72,14 +86,20 @@ const CoreRefreshTab: React.FC = () => {
                     {job.lastStatus === 'running' && <Loader2 size={14} className="animate-spin" style={{ color: '#F5A623' }} />}
                   </div>
                   <div style={{ fontSize: 11.5, color: '#8A8A8A', marginTop: 4 }}>
-                    every {job.intervalLabel} · last run {fmt(job.lastRunAt)}
+                    {job.enabled ? `every ${job.intervalLabel}` : 'paused — runs only with Run now'} · last run {fmt(job.lastRunAt)}
                     {job.lastError ? ` · error: ${job.lastError}` : ''}
                   </div>
                 </div>
+                <div className="flex items-center gap-2">
+                <label className="inline-flex items-center gap-1.5" style={{ fontSize: 12, color: '#8A8A8A', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={job.enabled} disabled={busyType === job.type} onChange={() => toggle(job)} aria-label={`Schedule ${job.name}`} />
+                  Scheduled
+                </label>
                 <button onClick={() => runNow(job)} disabled={busyType === job.type}
                   className="inline-flex items-center gap-1.5 rounded-md" style={{ height: 32, padding: '0 12px', fontSize: 12.5, fontWeight: 600, color: '#F5A623', border: '1px solid rgba(245,166,35,0.3)' }}>
                   {busyType === job.type ? <Loader2 size={13} className="animate-spin" /> : <Play size={13} />} Run now
                 </button>
+                </div>
               </div>
             </div>
           ))}
