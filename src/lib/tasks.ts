@@ -122,6 +122,10 @@ export async function updateTask(actor: Actor, id: string, input: TaskInput): Pr
   const data = clean(input);
   if (data.status && data.status !== before.status) data.completedAt = data.status === 'DONE' ? new Date() : null;
   const task = await prisma.task.update({ where: { id }, data: data as Prisma.TaskUncheckedUpdateInput, include: TASK_INCLUDE });
+  // A beta tester's report follows its task: done on the board → "Fixed" in the tester's portal.
+  if (task.source === 'beta' && data.status === 'DONE' && before.status !== 'DONE') {
+    await prisma.testerReport.updateMany({ where: { taskId: id, status: { in: ['new', 'triaged', 'in_progress'] } }, data: { status: 'fixed' } });
+  }
   await announce(actor, before, task);
   return task;
 }

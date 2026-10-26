@@ -7,7 +7,9 @@ import { COOKIE } from "./lib/constants";
 // auth (INGEST_API_KEY) inside the route; it just can't also require a session cookie.
 // /api/artifacts and /api/mcp take a session cookie OR a personal access token (Claude,
 // scripts) and check either themselves. Slack's endpoints verify Slack's request signature.
-const PUBLIC = ["/login", "/api/auth/login", "/api/auth/google", "/api/ingest", "/api/outbound", "/api/outreach-log", "/api/plain-webhook", "/api/artifacts", "/api/mcp", "/.well-known", "/_runtime", "/api/runtime", "/sw.js", "/manifest.webmanifest", "/icons/", "/api/slack/events", "/api/slack/interactions"];
+// /b/ and /api/tester/ are the beta-tester pages: testers have no CRM login; their join link
+// or personal portal token is checked by each route.
+const PUBLIC = ["/login", "/api/auth/login", "/api/auth/google", "/api/ingest", "/api/outbound", "/api/outreach-log", "/api/plain-webhook", "/api/artifacts", "/api/mcp", "/.well-known", "/_runtime", "/api/runtime", "/sw.js", "/manifest.webmanifest", "/icons/", "/api/slack/events", "/api/slack/interactions", "/b/", "/api/tester/"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;

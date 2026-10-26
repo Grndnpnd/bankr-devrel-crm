@@ -18,6 +18,7 @@ function titleFor(pathname: string): string {
   if (pathname.startsWith('/review')) return 'Review Inbox';
   if (pathname.startsWith('/tasks')) return 'Tasks';
   if (pathname.startsWith('/wallets')) return 'Wallets';
+  if (pathname.startsWith('/beta')) return 'Beta programs';
   if (pathname.startsWith('/artifacts')) return 'Artifacts';
   return 'Bankr';
 }

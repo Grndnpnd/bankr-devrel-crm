@@ -17,6 +17,13 @@ dashboard). This plan turns the DevRel pipeline into a community + support works
   + @mention over HTTP (needs the Slack app created from the manifest in Settings → Slack, then
   SLACK_BOT_TOKEN + SLACK_SIGNING_SECRET on the web service). /wallets: Base/Ethereum ETH + USDC every
   5 minutes, low-balance alerts to the wallet's team plus a top-up task that closes on recovery.
+- **Beta programs** (2026-10-26). /beta: a program per launch with a revocable join link, tester cap,
+  end date and sign-up questions. Testers join at /b/<slug> (no account; a personal portal link, re-join
+  with the same email for a fresh one), file bugs/feedback/ideas/questions with screenshots, and talk with
+  the team per report. Each report is a task for the program's team (bugs can go elsewhere), priority from
+  severity; tester replies notify the owner; Done on the board shows Fixed to the tester. Rate limits on
+  the public forms; Cloudflare Turnstile switches on with TURNSTILE_SITE_KEY + TURNSTILE_SECRET_KEY.
+  Not yet: Plain threads + live chat for testers (needs a Plain key), email to testers (needs Resend).
 
 ## The shared building blocks
 

@@ -40,6 +40,8 @@ export type Capability =
   | 'tasks.use'             // see the task board, create and change tasks
   // Wallets
   | 'wallets.manage'        // add/edit watched wallets and their alert levels (everyone with tasks.use can view)
+  // Beta programs
+  | 'beta.manage'           // create programs, change links/routing, remove testers (triage needs tasks.use)
   | 'settings.scoring'      // edit scoring weights
   | 'settings.sources'      // manage import sources, run imports
   | 'import.run';
@@ -66,6 +68,7 @@ const MATRIX: Record<Capability, Role[]> = {
   'teams.manage':      ['ADMIN'],
   'tasks.use':         ['ADMIN', 'DEVREL', 'SUPPORT', 'ENGINEERING'],
   'wallets.manage':    ['ADMIN'],
+  'beta.manage':       ['ADMIN', 'DEVREL', 'SUPPORT', 'ENGINEERING'],
   'settings.scoring':  ['ADMIN'],
   'settings.sources':  ['ADMIN'],
   'import.run':        ['ADMIN', 'DEVREL', 'SUPPORT', 'ENGINEERING'],
@@ -170,6 +173,7 @@ export const CAPABILITY_META: { key: Capability; label: string; group: string; n
   { key: 'import.run',         label: 'Run imports',             group: 'Data' },
   { key: 'tasks.use',          label: 'Use the task board',      group: 'Tasks' },
   { key: 'wallets.manage',     label: 'Manage watched wallets',  group: 'Tasks', note: 'add wallets and set low-balance alerts' },
+  { key: 'beta.manage',        label: 'Run beta programs',       group: 'Tasks', note: 'create programs, join links, routing' },
   { key: 'users.manage',       label: 'Manage users & roles',    group: 'Administration' },
   { key: 'teams.manage',       label: 'Manage teams',            group: 'Administration', note: 'team leads can always manage their own team' },
   { key: 'settings.scoring',   label: 'Edit scoring weights',    group: 'Administration' },

@@ -490,6 +490,8 @@ model Team {
   members     TeamMember[]
   tasks       Task[]
   wallets     Wallet[]
+  betaPrograms    BetaProgram[] @relation("BetaTeam")
+  betaBugPrograms BetaProgram[] @relation("BetaBugTeam")
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 }
@@ -533,6 +535,7 @@ model Task {
   sourceRef   String?                      // external id, for dedupe (e.g. a Slack message ts)
   position    Float      @default(0)       // order within a board column
   completedAt DateTime?
+  betaReport  TesterReport?
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
@@ -615,4 +618,104 @@ model WalletReading {
   at       DateTime @default(now())
 
   @@index([walletId, at])
+}
+
+// ───────────────────────── Beta programs ─────────────────────────
+// One program per launch. Testers join through the program's link (no CRM account),
+// get a personal portal link, and file bugs / feedback / ideas / questions. Each report
+// becomes a task for the program's team; team and tester talk in the report's replies.
+
+model BetaProgram {
+  id          String        @id @default(cuid())
+  name        String
+  product     String?
+  slug        String        @unique             // public URL: /b/<slug>
+  description String?                            // shown on the join page (plain text)
+  welcome     String?                            // shown once a tester has joined
+  status      String        @default("open")     // draft | open | closed (closed: no joins, no new reports)
+  joinToken   String        @unique              // in the join link; regenerate to revoke the old link
+  maxTesters  Int?
+  questions   Json?                              // extra sign-up questions [{ id, label, required }]
+  teamId      String?                            // gets feedback, ideas and questions
+  team        Team?         @relation("BetaTeam", fields: [teamId], references: [id], onDelete: SetNull)
+  bugTeamId   String?                            // gets bugs (falls back to teamId)
+  bugTeam     Team?         @relation("BetaBugTeam", fields: [bugTeamId], references: [id], onDelete: SetNull)
+  endsAt      DateTime?
+  createdById String?
+  testers     Tester[]
+  reports     TesterReport[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model Tester {
+  id         String         @id @default(cuid())
+  programId  String
+  program    BetaProgram    @relation(fields: [programId], references: [id], onDelete: Cascade)
+  email      String                              // lowercase
+  name       String
+  contact    String?                             // Telegram / Discord handle
+  platform   String?                             // device / OS / browser they test on
+  answers    Json?
+  accessHash String         @unique              // sha256 of the personal portal token
+  status     String         @default("active")   // active | removed
+  lastSeenAt DateTime?
+  reports    TesterReport[]
+  replies    TesterReply[]
+  createdAt  DateTime       @default(now())
+
+  @@unique([programId, email])
+}
+
+model TesterReport {
+  id          String             @id @default(cuid())
+  programId   String
+  program     BetaProgram        @relation(fields: [programId], references: [id], onDelete: Cascade)
+  testerId    String
+  tester      Tester             @relation(fields: [testerId], references: [id], onDelete: Cascade)
+  kind        String                                // bug | feedback | idea | question
+  title       String
+  body        String
+  severity    String?                               // bugs: blocker | major | minor
+  steps       String?
+  expected    String?
+  actual      String?
+  platform    String?
+  pageUrl     String?
+  status      String             @default("new")    // new | triaged | in_progress | fixed | wont_fix | duplicate | answered
+  taskId      String?            @unique
+  task        Task?              @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  testerSeenAt DateTime?                            // last time the tester opened it (for "new reply" badges)
+  replies     TesterReply[]
+  attachments TesterAttachment[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([programId, status])
+  @@index([testerId])
+}
+
+model TesterReply {
+  id         String       @id @default(cuid())
+  reportId   String
+  report     TesterReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  authorType String                                 // team | tester
+  userId     String?                                // team author
+  testerId   String?
+  tester     Tester?      @relation(fields: [testerId], references: [id], onDelete: SetNull)
+  body       String
+  createdAt  DateTime     @default(now())
+
+  @@index([reportId, createdAt])
+}
+
+model TesterAttachment {
+  id          String       @id @default(cuid())
+  reportId    String
+  report      TesterReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  filename    String
+  contentType String
+  size        Int
+  data        Bytes
+  createdAt   DateTime     @default(now())
 }
