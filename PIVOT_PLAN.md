@@ -8,6 +8,10 @@ dashboard). This plan turns the DevRel pipeline into a community + support works
 - **Google Sheet is no longer a source of truth.** The scheduled Sheets import and the DevRel onchain
   token refresh are paused by default (Settings → Core Refresh has a Scheduled switch per job).
   The import tooling, "Run now" and the submissions data all stay.
+- **Teams, notifications and the task board** (2026-10-26). Settings → Teams (admins create teams, leads
+  manage their own); /tasks board with drag-and-drop, filters and a drawer; the bell with live updates;
+  Web Push per device (Settings → Notifications, installable app for iPhone); due-soon reminders every
+  15 minutes. Tasks carry a source and link, ready for Slack, Claude, testers and email to feed them.
 
 ## The shared building blocks
 
