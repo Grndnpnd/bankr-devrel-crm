@@ -52,6 +52,12 @@ model User {
   artifacts    Artifact[]
   artifactShares ArtifactShare[]
   apiTokens    ApiToken[]
+  teamMemberships TeamMember[]
+  tasksAssigned   Task[]           @relation("TaskAssignee")
+  tasksCreated    Task[]           @relation("TaskCreator")
+  notifications   Notification[]
+  pushSubscriptions PushSubscription[]
+  notificationPrefs Json?          // { push: { [kind]: boolean } } — missing = on
   createdAt    DateTime           @default(now())
 }
 
@@ -466,6 +472,100 @@ model ApiToken {
   tokenHash  String    @unique           // sha256 of the full token
   lastUsedAt DateTime?
   revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId])
+}
+
+// ───────────────────────── Teams, tasks, notifications ─────────────────────────
+// The shared base for the community + support features: anything (a Slack message, a
+// tester report, an email thread, a low wallet) can become a task for a person or a
+// team, and every event reaches people through their notifications.
+
+model Team {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  description String?
+  color       String       @default("#F5A623")
+  members     TeamMember[]
+  tasks       Task[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   @default("member")   // lead | member
+  createdAt DateTime @default(now())
+
+  @@unique([teamId, userId])
+  @@index([userId])
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  DONE
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  body        String?
+  status      TaskStatus @default(TODO)
+  priority    Int        @default(2)       // 0 urgent, 1 high, 2 normal, 3 low
+  dueAt       DateTime?
+  remindedAt  DateTime?                    // due-soon reminder sent
+  assigneeId  String?
+  assignee    User?      @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  teamId      String?
+  team        Team?      @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  createdById String?
+  createdBy   User?      @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  source      String     @default("app")   // app | slack | claude | telegram | gmail | beta | plain | agent
+  sourceUrl   String?                      // link back to where it came from
+  sourceRef   String?                      // external id, for dedupe (e.g. a Slack message ts)
+  position    Float      @default(0)       // order within a board column
+  completedAt DateTime?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([source, sourceRef])
+  @@index([assigneeId, status])
+  @@index([teamId, status])
+  @@index([dueAt])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      String                         // task.assigned, task.team, task.done, task.due, team.added, test
+  title     String
+  body      String?
+  url       String?                        // in-app path to open
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt])
+  @@index([userId, createdAt])
+}
+
+/// A browser/device that accepts Web Push for a user.
+model PushSubscription {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  userAgent  String?
+  lastUsedAt DateTime?
   createdAt  DateTime  @default(now())
 
   @@index([userId])

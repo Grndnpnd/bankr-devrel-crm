@@ -103,6 +103,15 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
       return r;
     },
   },
+  task_reminders: {
+    type: 'task_reminders',
+    label: 'Task due reminders',
+    description: 'Notify each assignee once about open tasks due within the next 24 hours (in the app and by push).',
+    run: async () => {
+      const { remindDueTasks } = await import('@/lib/tasks');
+      return remindDueTasks();
+    },
+  },
   slack_report: {
     type: 'slack_report',
     label: 'Scheduled Slack report',
@@ -130,7 +139,7 @@ export const jobTypeList = () =>
  * in CoreJobState purely for display + due-checking. The custom cron harness
  * (CronJob table) remains for ad-hoc admin jobs.
  */
-export const CORE_TYPES = ['refresh_onchain', 'refresh_sheet', 'plain_reconcile'];
+export const CORE_TYPES = ['refresh_onchain', 'refresh_sheet', 'plain_reconcile', 'task_reminders'];
 
 // The DevRel sources (Google Sheet submissions, onchain token data) are off by default since the
 // pivot to community + support: the sheet is no longer the source of truth. Their tooling stays —
@@ -139,6 +148,7 @@ export const CORE_JOBS: { type: string; name: string; intervalMs: number; defaul
   { type: 'refresh_onchain', name: 'Refresh onchain token data', intervalMs: 15 * 60_000, defaultEnabled: false },
   { type: 'refresh_sheet', name: 'Import sheet submissions', intervalMs: 30 * 60_000, defaultEnabled: false },
   { type: 'plain_reconcile', name: 'Reconcile Plain support', intervalMs: 10 * 60_000, defaultEnabled: true },
+  { type: 'task_reminders', name: 'Task due reminders', intervalMs: 15 * 60_000, defaultEnabled: true },
 ];
 
 export const coreJobEnabled = (core: { defaultEnabled: boolean }, state?: { enabled: boolean | null } | null) =>

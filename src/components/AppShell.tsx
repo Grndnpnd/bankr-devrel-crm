@@ -16,6 +16,8 @@ function titleFor(pathname: string): string {
   if (pathname.startsWith('/settings')) return 'Settings';
   if (pathname.startsWith('/admin')) return 'Admin';
   if (pathname.startsWith('/review')) return 'Review Inbox';
+  if (pathname.startsWith('/tasks')) return 'Tasks';
+  if (pathname.startsWith('/artifacts')) return 'Artifacts';
   return 'Bankr';
 }
 

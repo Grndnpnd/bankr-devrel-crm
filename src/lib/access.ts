@@ -35,6 +35,9 @@ export type Capability =
   | 'cron.manage'           // create/edit/run/delete scheduled jobs
   // Administration
   | 'users.manage'          // invite users, change roles, deactivate
+  | 'teams.manage'          // create teams, change members (team leads manage their own team)
+  // Tasks
+  | 'tasks.use'             // see the task board, create and change tasks
   | 'settings.scoring'      // edit scoring weights
   | 'settings.sources'      // manage import sources, run imports
   | 'import.run';
@@ -58,6 +61,8 @@ const MATRIX: Record<Capability, Role[]> = {
   'panels.create':     ['ADMIN', 'DEVREL', 'SUPPORT', 'ENGINEERING'],
   'cron.manage':       ['ADMIN', 'DEVREL', 'SUPPORT', 'ENGINEERING'],
   'users.manage':      ['ADMIN'],
+  'teams.manage':      ['ADMIN'],
+  'tasks.use':         ['ADMIN', 'DEVREL', 'SUPPORT', 'ENGINEERING'],
   'settings.scoring':  ['ADMIN'],
   'settings.sources':  ['ADMIN'],
   'import.run':        ['ADMIN', 'DEVREL', 'SUPPORT', 'ENGINEERING'],
@@ -160,7 +165,9 @@ export const CAPABILITY_META: { key: Capability; label: string; group: string; n
   { key: 'panels.create',      label: 'Create dashboard panels', group: 'Analytics' },
   { key: 'cron.manage',        label: 'Manage scheduled jobs',   group: 'Automation' },
   { key: 'import.run',         label: 'Run imports',             group: 'Data' },
+  { key: 'tasks.use',          label: 'Use the task board',      group: 'Tasks' },
   { key: 'users.manage',       label: 'Manage users & roles',    group: 'Administration' },
+  { key: 'teams.manage',       label: 'Manage teams',            group: 'Administration', note: 'team leads can always manage their own team' },
   { key: 'settings.scoring',   label: 'Edit scoring weights',    group: 'Administration' },
   { key: 'settings.sources',   label: 'Manage import sources',   group: 'Administration' },
 ];
