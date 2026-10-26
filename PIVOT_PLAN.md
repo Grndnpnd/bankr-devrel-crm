@@ -12,6 +12,11 @@ dashboard). This plan turns the DevRel pipeline into a community + support works
   manage their own); /tasks board with drag-and-drop, filters and a drawer; the bell with live updates;
   Web Push per device (Settings → Notifications, installable app for iPhone); due-soon reminders every
   15 minutes. Tasks carry a source and link, ready for Slack, Claude, testers and email to feed them.
+- **Claude Code task tools, Slack "add to tasks", wallet alerts** (2026-10-26). The MCP connector has
+  my_tasks / list_tasks / create_task / update_task / list_teams / notifications. Slack: message shortcut
+  + @mention over HTTP (needs the Slack app created from the manifest in Settings → Slack, then
+  SLACK_BOT_TOKEN + SLACK_SIGNING_SECRET on the web service). /wallets: Base/Ethereum ETH + USDC every
+  5 minutes, low-balance alerts to the wallet's team plus a top-up task that closes on recovery.
 
 ## The shared building blocks
 
