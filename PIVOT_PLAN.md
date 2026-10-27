@@ -74,7 +74,7 @@ Renames to watch: tenant/company fields are deprecated in favour of `account`; s
 1. **Building blocks**: Teams, Notifications (in-app + Web Push), Tasks board — the visible part of feature 1.
 2. **Quick wins on top**: Claude Code tools (4), Slack shortcut (3), wallet alerts (7).
 3. **Beta programs** (2) with Plain wired back in.
-4. **Telegram** (5).
+4. **Telegram** (5) — tabled for now (Oct 27).
 5. **Gmail tracking** (6) — last, because it needs Google Cloud setup and a decision on whose inboxes.
 
 ## Decisions for you
