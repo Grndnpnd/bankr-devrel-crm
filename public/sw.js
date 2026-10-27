@@ -19,6 +19,8 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   const url = new URL((event.notification.data && event.notification.data.url) || '/', self.location.origin).href;
   event.waitUntil((async () => {
+    // Links elsewhere (a Plain thread) open in their own window.
+    if (new URL(url).origin !== self.location.origin) return self.clients.openWindow(url);
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
     for (const w of wins) {
       if (new URL(w.url).origin === self.location.origin && 'focus' in w) {

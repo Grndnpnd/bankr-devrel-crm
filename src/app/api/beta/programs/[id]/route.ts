@@ -41,6 +41,8 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (b?.maxTesters !== undefined) data.maxTesters = Number(b.maxTesters) > 0 ? Math.floor(Number(b.maxTesters)) : null;
   if (b?.endsAt !== undefined) data.endsAt = b.endsAt ? new Date(b.endsAt) : null;
   if (b?.questions !== undefined) data.questions = cleanQuestions(b.questions) as unknown as Prisma.InputJsonValue;
+  if (b?.plainEnabled !== undefined) data.plainEnabled = !!b.plainEnabled;
+  if (b?.plainLabelTypeId !== undefined) data.plainLabelTypeId = b.plainLabelTypeId ? String(b.plainLabelTypeId).slice(0, 60) : null;
   if (b?.regenerateLink) data.joinToken = token(18);
   const p = await prisma.betaProgram.update({ where: { id }, data });
   return NextResponse.json({ ok: true, joinUrl: joinUrl(p) });

@@ -20,6 +20,8 @@ function ago(iso: string) {
  */
 export default function NotificationBell() {
   const router = useRouter();
+  // Plain links open in a new tab; everything else stays in the app.
+  const go = (url: string) => (/^https?:\/\//.test(url) ? window.open(url, '_blank', 'noopener') : router.push(url));
   const [items, setItems] = useState<Item[]>([]);
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
@@ -42,7 +44,7 @@ export default function NotificationBell() {
       setItems((xs) => (xs.some((x) => x.id === n.id) ? xs : [n, ...xs].slice(0, 30)));
       setUnread((u) => u + 1);
       window.dispatchEvent(new CustomEvent('hub:notification', { detail: n }));
-      toast(n.title, { description: n.body ?? undefined, action: n.url ? { label: 'Open', onClick: () => router.push(n.url!) } : undefined });
+      toast(n.title, { description: n.body ?? undefined, action: n.url ? { label: 'Open', onClick: () => go(n.url!) } : undefined });
     });
     return () => es.close();
   }, [load, router]);
@@ -67,7 +69,7 @@ export default function NotificationBell() {
       setUnread((u) => Math.max(0, u - 1));
       markRead({ ids: [n.id] });
     }
-    if (n.url) router.push(n.url);
+    if (n.url) go(n.url);
   }
 
   async function readAll() {

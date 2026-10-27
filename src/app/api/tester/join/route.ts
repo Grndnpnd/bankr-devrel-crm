@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 /** Join: { slug, k, email, name, contact?, platform?, answers?, turnstile? } → sets the portal cookie, returns the personal link. */
 export async function POST(req: Request) {
   const ip = clientIp(req);
-  if (rateLimited(`join:${ip}`, 10, 3600_000)) return NextResponse.json({ error: 'Too many tries from here — wait a bit and try again.' }, { status: 429 });
+  if (await rateLimited(`join:${ip}`, 10, 3600_000)) return NextResponse.json({ error: 'Too many tries from here — wait a bit and try again.' }, { status: 429 });
   const body = await req.json().catch(() => ({}));
   const p = await prisma.betaProgram.findUnique({ where: { slug: String(body?.slug ?? '') } });
   if (!p || p.joinToken !== body?.k) return NextResponse.json({ error: 'This invite link isn’t valid any more.' }, { status: 404 });

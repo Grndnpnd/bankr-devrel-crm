@@ -8,8 +8,9 @@ import { COOKIE } from "./lib/constants";
 // /api/artifacts and /api/mcp take a session cookie OR a personal access token (Claude,
 // scripts) and check either themselves. Slack's endpoints verify Slack's request signature.
 // /b/ and /api/tester/ are the beta-tester pages: testers have no CRM login; their join link
-// or personal portal token is checked by each route.
-const PUBLIC = ["/login", "/api/auth/login", "/api/auth/google", "/api/ingest", "/api/outbound", "/api/outreach-log", "/api/plain-webhook", "/api/artifacts", "/api/mcp", "/.well-known", "/_runtime", "/api/runtime", "/sw.js", "/manifest.webmanifest", "/icons/", "/api/slack/events", "/api/slack/interactions", "/b/", "/api/tester/"];
+// or personal portal token is checked by each route. Plain's webhook and customer-card calls
+// carry Plain's request signature, which the routes verify.
+const PUBLIC = ["/login", "/api/auth/login", "/api/auth/google", "/api/ingest", "/api/outbound", "/api/outreach-log", "/api/plain-webhook", "/api/plain/cards", "/api/artifacts", "/api/mcp", "/.well-known", "/_runtime", "/api/runtime", "/sw.js", "/manifest.webmanifest", "/icons/", "/api/slack/events", "/api/slack/interactions", "/b/", "/api/tester/"];
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;

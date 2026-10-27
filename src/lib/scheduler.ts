@@ -121,6 +121,15 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
       return checkAllWallets();
     },
   },
+  plain_beta_sync: {
+    type: 'plain_beta_sync',
+    label: 'Send beta reports to Plain',
+    description: 'Retry beta reports and replies that did not reach Plain yet (each report opens a Plain thread; replies follow it). Does nothing without PLAIN_API_KEY.',
+    run: async () => {
+      const { syncBetaToPlain } = await import('@/lib/plainBeta');
+      return syncBetaToPlain();
+    },
+  },
   slack_report: {
     type: 'slack_report',
     label: 'Scheduled Slack report',
@@ -148,7 +157,7 @@ export const jobTypeList = () =>
  * in CoreJobState purely for display + due-checking. The custom cron harness
  * (CronJob table) remains for ad-hoc admin jobs.
  */
-export const CORE_TYPES = ['refresh_onchain', 'refresh_sheet', 'plain_reconcile', 'task_reminders', 'wallet_watch'];
+export const CORE_TYPES = ['refresh_onchain', 'refresh_sheet', 'plain_reconcile', 'task_reminders', 'wallet_watch', 'plain_beta_sync'];
 
 // The DevRel sources (Google Sheet submissions, onchain token data) are off by default since the
 // pivot to community + support: the sheet is no longer the source of truth. Their tooling stays —
@@ -159,6 +168,7 @@ export const CORE_JOBS: { type: string; name: string; intervalMs: number; defaul
   { type: 'plain_reconcile', name: 'Reconcile Plain support', intervalMs: 10 * 60_000, defaultEnabled: true },
   { type: 'task_reminders', name: 'Task due reminders', intervalMs: 15 * 60_000, defaultEnabled: true },
   { type: 'wallet_watch', name: 'Wallet balance watch', intervalMs: 5 * 60_000, defaultEnabled: true },
+  { type: 'plain_beta_sync', name: 'Send beta reports to Plain', intervalMs: 5 * 60_000, defaultEnabled: true },
 ];
 
 export const coreJobEnabled = (core: { defaultEnabled: boolean }, state?: { enabled: boolean | null } | null) =>
@@ -174,12 +184,16 @@ async function runDueCoreJobs(now: Date): Promise<any[]> {
     if (!coreJobEnabled(core, state)) continue;
     const due = !state?.lastRunAt || (now.getTime() - new Date(state.lastRunAt).getTime()) >= core.intervalMs;
     if (!due) continue;
-    // Reserve: stamp lastRunAt now so an overlapping tick won't double-fire.
-    await prisma.coreJobState.upsert({
-      where: { type: core.type },
-      update: { lastStatus: 'running', lastRunAt: now },
-      create: { type: core.type, lastStatus: 'running', lastRunAt: now },
-    });
+    // Reserve: claim the run only if lastRunAt is still what we read, so two ticks (or two
+    // instances) can't both run it.
+    if (state) {
+      const claimed = await prisma.coreJobState.updateMany({ where: { type: core.type, lastRunAt: state.lastRunAt }, data: { lastStatus: 'running', lastRunAt: now } });
+      if (!claimed.count) continue;
+    } else {
+      try {
+        await prisma.coreJobState.create({ data: { type: core.type, lastStatus: 'running', lastRunAt: now } });
+      } catch { continue; } // another tick created it first
+    }
     try {
       const result = await handler.run();
       await prisma.coreJobState.update({ where: { type: core.type }, data: { lastStatus: 'ok', lastResult: result ?? {}, lastError: null, lastRunAt: new Date() } });

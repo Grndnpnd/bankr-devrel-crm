@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
+import { verifyPlainRequest } from "@/lib/plain";
 
 /**
  * Maps Plain webhook payloads into our SupportThread / SupportCustomer / SupportMessage
@@ -15,18 +16,9 @@ const CONTENT_DEDUP_WINDOW_MS = 60_000;
 
 // ── Verification ──────────────────────────────────────────────────────────────
 // Plain signs the raw body with HMAC-SHA256 and sends it in `plain-request-signature`.
-// Verify against the RAW body before parsing. (Inline impl — no SDK dep.)
+// Verify against the RAW body before parsing. Kept for older callers; see lib/plain.
 export function verifyPlainSignature(rawBody: string, signatureHeader: string | null, secret: string): boolean {
-  if (!signatureHeader || !secret) return false;
-  const expected = crypto.createHmac("sha256", secret).update(rawBody, "utf8").digest("hex");
-  // Header may be just the hex, or "hexsig" — normalize by taking the last hex token.
-  const provided = signatureHeader.trim().split(/[\s,=]/).filter(Boolean).pop() || "";
-  if (provided.length !== expected.length) return false;
-  try {
-    return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(expected));
-  } catch {
-    return false;
-  }
+  return verifyPlainRequest(rawBody, signatureHeader, secret);
 }
 
 // ── Helpers to read Plain's actor/assignee/label shapes ───────────────────────
@@ -99,7 +91,10 @@ export async function upsertThreadFromPayload(thread: any, eventType?: string): 
   const customerId = await upsertCustomer(thread.customer);
   const { assigneeId, assigneeType, assigneeName } = assigneeFields(thread.assignee);
   const statusDetailType = thread.statusDetail?.type ?? null;
-  const channel = eventType ? channelFromEvent(eventType) : null;
+  // The event type is the surest channel; otherwise the thread's own channel (GraphQL) or the
+  // source of its first inbound message (webhooks).
+  const source = thread.channel ?? thread.firstInboundMessageInfo?.messageSource ?? null;
+  const channel = (eventType ? channelFromEvent(eventType) : null) ?? (source && !String(source).startsWith('UNKNOWN') ? source : null);
 
   // Common fields set on every event.
   const base = {

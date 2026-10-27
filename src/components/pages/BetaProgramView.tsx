@@ -8,6 +8,7 @@ import { ArrowLeft, Copy, RefreshCw, X, Download, Paperclip, ExternalLink, Bug, 
 interface Program {
   id: string; name: string; product: string | null; slug: string; status: string; joinUrl: string; description: string | null; welcome: string | null;
   teamId: string | null; bugTeamId: string | null; maxTesters: number | null; endsAt: string | null;
+  plainEnabled: boolean; plainLabelTypeId: string | null;
   questions: { id: string; label: string; required?: boolean }[];
 }
 interface ReportRow {
@@ -208,6 +209,8 @@ function ReportDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                   Task · {r.task.status.replace('_', ' ').toLowerCase()} · {r.task.assignee ? (r.task.assignee.name || r.task.assignee.email) : r.task.team?.name ?? 'unassigned'}
                 </Link>
               )}
+              {r.plainUrl && <a href={r.plainUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1" style={{ fontSize: 12.5, color: accent }}>Plain thread <ExternalLink size={12} /></a>}
+              {!r.plainUrl && r.plainError && <span title={r.plainError} style={{ fontSize: 12, color: faint }}>Not in Plain yet (retrying)</span>}
             </div>
             <p style={{ fontSize: 13.5, color: ink, whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{r.body}</p>
             {r.steps && <div><span style={label}>Steps</span><p style={{ fontSize: 13, color: ink, whiteSpace: 'pre-wrap' }}>{r.steps}</p></div>}
@@ -238,7 +241,7 @@ function ReportDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                   </div>
                 ))}
               </div>
-              <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={3} placeholder="Reply to the tester — they see it on their beta page" style={{ ...field, resize: 'vertical' }} />
+              <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={3} placeholder={r.plainUrl ? 'Reply to the tester — they see it on their beta page and get it by email from Plain' : 'Reply to the tester — they see it on their beta page'} style={{ ...field, resize: 'vertical' }} />
               <div className="flex justify-end">
                 <button onClick={send} disabled={busy || !reply.trim()} className="rounded-lg" style={{ background: accent, color: '#0D0D0D', fontSize: 13, fontWeight: 600, padding: '8px 16px', opacity: busy || !reply.trim() ? 0.5 : 1 }}>{busy ? 'Sending…' : 'Send reply'}</button>
               </div>
@@ -301,6 +304,9 @@ function Settings({ p, teams, canManage, onSave, onDelete }: { p: Program; teams
     teamId: p.teamId ?? '', bugTeamId: p.bugTeamId ?? '', maxTesters: p.maxTesters ? String(p.maxTesters) : '', endsAt: p.endsAt ? p.endsAt.slice(0, 10) : '',
   });
   const [questions, setQuestions] = useState(p.questions);
+  const [plain, setPlain] = useState({ enabled: p.plainEnabled, labelTypeId: p.plainLabelTypeId ?? '' });
+  const [labels, setLabels] = useState<{ configured: boolean; labels: { id: string; name: string }[]; error?: string } | null>(null);
+  useEffect(() => { fetch('/api/plain/labels').then((r) => r.json()).then(setLabels).catch(() => {}); }, []);
   const set = (k: keyof typeof f, v: string) => setF((x) => ({ ...x, [k]: v }));
   const dis = !canManage;
   return (
@@ -332,11 +338,29 @@ function Settings({ p, teams, canManage, onSave, onDelete }: { p: Program; teams
           )}
         </div>
       </div>
+      <div>
+        <span style={label}>Plain</span>
+        <label className="flex items-start gap-2" style={{ fontSize: 13, color: ink }}>
+          <input disabled={dis} type="checkbox" checked={plain.enabled} onChange={(e) => setPlain((x) => ({ ...x, enabled: e.target.checked }))} style={{ marginTop: 3 }} />
+          <span>Each report opens a thread in Plain, replies go both ways (Plain emails your replies to the tester), and testers get live chat on their page.
+            {labels && !labels.configured && <span style={{ color: faint }}> Plain isn’t connected yet; this starts working once it is.</span>}</span>
+        </label>
+        {plain.enabled && labels?.configured && (
+          <div className="flex items-center gap-2" style={{ marginTop: 8, maxWidth: 360 }}>
+            <span style={{ fontSize: 12.5, color: muted, whiteSpace: 'nowrap' }}>Label in Plain</span>
+            <select disabled={dis} value={plain.labelTypeId} onChange={(e) => setPlain((x) => ({ ...x, labelTypeId: e.target.value }))} style={field} aria-label="Plain label for this program">
+              <option value="">None</option>
+              {labels.labels.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+            </select>
+          </div>
+        )}
+        {labels?.error && <p style={{ fontSize: 12, color: faint, marginTop: 6 }}>Couldn’t load Plain labels: {labels.error}</p>}
+      </div>
       {canManage && (
         <div className="flex items-center gap-2">
           <button onClick={onDelete} className="inline-flex items-center gap-1.5" style={{ fontSize: 12.5, color: faint }}><Trash2 size={14} /> Delete program</button>
           <span style={{ flex: 1 }} />
-          <button onClick={() => onSave({ ...f, endsAt: f.endsAt ? `${f.endsAt}T23:59:00Z` : null, questions: questions.filter((q) => q.label.trim()) })}
+          <button onClick={() => onSave({ ...f, endsAt: f.endsAt ? `${f.endsAt}T23:59:00Z` : null, questions: questions.filter((q) => q.label.trim()), plainEnabled: plain.enabled, plainLabelTypeId: plain.labelTypeId || null })}
             className="rounded-lg" style={{ background: accent, color: '#0D0D0D', fontSize: 13, fontWeight: 600, padding: '8px 16px' }}>Save settings</button>
         </div>
       )}

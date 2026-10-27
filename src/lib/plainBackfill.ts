@@ -41,6 +41,7 @@ const THREAD_FIELDS = `
   previewText
   status
   priority
+  channel
   createdAt { iso8601 }
   statusChangedAt { iso8601 }
   assignedTo {
@@ -90,6 +91,7 @@ function normalizeThreadNode(n: any): any {
     status: n.status ?? null,
     statusDetail: null,
     priority: n.priority,
+    channel: n.channel ?? null,
     createdAt: n.createdAt?.iso8601 ?? null,
     statusChangedAt: n.statusChangedAt?.iso8601 ?? null,
     assignee,
@@ -118,35 +120,34 @@ export async function fetchThreadPage(first: number, after: string | null): Prom
 }
 
 // ── Timeline (messages) ───────────────────────────────────────────────────────
-// IMPORTANT: timelineEntries is CUSTOMER-scoped at the Query root (not nested under
-// thread). Each TimelineEntry carries threadId, so we pull the customer's timeline and
-// keep entries for the thread we're backfilling. entry is an Entry union; actor an Actor
-// union. We fetch the message-bearing entry types.
+// A thread's own timeline (Thread.timelineEntries), so one call covers one thread instead of
+// paging the customer's whole history. entry is an Entry union; actor an Actor union.
 const TIMELINE_QUERY = `
-  query Timeline($customerId: ID!, $first: Int!, $after: String) {
-    timelineEntries(customerId: $customerId, first: $first, after: $after) {
-      edges {
-        node {
-          id
-          threadId
-          timestamp { iso8601 }
-          actor {
-            __typename
-            ... on UserActor { userId }
-            ... on CustomerActor { customerId }
-            ... on MachineUserActor { machineUserId }
+  query Timeline($threadId: ID!, $first: Int!, $after: String) {
+    thread(threadId: $threadId) {
+      timelineEntries(first: $first, after: $after) {
+        edges {
+          node {
+            id
+            timestamp { iso8601 }
+            actor {
+              __typename
+              ... on UserActor { userId }
+              ... on CustomerActor { customerId }
+              ... on MachineUserActor { machineUserId }
+            }
+            entry {
+              __typename
+              ... on EmailEntry { textContent markdownContent }
+              ... on ChatEntry { text }
+              ... on SlackMessageEntry { text }
+              ... on NoteEntry { text markdown }
+            }
           }
-          entry {
-            __typename
-            ... on EmailEntry { textContent markdownContent }
-            ... on ChatEntry { text }
-            ... on SlackMessageEntry { text }
-            ... on NoteEntry { text markdown }
-          }
+          cursor
         }
-        cursor
+        pageInfo { hasNextPage endCursor }
       }
-      pageInfo { hasNextPage endCursor }
     }
   }
 `;
@@ -157,20 +158,15 @@ const ENTRY_CHANNEL: Record<string, string | null> = {
   EmailEntry: "EMAIL", ChatEntry: "CHAT", SlackMessageEntry: "SLACK", NoteEntry: null,
 };
 
-/**
- * Fetch a customer's timeline (paged) and return message entries, optionally filtered to a
- * single thread. Customer-scoped per the schema; we filter by threadId in code.
- */
-export async function fetchCustomerMessages(customerId: string, threadId: string | null, pageSize = 50, maxPages = 20): Promise<TimelineMessage[]> {
+/** Fetch a thread's message entries (paged). */
+export async function fetchThreadMessages(threadId: string, pageSize = 50, maxPages = 20): Promise<TimelineMessage[]> {
   const out: TimelineMessage[] = [];
   let after: string | null = null;
   for (let i = 0; i < maxPages; i++) {
-    const data: any = await plainQuery(TIMELINE_QUERY, { customerId, first: pageSize, after });
-    const tl = data?.timelineEntries;
-    const edges = tl?.edges ?? [];
-    for (const e of edges) {
+    const data: any = await plainQuery(TIMELINE_QUERY, { threadId, first: pageSize, after });
+    const tl = data?.thread?.timelineEntries;
+    for (const e of tl?.edges ?? []) {
       const node = e.node;
-      if (threadId && node?.threadId !== threadId) continue; // keep only this thread's entries
       const typename: string = node?.entry?.__typename ?? "";
       const body = node?.entry?.markdownContent ?? node?.entry?.textContent ?? node?.entry?.text ?? node?.entry?.markdown ?? null;
       if (body == null) continue; // skip non-message entries (status transitions, etc.)
@@ -181,7 +177,7 @@ export async function fetchCustomerMessages(customerId: string, threadId: string
       const direction = typename === "NoteEntry" ? "note" : authorType === "customer" ? "inbound" : "outbound";
       out.push({
         id: node.id,
-        threadId: node?.threadId ?? null,
+        threadId,
         direction,
         channel: ENTRY_CHANNEL[typename] ?? null,
         authorType,
@@ -240,12 +236,12 @@ export async function reconcilePlain(opts?: { maxPagesPerRun?: number; pageSize?
     for (const node of page.nodes) {
       await upsertThreadFromPayload(node);  // no eventType → channel left for messages to set
       threadsUpserted++;
-      if (withMessages && node.customer?.id) {
+      if (withMessages) {
         try {
-          const msgs = await fetchCustomerMessages(node.customer.id, node.id);
+          const msgs = await fetchThreadMessages(node.id);
           const ch = await storeMessages(node.id, msgs);
           messagesUpserted += msgs.length;
-          if (ch) await prisma.supportThread.update({ where: { id: node.id }, data: { channel: ch } }).catch(() => {});
+          if (ch && !node.channel) await prisma.supportThread.update({ where: { id: node.id }, data: { channel: ch } }).catch(() => {});
         } catch { /* a single thread's timeline failing shouldn't abort the run */ }
       }
     }

@@ -2,7 +2,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { TesterShell } from '@/components/beta/testerStyles';
 
+interface Chat {
+  appId: string; title: string;
+  customerDetails: { email: string; fullName: string; shortName: string };
+  customerDetailsSignature: string;
+  threadDetails?: { labelTypeIds: string[] };
+}
 interface Me {
+  chat: Chat | null;
   tester: { name: string; email: string; platform: string | null };
   program: { name: string; product: string | null; welcome: string | null; open: boolean };
   reports: { id: string; kind: string; title: string; severity: string | null; status: string; statusLabel: string; createdAt: string; teamReplies: number; unread: number }[];
@@ -61,9 +68,12 @@ export default function TesterPortal({ slug, expired }: { slug: string; expired:
           <div className="eyebrow">{me.program.name}</div>
           <h1>Hi {me.tester.name.split(' ')[0]}</h1>
         </div>
-        {view === 'list'
-          ? me.program.open && <button className="btn primary" onClick={() => setView('new')}>New report</button>
-          : <button className="btn" onClick={() => { setView('list'); load(); }}>All my reports</button>}
+        <div className="row" style={{ gap: 8 }}>
+          {me.chat && view === 'list' && <button className="btn" onClick={() => (window as any).Plain?.open()}>Chat with the team</button>}
+          {view === 'list'
+            ? me.program.open && <button className="btn primary" onClick={() => setView('new')}>New report</button>
+            : <button className="btn" onClick={() => { setView('list'); load(); }}>All my reports</button>}
+        </div>
       </header>
 
       {view === 'list' && (
@@ -92,10 +102,33 @@ export default function TesterPortal({ slug, expired }: { slug: string; expired:
         </>
       )}
 
+      {me.chat && <PlainChat chat={me.chat} />}
       {view === 'new' && <NewReport slug={slug} platform={me.tester.platform ?? ''} onDone={(id) => { setView(id); load(); }} />}
       {view !== 'list' && view !== 'new' && <ReportView slug={slug} id={view} />}
     </TesterShell>
   );
+}
+
+/** Plain's chat widget, signed in as this tester (the signature comes from our server). */
+function PlainChat({ chat }: { chat: Chat }) {
+  useEffect(() => {
+    const w = window as any;
+    const init = () => w.Plain?.init({
+      appId: chat.appId,
+      customerDetails: chat.customerDetails,
+      customerDetailsSignature: chat.customerDetailsSignature,
+      ...(chat.threadDetails ? { threadDetails: chat.threadDetails } : {}),
+      theme: 'auto',
+      style: { brandColor: { light: '#c4620d', dark: '#f0913f' }, launcherBackgroundColor: { light: '#c4620d', dark: '#f0913f' }, launcherIconColor: '#ffffff' },
+      links: [],
+    });
+    if (w.Plain) { init(); return; }
+    if (document.getElementById('plain-chat')) return;
+    const s = document.createElement('script');
+    s.id = 'plain-chat'; s.async = true; s.src = 'https://chat.cdn-plain.com/index.js'; s.onload = init;
+    document.head.appendChild(s);
+  }, [chat]);
+  return null;
 }
 
 function NewReport({ slug, platform, onDone }: { slug: string; platform: string; onDone: (id: string) => void }) {

@@ -1,7 +1,7 @@
 'use client';
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { UserCircle, SlidersHorizontal, Clock, History, Slack, Bot, Cpu, Bell, Users } from 'lucide-react';
+import { UserCircle, SlidersHorizontal, Clock, History, Slack, Bot, Cpu, Bell, Users, LifeBuoy } from 'lucide-react';
 import '@/components/settings/settings.css';
 import AccountTab from '@/components/settings/AccountTab';
 import ScoringTab from '@/components/settings/ScoringTab';
@@ -12,10 +12,11 @@ import ClaudeTab from '@/components/settings/ClaudeTab';
 import ModelsTab from '@/components/settings/ModelsTab';
 import NotificationsTab from '@/components/settings/NotificationsTab';
 import TeamsTab from '@/components/settings/TeamsTab';
+import PlainTab from '@/components/settings/PlainTab';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import { can } from '@/lib/access';
 
-type Tab = 'account' | 'notifications' | 'teams' | 'claude' | 'models' | 'scoring' | 'slack' | 'automation' | 'import-log';
+type Tab = 'account' | 'notifications' | 'teams' | 'plain' | 'claude' | 'models' | 'scoring' | 'slack' | 'automation' | 'import-log';
 
 const Settings: React.FC = () => {
   const me = useSubmissionStore((st) => st.me);
@@ -32,6 +33,7 @@ const Settings: React.FC = () => {
       { id: 'scoring', label: 'Scoring', icon: SlidersHorizontal },
       { id: 'slack', label: 'Slack', icon: Slack },
     ];
+    if (can(role, 'support.view')) t.splice(3, 0, { id: 'plain', label: 'Plain', icon: LifeBuoy });
     if (can(role, 'cron.manage')) t.push({ id: 'automation', label: 'Automation', icon: Clock });
     if (can(role, 'import.run')) t.push({ id: 'import-log', label: 'Import Log', icon: History });
     return t;
@@ -82,6 +84,7 @@ const Settings: React.FC = () => {
         {safeActive === 'account' && <AccountTab />}
         {safeActive === 'notifications' && <NotificationsTab />}
         {safeActive === 'teams' && <TeamsTab />}
+        {safeActive === 'plain' && <PlainTab />}
         {safeActive === 'claude' && <ClaudeTab />}
         {safeActive === 'models' && <ModelsTab />}
         {safeActive === 'scoring' && <ScoringTab onUnsavedChange={scoringUnsaved} readOnly={!canEditScoring} />}

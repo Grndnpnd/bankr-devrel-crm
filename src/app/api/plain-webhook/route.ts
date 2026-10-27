@@ -1,21 +1,22 @@
 import { NextResponse } from "next/server";
-import {
-  verifyPlainSignature,
-  upsertThreadFromPayload,
-  appendMessageFromPayload,
-  isDuplicateEvent,
-  contentHashFor,
-} from "@/lib/plainSync";
+import { upsertThreadFromPayload, appendMessageFromPayload, isDuplicateEvent, contentHashFor } from "@/lib/plainSync";
+import { plainHmacSecret, verifyPlainRequest } from "@/lib/plain";
+import { onSlaTransition, onThreadCreated } from "@/lib/plainSupport";
+import { mirrorPlainMessage } from "@/lib/plainBeta";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Plain → BANKRcrm support ingest. Plain pushes webhooks here (independent subscription,
- * separate from Gamal's Discord relay). We verify the HMAC over the RAW body, dedup
- * (event id + content hash), upsert the thread on every event, and append messages on
- * message events. Ack fast; tolerate unknown event types.
+ * Plain → CRM. Plain posts every event of the webhook target here (pin the target to version
+ * 2026-10-06 or later). We verify Plain-Request-Signature over the RAW body, dedup (event id +
+ * content hash), keep the support tables current, then:
+ *   - SLA transitions → notify the routed teams; a breach opens a task
+ *   - new threads    → notify teams whose route asks for every new thread
+ *   - messages on beta-report threads → mirrored into the report's conversation
+ * A 500 makes Plain retry (for ~5 days); the event is only recorded as seen after success.
  *
- * Must be in middleware PUBLIC (no session cookie) — auth is the HMAC signature.
+ * Public in src/proxy.ts; the signature is the auth. Without PLAIN_HMAC_SECRET it accepts
+ * unsigned requests only outside production.
  */
 
 const MESSAGE_EVENTS = new Set([
@@ -26,78 +27,48 @@ const MESSAGE_EVENTS = new Set([
   "thread.ms_teams_message_received", "thread.ms_teams_message_sent",
   "thread.note_created",
 ]);
-
-// Thread-shaped events whose payload carries a full `thread` we should upsert.
-const THREAD_EVENTS = new Set([
-  "thread.thread_created",
-  "thread.thread_status_transitioned",
-  "thread.thread_assignment_transitioned",
-  "thread.thread_labels_changed",
-  "thread.thread_priority_changed",
-  "thread.service_level_agreement_status_transitioned",
-  "thread.thread_field_created",
-  "thread.thread_field_updated",
-  "thread.thread_field_deleted",
-]);
+const BETA_MIRROR = new Set(["thread.email_received", "thread.email_sent", "thread.chat_received", "thread.chat_sent"]);
 
 export async function POST(req: Request) {
-  const secret = process.env.PLAIN_WEBHOOK_SECRET;
-  // Read the RAW body for signature verification (must not be parsed first).
   const rawBody = await req.text();
-  const sig = req.headers.get("plain-request-signature") || req.headers.get("plain-webhook-signature");
-
+  const secret = plainHmacSecret();
   if (secret) {
-    if (!verifyPlainSignature(rawBody, sig, secret)) {
+    if (!verifyPlainRequest(rawBody, req.headers.get("plain-request-signature"), secret)) {
       return NextResponse.json({ error: "invalid signature" }, { status: 401 });
     }
-  }
-  // If no secret is configured yet, accept (lets you wire the endpoint before the secret
-  // lands) — but log it so it's visible. Set PLAIN_WEBHOOK_SECRET to enforce.
-  else {
-    console.warn("[plain-webhook] PLAIN_WEBHOOK_SECRET not set — accepting unverified payload");
+  } else if (process.env.NODE_ENV === "production") {
+    console.error("[plain-webhook] PLAIN_HMAC_SECRET not set — refusing unsigned webhooks");
+    return NextResponse.json({ error: "webhook signing not configured" }, { status: 503 });
   }
 
   let event: any;
   try { event = JSON.parse(rawBody); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
 
   const eventId: string = event?.id;
-  const eventType: string = event?.type || event?.payload?.eventType || "";
+  const eventType: string = event?.type || req.headers.get("plain-event-type") || event?.payload?.eventType || "";
   const payload = event?.payload;
-  if (!eventId || !payload) {
-    // Ack anyway so Plain doesn't retry a malformed delivery forever.
-    return NextResponse.json({ ok: true, skipped: "missing id/payload" });
-  }
+  if (!eventId || !payload) return NextResponse.json({ ok: true, skipped: "missing id/payload" });
 
   try {
-    // Dedup check (event id + content hash for AI double-fires) — read-only here.
     const hash = contentHashFor(payload);
-    if (await isDuplicateEvent(eventId, hash, eventType, false)) {
-      return NextResponse.json({ ok: true, deduped: true });
-    }
+    if (await isDuplicateEvent(eventId, hash, eventType, false)) return NextResponse.json({ ok: true, deduped: true });
 
-    // Upsert the thread state from any event that carries a thread.
-    if (payload.thread) {
-      await upsertThreadFromPayload(payload.thread, eventType);
-    }
+    if (payload.thread) await upsertThreadFromPayload(payload.thread, eventType);
+    if (MESSAGE_EVENTS.has(eventType)) await appendMessageFromPayload(eventType, payload);
 
-    // Append the message on message events.
-    if (MESSAGE_EVENTS.has(eventType)) {
-      await appendMessageFromPayload(eventType, payload);
-    }
+    const ws = event.workspaceId ?? req.headers.get("plain-workspace-id");
+    if (eventType === "thread.service_level_agreement_status_transitioned") await onSlaTransition(payload, ws);
+    else if (eventType === "thread.thread_created") await onThreadCreated(payload.thread, ws);
+    if (BETA_MIRROR.has(eventType)) await mirrorPlainMessage(eventType, payload);
 
-    // Record as processed ONLY after success, so a failure (below) lets Plain retry.
     await isDuplicateEvent(eventId, hash, eventType, true);
-
     return NextResponse.json({ ok: true, eventType });
   } catch (e: any) {
     console.error("[plain-webhook] handler error:", e?.message ?? e, "event:", eventType);
-    // 500 → Plain retries. The event was NOT recorded as seen (we record only on success),
-    // so the retry will reprocess cleanly.
     return NextResponse.json({ ok: false, error: "handler error" }, { status: 500 });
   }
 }
 
-// Plain may send a GET to verify the endpoint exists.
 export async function GET() {
   return NextResponse.json({ ok: true, service: "plain-webhook" });
 }

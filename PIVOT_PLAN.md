@@ -23,7 +23,22 @@ dashboard). This plan turns the DevRel pipeline into a community + support works
   the team per report. Each report is a task for the program's team (bugs can go elsewhere), priority from
   severity; tester replies notify the owner; Done on the board shows Fixed to the tester. Rate limits on
   the public forms; Cloudflare Turnstile switches on with TURNSTILE_SITE_KEY + TURNSTILE_SECRET_KEY.
-  Not yet: Plain threads + live chat for testers (needs a Plain key), email to testers (needs Resend).
+  Rate limits live in the database (they hold across instances).
+- **Plain** (2026-10-27, built and tested against a mock; switches on with the keys below). Settings → Plain
+  shows what's connected, the URLs to paste into Plain, SLA numbers and the routing rules.
+  - Routing rules: a Plain label (or any thread) → a team, with "tell them about new threads" and "SLA alerts".
+  - SLA alerts: about to breach / breached → the team's members (bell + push, opens the Plain thread); a breach
+    puts an urgent task on the team's board that closes itself once the SLA is met or the thread is done.
+  - Beta reports open an API thread in Plain (externalId `beta_report_<id>`, program label, priority from
+    severity). CRM replies go out through Plain, which emails the tester; replies written in Plain and the
+    tester's emailed answers show up in the portal; portal replies land on the thread and move it back to Todo.
+    Failures are retried every 5 minutes (`plain_beta_sync`). Team replies older than the thread aren't emailed.
+  - Live chat on the tester page: Plain's widget, signed as the tester (HMAC of their email).
+  - Customer cards `crm-beta` (programs and reports, this thread's first) and `crm-tasks` (open CRM tasks).
+  - Webhook now refuses unsigned requests in production; reconcile reads each thread's own timeline and channel.
+  - Needs: PLAIN_API_KEY (machine user, permissions listed in Settings → Plain), PLAIN_HMAC_SECRET (or the
+    existing PLAIN_WEBHOOK_SECRET), optional PLAIN_CHAT_APP_ID + PLAIN_CHAT_SECRET and PLAIN_WORKSPACE_ID.
+  Email to testers now comes from Plain; Resend would only matter for programs with Plain switched off.
 
 ## The shared building blocks
 
@@ -75,6 +90,7 @@ Renames to watch: tenant/company fields are deprecated in favour of `account`; s
 2. **Quick wins on top**: Claude Code tools (4), Slack shortcut (3), wallet alerts (7).
 3. **Beta programs** (2) with Plain wired back in.
 4. **Telegram** (5) — tabled for now (Oct 27).
+   Plain (support pillar) was done before Gmail, on Oct 27.
 5. **Gmail tracking** (6) — last, because it needs Google Cloud setup and a decision on whose inboxes.
 
 ## Decisions for you
@@ -88,3 +104,19 @@ Renames to watch: tenant/company fields are deprecated in favour of `account`; s
 
 - The Slack Bot service on Railway still has the old (revoked) Ollama key and its Slack app was deleted; it can be removed once the new HTTP Slack app is in.
 - Still open from the incident notes: regenerate the Postgres password from Railway's dashboard, and rotate `AUTH_SECRET` (that signs people out once).
+
+## Moving to AWS
+
+The app is planned to move to AWS. What's already portable and what has to change:
+
+- Portable: config is env vars only; Postgres via Prisma; no local files; webhook and job state live in the
+  database. Core jobs claim each run with a conditional update and public-form rate limits are in Postgres,
+  so running more than one instance is safe.
+- `after()` work (Plain pushes, Slack replies) needs a long-lived Node server (ECS/Fargate or App Runner).
+  On Lambda it would be cut off; the `plain_beta_sync` retry covers Plain, but prefer a container.
+- The cron tick (`/api/cron/tick` every 5 minutes) becomes an EventBridge Scheduler rule calling the same URL.
+- Railway starts with `prisma db push --accept-data-loss`; switch to `prisma migrate deploy` with checked-in
+  migrations before the move.
+- Tester attachments are stored in Postgres (`TesterAttachment.data`); move them to S3 when the data grows.
+- SSE notifications poll the database every 4 s, so they work behind a load balancer; keep idle timeouts above
+  the 25 s heartbeat.

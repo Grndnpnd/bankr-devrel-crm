@@ -35,30 +35,30 @@ enum Role {
 }
 
 model User {
-  id           String             @id @default(cuid())
-  email        String             @unique
-  name         String?
-  role         Role               @default(DEVREL)
-  active       Boolean            @default(true)
-  passwordHash String
-  dashboardLayout Json?
-  dashboardDefault Json?
-  dashboardLayouts Json?              // named layouts: [{ id, name, layout }]
-  activeLayoutId  String?             // which named layout is currently active
-  savedPanels     Json?
-  slackWebhook    String?            // per-user Slack incoming-webhook URL
-  activities   OutreachActivity[]
-  panels       SharedPanel[]
-  artifacts    Artifact[]
-  artifactShares ArtifactShare[]
-  apiTokens    ApiToken[]
-  teamMemberships TeamMember[]
-  tasksAssigned   Task[]           @relation("TaskAssignee")
-  tasksCreated    Task[]           @relation("TaskCreator")
-  notifications   Notification[]
+  id                String             @id @default(cuid())
+  email             String             @unique
+  name              String?
+  role              Role               @default(DEVREL)
+  active            Boolean            @default(true)
+  passwordHash      String
+  dashboardLayout   Json?
+  dashboardDefault  Json?
+  dashboardLayouts  Json? // named layouts: [{ id, name, layout }]
+  activeLayoutId    String? // which named layout is currently active
+  savedPanels       Json?
+  slackWebhook      String? // per-user Slack incoming-webhook URL
+  activities        OutreachActivity[]
+  panels            SharedPanel[]
+  artifacts         Artifact[]
+  artifactShares    ArtifactShare[]
+  apiTokens         ApiToken[]
+  teamMemberships   TeamMember[]
+  tasksAssigned     Task[]             @relation("TaskAssignee")
+  tasksCreated      Task[]             @relation("TaskCreator")
+  notifications     Notification[]
   pushSubscriptions PushSubscription[]
-  notificationPrefs Json?          // { push: { [kind]: boolean } } — missing = on
-  createdAt    DateTime           @default(now())
+  notificationPrefs Json? // { push: { [kind]: boolean } } — missing = on
+  createdAt         DateTime           @default(now())
 }
 
 model SharedPanel {
@@ -75,88 +75,88 @@ model SharedPanel {
 }
 
 model CronJob {
-  id          String    @id @default(cuid())
-  name        String
-  type        String                       // handler key, e.g. "refresh_onchain"
-  schedule    String                       // preset token ("15m"/"hourly"/...) or a cron expression
-  enabled     Boolean   @default(true)
-  config      Json?                        // job-type-specific config (e.g. slack_report spec + webhook)
-  lastRunAt   DateTime?
-  nextRunAt   DateTime?
-  lastStatus  String?                      // "ok" | "error" | "running"
-  lastResult  Json?
-  lastError   String?
-  createdBy   String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id         String    @id @default(cuid())
+  name       String
+  type       String // handler key, e.g. "refresh_onchain"
+  schedule   String // preset token ("15m"/"hourly"/...) or a cron expression
+  enabled    Boolean   @default(true)
+  config     Json? // job-type-specific config (e.g. slack_report spec + webhook)
+  lastRunAt  DateTime?
+  nextRunAt  DateTime?
+  lastStatus String? // "ok" | "error" | "running"
+  lastResult Json?
+  lastError  String?
+  createdBy  String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   @@index([enabled])
 }
 
 model CoreJobState {
-  id          String    @id @default(cuid())
-  type        String    @unique          // "refresh_onchain" | "refresh_sheet"
-  enabled     Boolean?                    // admin override; null = the job's default (CORE_JOBS.defaultEnabled)
-  lastRunAt   DateTime?
-  lastStatus  String?                     // "ok" | "error" | "running"
-  lastResult  Json?
-  lastError   String?
-  updatedAt   DateTime  @updatedAt
+  id         String    @id @default(cuid())
+  type       String    @unique // "refresh_onchain" | "refresh_sheet"
+  enabled    Boolean? // admin override; null = the job's default (CORE_JOBS.defaultEnabled)
+  lastRunAt  DateTime?
+  lastStatus String? // "ok" | "error" | "running"
+  lastResult Json?
+  lastError  String?
+  updatedAt  DateTime  @updatedAt
 }
 
 model ProposedEdit {
-  id           String    @id @default(cuid())
+  id           String     @id @default(cuid())
   submissionId String
   submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  changes      Json                      // [{ field, op, value, currentValue }]
+  changes      Json // [{ field, op, value, currentValue }]
   rationale    String?
-  status       String    @default("pending")  // pending | approved | rejected | auto_applied
-  source       String    @default("agent")    // agent | ingest | manual
+  status       String     @default("pending") // pending | approved | rejected | auto_applied
+  source       String     @default("agent") // agent | ingest | manual
   proposedBy   String?
   reviewedBy   String?
   reviewedAt   DateTime?
-  createdAt    DateTime  @default(now())
+  createdAt    DateTime   @default(now())
 
   @@index([status])
   @@index([submissionId])
 }
 
 model Submission {
-  id              String             @id @default(cuid())
-  source          Source
-  externalId      String
-  submittedAt     DateTime
-  project         String
-  projectX        String?
-  website         String?
-  oneLiner        String?
-  problem         String?            @db.Text
-  solution        String?            @db.Text
-  traction        String?            @db.Text
-  funding         String?            @db.Text
-  plan            String?            @db.Text
-  whyBankr        String?            @db.Text
-  accomplishments String?            @db.Text
-  links           String?            @db.Text
-  notesField      String?            @db.Text
-  location        String?
-  telegramTarget  String?            // Telegram chat/user id for outbound DMs (set manually or captured on inbound)
-  needsHelp       String[]
-  founders        Json
-  score           Int                @default(0)
-  scoreBreakdown  Json
-  lowEffort       Boolean            @default(false)
-  needsReview     Boolean            @default(false)
+  id               String             @id @default(cuid())
+  source           Source
+  externalId       String
+  submittedAt      DateTime
+  project          String
+  projectX         String?
+  website          String?
+  oneLiner         String?
+  problem          String?            @db.Text
+  solution         String?            @db.Text
+  traction         String?            @db.Text
+  funding          String?            @db.Text
+  plan             String?            @db.Text
+  whyBankr         String?            @db.Text
+  accomplishments  String?            @db.Text
+  links            String?            @db.Text
+  notesField       String?            @db.Text
+  location         String?
+  telegramTarget   String? // Telegram chat/user id for outbound DMs (set manually or captured on inbound)
+  needsHelp        String[]
+  founders         Json
+  score            Int                @default(0)
+  scoreBreakdown   Json
+  lowEffort        Boolean            @default(false)
+  needsReview      Boolean            @default(false)
   reviewCandidates Json?
-  stage           Stage              @default(NEW)
-  owner           String?
-  tokenMatch      TokenMatch?
-  activities      OutreachActivity[]
-  proposedEdits   ProposedEdit[]
+  stage            Stage              @default(NEW)
+  owner            String?
+  tokenMatch       TokenMatch?
+  activities       OutreachActivity[]
+  proposedEdits    ProposedEdit[]
   outboundMessages OutboundMessage[]
-  outreachLog     OutreachLog[]
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  outreachLog      OutreachLog[]
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
 
   @@unique([source, externalId])
   @@index([score])
@@ -169,19 +169,19 @@ model Submission {
 // always the caller, bearer-authed with INGEST_API_KEY; the CRM never calls them.
 // Claim-with-timeout prevents double-sends if the bot polls twice or crashes mid-send.
 model OutboundMessage {
-  id            String     @id @default(cuid())
-  submissionId  String
-  submission    Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  channel       String     @default("telegram") // future-proof; telegram for now
-  target        String     // the Telegram chat/user id to deliver to
-  body          String     @db.Text
-  status        String     @default("pending")  // pending | claimed | sent | failed
-  claimedAt     DateTime?                        // set when a poll claims it; reverts to pending after timeout
-  sentAt        DateTime?
-  error         String?    @db.Text
-  createdBy     String?                          // who queued it (user email or 'agent')
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
+  id           String     @id @default(cuid())
+  submissionId String
+  submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  channel      String     @default("telegram") // future-proof; telegram for now
+  target       String // the Telegram chat/user id to deliver to
+  body         String     @db.Text
+  status       String     @default("pending") // pending | claimed | sent | failed
+  claimedAt    DateTime? // set when a poll claims it; reverts to pending after timeout
+  sentAt       DateTime?
+  error        String?    @db.Text
+  createdBy    String? // who queued it (user email or 'agent')
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   @@index([status])
   @@index([submissionId])
@@ -196,10 +196,10 @@ model OutreachLog {
   id           String     @id @default(cuid())
   submissionId String
   submission   Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
-  type         String     // core key (reddit_post, co_marketing, pr, agent_hours, telegram_group) or a custom label
+  type         String // core key (reddit_post, co_marketing, pr, agent_hours, telegram_group) or a custom label
   detail       String?    @db.Text
   occurredAt   DateTime   @default(now())
-  createdBy    String?    // user email or 'agent' / 'telegram'
+  createdBy    String? // user email or 'agent' / 'telegram'
   createdAt    DateTime   @default(now())
 
   @@index([submissionId])
@@ -239,14 +239,14 @@ model OutreachActivity {
 
 /// Tunable scoring weights (singleton row, id = "default").
 model AppConfig {
-  id              String   @id @default("default")
-  teamSlackWebhook String?              // admin-set team-wide Slack channel webhook
-  capabilityOverrides Json?             // admin-edited role→capability overrides; null cells fall back to code defaults
-  userCapabilityOverrides Json?         // per-user overrides: { [userId]: { grant: Capability[], revoke: Capability[] } }
-  customOutreachTypes Json?             // persisted custom outreach-type labels [{key,label}] added by users
-  llmConfig       Json?                 // { provider, models: { agent, extract, report } } — Settings → Models
-  updatedAt       DateTime @updatedAt
-  updatedBy       String?
+  id                      String   @id @default("default")
+  teamSlackWebhook        String? // admin-set team-wide Slack channel webhook
+  capabilityOverrides     Json? // admin-edited role→capability overrides; null cells fall back to code defaults
+  userCapabilityOverrides Json? // per-user overrides: { [userId]: { grant: Capability[], revoke: Capability[] } }
+  customOutreachTypes     Json? // persisted custom outreach-type labels [{key,label}] added by users
+  llmConfig               Json? // { provider, models: { agent, extract, report } } — Settings → Models
+  updatedAt               DateTime @updatedAt
+  updatedBy               String?
 }
 
 model ScoreConfig {
@@ -263,13 +263,13 @@ model ScoreConfig {
 /// Audit row written after each import run (powers Sources status + Import Log).
 model ImportLog {
   id        String   @id @default(cuid())
-  source    String   // "google" | "seed" | "plain" | "manual"
+  source    String // "google" | "seed" | "plain" | "manual"
   pulled    Int      @default(0)
   created   Int      @default(0)
   updated   Int      @default(0)
   ok        Boolean  @default(true)
   message   String?
-  by        String?  // email of the admin who triggered it
+  by        String? // email of the admin who triggered it
   createdAt DateTime @default(now())
 
   @@index([createdAt])
@@ -282,35 +282,35 @@ model ImportLog {
 
 // A Plain customer (the person who opened the support thread).
 model SupportCustomer {
-  id           String          @id  // Plain customer id (c_...)
-  email        String?
-  externalId   String?
-  fullName     String?
-  shortName    String?
-  threads      SupportThread[]
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+  id         String          @id // Plain customer id (c_...)
+  email      String?
+  externalId String?
+  fullName   String?
+  shortName  String?
+  threads    SupportThread[]
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
 
   @@index([email])
 }
 
 // A Plain support thread (a ticket / conversation). Upserted on every thread event.
 model SupportThread {
-  id             String           @id  // Plain thread id (th_...)
-  externalId     String?
-  title          String?
-  previewText    String?
-  status         String           @default("TODO")  // TODO | SNOOZED | DONE | UNKNOWN_THREAD_STATUS
-  statusDetail   String?          // e.g. DONE_MANUALLY_SET, WAITING_FOR_CUSTOMER
-  priority       Int              @default(2)        // 0 urgent, 1 high, 2 normal, 3 low
+  id              String           @id // Plain thread id (th_...)
+  externalId      String?
+  title           String?
+  previewText     String?
+  status          String           @default("TODO") // TODO | SNOOZED | DONE | UNKNOWN_THREAD_STATUS
+  statusDetail    String? // e.g. DONE_MANUALLY_SET, WAITING_FOR_CUSTOMER
+  priority        Int              @default(2) // 0 urgent, 1 high, 2 normal, 3 low
   // assignee — Plain assignee can be a user OR a machine (AI) user
-  assigneeId     String?
-  assigneeType   String?          // user | machineUser | null
-  assigneeName   String?
+  assigneeId      String?
+  assigneeType    String? // user | machineUser | null
+  assigneeName    String?
   // labels — flattened to keys + names for fast topic analytics
-  labelNames     String[]         @default([])
+  labelNames      String[]         @default([])
   // channel / source of the thread's traffic
-  channel        String?          // EMAIL | CHAT | SLACK | API | MS_TEAMS | DISCORD
+  channel         String? // EMAIL | CHAT | SLACK | API | MS_TEAMS | DISCORD
   // timing (Plain computes these for us on the thread object — powers response/resolution analytics)
   firstInboundAt  DateTime?
   firstOutboundAt DateTime?
@@ -318,12 +318,12 @@ model SupportThread {
   lastOutboundAt  DateTime?
   statusChangedAt DateTime?
   // customer relation
-  customerId     String?
-  customer       SupportCustomer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  messages       SupportMessage[]
-  plainCreatedAt DateTime?        // original createdAt from Plain
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  customerId      String?
+  customer        SupportCustomer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  messages        SupportMessage[]
+  plainCreatedAt  DateTime? // original createdAt from Plain
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
 
   @@index([status])
   @@index([priority])
@@ -335,16 +335,16 @@ model SupportThread {
 // A single message in a support thread's timeline. Appended on message events.
 // (Stored in S2 onward; the table exists from S1 so the relation is stable.)
 model SupportMessage {
-  id           String        @id  // Plain timelineEntryId
-  threadId     String
-  thread       SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
-  direction    String        // inbound | outbound | note
-  channel      String?       // EMAIL | CHAT | SLACK | API | ...
-  authorType   String?       // customer | user | machineUser | system
-  authorId     String?
-  body         String?       @db.Text
-  occurredAt   DateTime      @default(now())
-  createdAt    DateTime      @default(now())
+  id         String        @id // Plain timelineEntryId
+  threadId   String
+  thread     SupportThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  direction  String // inbound | outbound | note
+  channel    String? // EMAIL | CHAT | SLACK | API | ...
+  authorType String? // customer | user | machineUser | system
+  authorId   String?
+  body       String?       @db.Text
+  occurredAt DateTime      @default(now())
+  createdAt  DateTime      @default(now())
 
   @@index([threadId])
   @@index([occurredAt])
@@ -354,8 +354,8 @@ model SupportMessage {
 // agent double-fires logically-identical messages ~6s apart with DIFFERENT event ids
 // (learned in Gamal). So we dedup on BOTH the event id and a content hash with a TTL.
 model SupportWebhookEvent {
-  id          String   @id  // Plain event id
-  contentHash String?  // sha256(threadId + body) for content-level dedup
+  id          String   @id // Plain event id
+  contentHash String? // sha256(threadId + body) for content-level dedup
   eventType   String?
   receivedAt  DateTime @default(now())
 
@@ -368,26 +368,26 @@ model SupportWebhookEvent {
 // window.claude shim (db / user / artifact / downloads / sample) backed by ArtifactDoc.
 
 enum ArtifactVisibility {
-  PRIVATE   // owner + explicit shares
-  TEAM      // every active user can view
+  PRIVATE // owner + explicit shares
+  TEAM // every active user can view
 }
 
 enum ArtifactLevel {
-  VIEW      // read the page and its shared data
-  INTERACT  // also write shared data (claude.ai "Contributor")
-  EDIT      // also publish new versions, change metadata (claude.ai "Editor")
+  VIEW // read the page and its shared data
+  INTERACT // also write shared data (claude.ai "Contributor")
+  EDIT // also publish new versions, change metadata (claude.ai "Editor")
 }
 
 model Artifact {
   id             String             @id @default(cuid())
   title          String
   description    String?
-  kind           String             @default("page")   // page | dashboard | doc | deck
+  kind           String             @default("page") // page | dashboard | doc | deck
   tags           String[]           @default([])
-  html           String                                 // current version's HTML (denormalized)
+  html           String // current version's HTML (denormalized)
   currentVersion Int                @default(1)
-  sourceUrl      String?                                // e.g. https://claude.ai/artifact/…
-  capabilities   Json?                                  // declared runtime capabilities (db rules etc.)
+  sourceUrl      String? // e.g. https://claude.ai/artifact/…
+  capabilities   Json? // declared runtime capabilities (db rules etc.)
   visibility     ArtifactVisibility @default(PRIVATE)
   ownerId        String
   owner          User               @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -434,9 +434,9 @@ model ArtifactDoc {
   id          String    @id @default(cuid())
   artifactId  String
   artifact    Artifact  @relation(fields: [artifactId], references: [id], onDelete: Cascade)
-  path        String                     // full document path, e.g. "tasks/t1"
-  collection  String                     // parent collection path, e.g. "tasks"
-  docId       String                     // last segment
+  path        String // full document path, e.g. "tasks/t1"
+  collection  String // parent collection path, e.g. "tasks"
+  docId       String // last segment
   data        Json
   version     Int       @default(1)
   leaseHolder String?
@@ -452,7 +452,7 @@ model ArtifactFile {
   id          String   @id @default(cuid())
   artifactId  String
   artifact    Artifact @relation(fields: [artifactId], references: [id], onDelete: Cascade)
-  path        String                     // e.g. "gray/s01_shadow.jpg"
+  path        String // e.g. "gray/s01_shadow.jpg"
   contentType String
   size        Int
   sha256      String
@@ -468,8 +468,8 @@ model ApiToken {
   userId     String
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   name       String
-  prefix     String                      // first chars, shown in the UI
-  tokenHash  String    @unique           // sha256 of the full token
+  prefix     String // first chars, shown in the UI
+  tokenHash  String    @unique // sha256 of the full token
   lastUsedAt DateTime?
   revokedAt  DateTime?
   createdAt  DateTime  @default(now())
@@ -483,17 +483,18 @@ model ApiToken {
 // team, and every event reaches people through their notifications.
 
 model Team {
-  id          String       @id @default(cuid())
-  name        String       @unique
-  description String?
-  color       String       @default("#F5A623")
-  members     TeamMember[]
-  tasks       Task[]
-  wallets     Wallet[]
+  id              String        @id @default(cuid())
+  name            String        @unique
+  description     String?
+  color           String        @default("#F5A623")
+  members         TeamMember[]
+  tasks           Task[]
+  wallets         Wallet[]
   betaPrograms    BetaProgram[] @relation("BetaTeam")
   betaBugPrograms BetaProgram[] @relation("BetaBugTeam")
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  plainRoutes     PlainRoute[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }
 
 model TeamMember {
@@ -502,7 +503,7 @@ model TeamMember {
   team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      String   @default("member")   // lead | member
+  role      String   @default("member") // lead | member
   createdAt DateTime @default(now())
 
   @@unique([teamId, userId])
@@ -517,27 +518,27 @@ enum TaskStatus {
 }
 
 model Task {
-  id          String     @id @default(cuid())
+  id          String        @id @default(cuid())
   title       String
   body        String?
-  status      TaskStatus @default(TODO)
-  priority    Int        @default(2)       // 0 urgent, 1 high, 2 normal, 3 low
+  status      TaskStatus    @default(TODO)
+  priority    Int           @default(2) // 0 urgent, 1 high, 2 normal, 3 low
   dueAt       DateTime?
-  remindedAt  DateTime?                    // due-soon reminder sent
+  remindedAt  DateTime? // due-soon reminder sent
   assigneeId  String?
-  assignee    User?      @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assignee    User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   teamId      String?
-  team        Team?      @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  team        Team?         @relation(fields: [teamId], references: [id], onDelete: SetNull)
   createdById String?
-  createdBy   User?      @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  source      String     @default("app")   // app | slack | claude | telegram | gmail | beta | plain | agent
-  sourceUrl   String?                      // link back to where it came from
-  sourceRef   String?                      // external id, for dedupe (e.g. a Slack message ts)
-  position    Float      @default(0)       // order within a board column
+  createdBy   User?         @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  source      String        @default("app") // app | slack | claude | telegram | gmail | beta | plain | agent
+  sourceUrl   String? // link back to where it came from
+  sourceRef   String? // external id, for dedupe (e.g. a Slack message ts)
+  position    Float         @default(0) // order within a board column
   completedAt DateTime?
   betaReport  TesterReport?
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   @@unique([source, sourceRef])
   @@index([assigneeId, status])
@@ -549,10 +550,10 @@ model Notification {
   id        String    @id @default(cuid())
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  kind      String                         // task.assigned, task.team, task.done, task.due, team.added, test
+  kind      String // task.assigned, task.team, task.done, task.due, team.added, test
   title     String
   body      String?
-  url       String?                        // in-app path to open
+  url       String? // in-app path to open
   readAt    DateTime?
   createdAt DateTime  @default(now())
 
@@ -582,8 +583,8 @@ model PushSubscription {
 model Wallet {
   id            String          @id @default(cuid())
   label         String
-  chain         String          @default("base")   // base | ethereum
-  address       String                             // 0x…, lowercase
+  chain         String          @default("base") // base | ethereum
+  address       String // 0x…, lowercase
   teamId        String?
   team          Team?           @relation(fields: [teamId], references: [id], onDelete: SetNull)
   // Alert when below *Alert for 2 readings in a row; clear when back at or above *Clear
@@ -592,9 +593,9 @@ model Wallet {
   ethClear      Float?
   usdcAlert     Float?
   usdcClear     Float?
-  ethState      String          @default("ok")     // ok | low
+  ethState      String          @default("ok") // ok | low
   usdcState     String          @default("ok")
-  ethBelow      Int             @default(0)        // consecutive readings below the alert level
+  ethBelow      Int             @default(0) // consecutive readings below the alert level
   usdcBelow     Int             @default(0)
   lastEth       Float?
   lastUsdc      Float?
@@ -626,39 +627,41 @@ model WalletReading {
 // becomes a task for the program's team; team and tester talk in the report's replies.
 
 model BetaProgram {
-  id          String        @id @default(cuid())
-  name        String
-  product     String?
-  slug        String        @unique             // public URL: /b/<slug>
-  description String?                            // shown on the join page (plain text)
-  welcome     String?                            // shown once a tester has joined
-  status      String        @default("open")     // draft | open | closed (closed: no joins, no new reports)
-  joinToken   String        @unique              // in the join link; regenerate to revoke the old link
-  maxTesters  Int?
-  questions   Json?                              // extra sign-up questions [{ id, label, required }]
-  teamId      String?                            // gets feedback, ideas and questions
-  team        Team?         @relation("BetaTeam", fields: [teamId], references: [id], onDelete: SetNull)
-  bugTeamId   String?                            // gets bugs (falls back to teamId)
-  bugTeam     Team?         @relation("BetaBugTeam", fields: [bugTeamId], references: [id], onDelete: SetNull)
-  endsAt      DateTime?
-  createdById String?
-  testers     Tester[]
-  reports     TesterReport[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id               String         @id @default(cuid())
+  name             String
+  product          String?
+  slug             String         @unique // public URL: /b/<slug>
+  description      String? // shown on the join page (plain text)
+  welcome          String? // shown once a tester has joined
+  status           String         @default("open") // draft | open | closed (closed: no joins, no new reports)
+  joinToken        String         @unique // in the join link; regenerate to revoke the old link
+  maxTesters       Int?
+  questions        Json? // extra sign-up questions [{ id, label, required }]
+  teamId           String? // gets feedback, ideas and questions
+  team             Team?          @relation("BetaTeam", fields: [teamId], references: [id], onDelete: SetNull)
+  bugTeamId        String? // gets bugs (falls back to teamId)
+  bugTeam          Team?          @relation("BetaBugTeam", fields: [bugTeamId], references: [id], onDelete: SetNull)
+  endsAt           DateTime?
+  createdById      String?
+  plainEnabled     Boolean        @default(true) // reports open Plain threads, portal shows Plain chat (when Plain is configured)
+  plainLabelTypeId String? // Plain label put on this program's threads and chats
+  testers          Tester[]
+  reports          TesterReport[]
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 }
 
 model Tester {
   id         String         @id @default(cuid())
   programId  String
   program    BetaProgram    @relation(fields: [programId], references: [id], onDelete: Cascade)
-  email      String                              // lowercase
+  email      String // lowercase
   name       String
-  contact    String?                             // Telegram / Discord handle
-  platform   String?                             // device / OS / browser they test on
+  contact    String? // Telegram / Discord handle
+  platform   String? // device / OS / browser they test on
   answers    Json?
-  accessHash String         @unique              // sha256 of the personal portal token
-  status     String         @default("active")   // active | removed
+  accessHash String         @unique // sha256 of the personal portal token
+  status     String         @default("active") // active | removed
   lastSeenAt DateTime?
   reports    TesterReport[]
   replies    TesterReply[]
@@ -668,43 +671,51 @@ model Tester {
 }
 
 model TesterReport {
-  id          String             @id @default(cuid())
-  programId   String
-  program     BetaProgram        @relation(fields: [programId], references: [id], onDelete: Cascade)
-  testerId    String
-  tester      Tester             @relation(fields: [testerId], references: [id], onDelete: Cascade)
-  kind        String                                // bug | feedback | idea | question
-  title       String
-  body        String
-  severity    String?                               // bugs: blocker | major | minor
-  steps       String?
-  expected    String?
-  actual      String?
-  platform    String?
-  pageUrl     String?
-  status      String             @default("new")    // new | triaged | in_progress | fixed | wont_fix | duplicate | answered
-  taskId      String?            @unique
-  task        Task?              @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  testerSeenAt DateTime?                            // last time the tester opened it (for "new reply" badges)
-  replies     TesterReply[]
-  attachments TesterAttachment[]
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
+  id            String             @id @default(cuid())
+  programId     String
+  program       BetaProgram        @relation(fields: [programId], references: [id], onDelete: Cascade)
+  testerId      String
+  tester        Tester             @relation(fields: [testerId], references: [id], onDelete: Cascade)
+  kind          String // bug | feedback | idea | question
+  title         String
+  body          String
+  severity      String? // bugs: blocker | major | minor
+  steps         String?
+  expected      String?
+  actual        String?
+  platform      String?
+  pageUrl       String?
+  status        String             @default("new") // new | triaged | in_progress | fixed | wont_fix | duplicate | answered
+  taskId        String?            @unique
+  task          Task?              @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  testerSeenAt  DateTime? // last time the tester opened it (for "new reply" badges)
+  plainThreadId String?            @unique // the Plain thread this report opened (externalId beta_report_<id>)
+  plainSyncedAt DateTime?
+  plainError    String?
+  plainTries    Int                @default(0)
+  replies       TesterReply[]
+  attachments   TesterAttachment[]
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
 
   @@index([programId, status])
   @@index([testerId])
 }
 
 model TesterReply {
-  id         String       @id @default(cuid())
-  reportId   String
-  report     TesterReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  authorType String                                 // team | tester
-  userId     String?                                // team author
-  testerId   String?
-  tester     Tester?      @relation(fields: [testerId], references: [id], onDelete: SetNull)
-  body       String
-  createdAt  DateTime     @default(now())
+  id            String       @id @default(cuid())
+  reportId      String
+  report        TesterReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  authorType    String // team | tester
+  userId        String? // team author
+  testerId      String?
+  tester        Tester?      @relation(fields: [testerId], references: [id], onDelete: SetNull)
+  body          String
+  via           String       @default("crm") // crm (portal / triage view) | plain (mirrored from a Plain thread)
+  plainEntryId  String?      @unique // Plain timeline entry it came from, or was sent as
+  plainSyncedAt DateTime? // a crm reply pushed to Plain
+  plainTries    Int          @default(0)
+  createdAt     DateTime     @default(now())
 
   @@index([reportId, createdAt])
 }
@@ -718,4 +729,46 @@ model TesterAttachment {
   size        Int
   data        Bytes
   createdAt   DateTime     @default(now())
+}
+
+// ───────────────────────── Plain support routing ─────────────────────────
+
+// Which team hears about a Plain thread. Rules are checked in order; a rule with no label
+// matches every thread (use it last as the default).
+model PlainRoute {
+  id        String   @id @default(cuid())
+  labelName String? // Plain label name; null = any thread
+  teamId    String
+  team      Team     @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  notifyNew Boolean  @default(false) // tell the team about every new thread
+  notifySla Boolean  @default(true) // SLA about to breach / breached
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+// Latest status of each SLA on a thread (from thread.service_level_agreement_status_transitioned).
+model SupportSla {
+  id         String    @id @default(cuid())
+  threadId   String
+  slaId      String?
+  type       String // FIRST_RESPONSE_TIME | NEXT_RESPONSE_TIME | FIRST_RESOLUTION_TIME | TOTAL_RESOLUTION_TIME
+  status     String // PENDING | IMMINENT_BREACH | BREACHING | BREACHED | ACHIEVED | CANCELLED
+  breachTime DateTime?
+  achievedAt DateTime?
+  breachedAt DateTime?
+  doneAt     DateTime? // completed / cancelled
+  policyName String?
+  taskId     String? // the "SLA breached" task, closed once the SLA resolves
+  updatedAt  DateTime  @updatedAt
+  createdAt  DateTime  @default(now())
+
+  @@unique([threadId, type])
+  @@index([status])
+}
+
+// Fixed-window counters for the public forms. In the database so limits hold across instances.
+model RateLimit {
+  key         String   @id
+  windowStart DateTime
+  count       Int
 }

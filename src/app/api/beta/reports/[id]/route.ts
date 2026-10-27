@@ -4,6 +4,7 @@ import { can } from '@/lib/access';
 import { prisma } from '@/lib/prisma';
 import { REPORT_STATUSES } from '@/lib/beta';
 import { updateTask } from '@/lib/tasks';
+import { threadUrl } from '@/lib/plainSupport';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,7 +25,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const authorIds = [...new Set(report.replies.map((r) => r.userId).filter(Boolean))] as string[];
   const authors = await prisma.user.findMany({ where: { id: { in: authorIds } }, select: { id: true, name: true, email: true } });
   const byId = Object.fromEntries(authors.map((a) => [a.id, a.name || a.email]));
-  return NextResponse.json({ report: { ...report, replies: report.replies.map((r) => ({ ...r, author: r.authorType === 'team' ? byId[r.userId ?? ''] ?? 'Team' : report.tester.name })) } });
+  return NextResponse.json({ report: { ...report, plainUrl: report.plainThreadId ? threadUrl(null, report.plainThreadId) : null, replies: report.replies.map((r) => ({ ...r, author: r.authorType === 'team' ? byId[r.userId ?? ''] ?? (r.via === 'plain' ? 'Team (in Plain)' : 'Team') : `${report.tester.name}${r.via === 'plain' ? ' (by email)' : ''}` })) } });
 }
 
 /** Set the status the tester sees. Closing statuses also finish the linked task. */

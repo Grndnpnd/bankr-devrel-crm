@@ -55,16 +55,24 @@ export function programOpen(p: BetaProgram) {
   return p.status === 'open' && (!p.endsAt || p.endsAt > new Date());
 }
 
-// ───────── abuse limits (one web instance; good enough for public forms) ─────────
+// ───────── abuse limits (in the database, so they hold across instances) ─────────
 
-const hits = new Map<string, number[]>();
-export function rateLimited(key: string, max: number, windowMs: number) {
-  const now = Date.now();
-  const list = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
-  if (list.length >= max) { hits.set(key, list); return true; }
-  list.push(now); hits.set(key, list);
-  if (hits.size > 5000) for (const [k, v] of hits) if (!v.some((t) => now - t < 3600_000)) hits.delete(k);
-  return false;
+/** Fixed window per key: true once `max` hits land within `windowMs`. Fails open if the DB errors. */
+export async function rateLimited(key: string, max: number, windowMs: number): Promise<boolean> {
+  const now = new Date();
+  const start = new Date(now.getTime() - windowMs);
+  try {
+    const rows = await prisma.$queryRaw<{ count: number }[]>`
+      INSERT INTO "RateLimit" ("key", "windowStart", "count") VALUES (${key}, ${now}, 1)
+      ON CONFLICT ("key") DO UPDATE SET
+        "count" = CASE WHEN "RateLimit"."windowStart" < ${start} THEN 1 ELSE "RateLimit"."count" + 1 END,
+        "windowStart" = CASE WHEN "RateLimit"."windowStart" < ${start} THEN ${now} ELSE "RateLimit"."windowStart" END
+      RETURNING "count"`;
+    if (Math.random() < 0.01) prisma.rateLimit.deleteMany({ where: { windowStart: { lt: new Date(now.getTime() - 86_400_000) } } }).catch(() => {});
+    return Number(rows[0]?.count ?? 0) > max;
+  } catch {
+    return false;
+  }
 }
 export const clientIp = (req: Request) => (req.headers.get('x-forwarded-for') || '').split(',')[0].trim() || 'unknown';
 

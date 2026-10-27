@@ -1,7 +1,8 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, after } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { can } from '@/lib/access';
 import { prisma } from '@/lib/prisma';
+import { pushReplyToPlain } from '@/lib/plainBeta';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,5 +19,6 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (report.status === 'new') {
     await prisma.testerReport.update({ where: { id }, data: { status: report.kind === 'question' ? 'answered' : 'triaged' } });
   }
+  after(() => pushReplyToPlain(reply.id).catch(() => {})); // the tester also gets it by email from Plain
   return NextResponse.json({ reply: { ...reply, author: session.name || session.email } }, { status: 201 });
 }
