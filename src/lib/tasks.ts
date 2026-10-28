@@ -116,19 +116,16 @@ export async function createTask(actor: Actor, input: TaskInput, opts: { silent?
   return { task, existed: false };
 }
 
-export async function updateTask(actor: Actor, id: string, input: TaskInput): Promise<TaskRow> {
+export async function updateTask(actor: Actor, id: string, input: TaskInput, opts: { fromReport?: boolean } = {}): Promise<TaskRow> {
   const before = await prisma.task.findUnique({ where: { id } });
   if (!before) throw new Error('task not found');
   const data = clean(input);
   if (data.status && data.status !== before.status) data.completedAt = data.status === 'DONE' ? new Date() : null;
   const task = await prisma.task.update({ where: { id }, data: data as Prisma.TaskUncheckedUpdateInput, include: TASK_INCLUDE });
-  // A beta tester's report follows its task: done on the board → "Fixed" in the tester's portal.
-  if (task.source === 'beta' && data.status === 'DONE' && before.status !== 'DONE') {
-    await prisma.testerReport.updateMany({ where: { taskId: id, status: { in: ['new', 'triaged', 'in_progress'] } }, data: { status: 'fixed' } });
-  }
-  // …and back out of Done (reopened on the board) → the tester sees it's being looked at again.
-  if (task.source === 'beta' && before.status === 'DONE' && data.status && data.status !== 'DONE') {
-    await prisma.testerReport.updateMany({ where: { taskId: id, status: 'fixed' }, data: { status: data.status === 'IN_PROGRESS' ? 'in_progress' : 'triaged' } });
+  // A beta report follows its task on the board (done → fix live, reopened → escalated again).
+  if (task.source === 'beta' && !opts.fromReport && data.status && data.status !== before.status) {
+    const { onReportTaskMoved } = await import('@/lib/betaFlow');
+    await onReportTaskMoved(actor, id, before.status, data.status as string);
   }
   await announce(actor, before, task);
   return task;

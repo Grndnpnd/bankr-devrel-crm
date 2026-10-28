@@ -40,6 +40,29 @@ dashboard). This plan turns the DevRel pipeline into a community + support works
     existing PLAIN_WEBHOOK_SECRET), optional PLAIN_CHAT_APP_ID + PLAIN_CHAT_SECRET and PLAIN_WORKSPACE_ID.
   Email to testers now comes from Plain; Resend would only matter for programs with Plain switched off.
 
+- **Beta programs, production pass** (2026-10-28). Re-joining with an email that already joined no longer signs
+  you in as that tester (emailed link when email is set up; otherwise "use your saved link"); extra sign-in links
+  and "sign out everywhere" for the team; email verification (opened an emailed link, or answered a Plain email)
+  before Plain chat is signed; upload fixes (UTF-8 names, 10 MB through the proxy, caps under parallel uploads,
+  quotas); clean errors; rollback of half-filed reports; Referrer-Policy on tester pages.
+- **Beta dashboard parity + Notion** (2026-10-28), matching the team's Notion-backed "Texting Beta Testers" page:
+  - Testers: lifecycle (To Contact → Invited → Onboarding → Active → Feedback In → Completed / Dropped; removed =
+    Declined), type, usage, send funds, channel + handle, wallet, test areas, check-ins; the team can add testers
+    without an email.
+  - Reports: claimed vs official severity (Critical/High/Medium/Low), their bug flow (New → Triaged → Escalated →
+    Fix in Review → Fix Live → Retest Needed → Verified, or Duplicate / Already Known / Won't Fix; others Noted /
+    Passed On / Shipped), area, device, environment, tx/contract, Plain ticket, tracked in, fix PR, next step,
+    "waiting on" that follows the status, duplicates, calls; the team can log a report for a tester.
+  - Outreach queue: suggest → lead approves → sender sends on the tester's channel → answer → close with an outcome;
+    escalating a bug or putting its fix live suggests the message for every affected tester (duplicates included).
+    Testers can also answer a retest themselves on their page (Works now / Still broken).
+  - Payouts and the funding queue, feedback calls, an overview (tiles, test-area coverage, "waiting on me").
+  - Notion, both ways, per program: connect each board (testers, reports, outreach, payouts, calls) by link; it maps
+    itself to their property names (adjustable in Settings → Notion), imports existing rows, and from then on syncs
+    field by field every 5 minutes (new reports right away). Shared boards (Outreach, Payouts) are scoped by their
+    Program column. If both sides change the same field between syncs, Notion's edit wins.
+  - Needs: NOTION_TOKEN (an internal Notion integration, shared with each board) on the web service and Cron Tick.
+
 ## The shared building blocks
 
 Most of the seven asks need the same three things first. Built once, every feature plugs into them.

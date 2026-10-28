@@ -16,6 +16,7 @@ export const NOTIFICATION_KINDS: { kind: string; label: string }[] = [
   { kind: 'team.added', label: 'I am added to a team' },
   { kind: 'wallet.low', label: 'A watched wallet runs low (or recovers)' },
   { kind: 'beta.reply', label: 'A beta tester replies on a report' },
+  { kind: 'beta.waiting', label: 'A beta report or tester message is waiting on me' },
   { kind: 'support.sla', label: 'A Plain thread routed to my team is about to breach (or breaches) its SLA' },
   { kind: 'support.new', label: 'A new Plain thread arrives for my team (if the route asks for it)' },
 ];

@@ -1,6 +1,7 @@
 'use client';
 import React, { useCallback, useEffect, useState } from 'react';
 import { TesterShell } from '@/components/beta/testerStyles';
+import { DEVICES, LABEL } from '@/lib/betaModel';
 
 interface Chat {
   appId: string; title: string;
@@ -13,12 +14,13 @@ interface Chat {
 interface Me {
   chat: Chat | null;
   tester: { name: string; email: string; platform: string | null };
-  program: { name: string; product: string | null; welcome: string | null; open: boolean };
-  reports: { id: string; kind: string; title: string; severity: string | null; status: string; statusLabel: string; createdAt: string; teamReplies: number; unread: number }[];
+  program: { name: string; product: string | null; welcome: string | null; open: boolean; testAreas?: string[] };
+  reports: { id: string; kind: string; title: string; severity: string | null; status: string; statusLabel: string; tone?: string; retest?: boolean; createdAt: string; teamReplies: number; unread: number }[];
 }
 interface Detail {
   id: string; kind: string; title: string; body: string; severity: string | null; steps: string | null; expected: string | null; actual: string | null;
-  platform: string | null; pageUrl: string | null; status: string; statusLabel: string; createdAt: string;
+  platform: string | null; pageUrl: string | null; device?: string | null; browser?: string | null; testArea?: string | null;
+  status: string; statusLabel: string; tone?: string; retest?: boolean; createdAt: string;
   replies: { id: string; authorType: 'team' | 'tester'; body: string; createdAt: string }[];
   attachments: { id: string; filename: string; contentType: string; size: number }[];
 }
@@ -28,13 +30,17 @@ const KINDS = [
   { id: 'feedback', label: 'Feedback', hint: 'How something felt to use' },
   { id: 'idea', label: 'Idea', hint: 'Something you wish it did' },
   { id: 'question', label: 'Question', hint: 'Not sure how something works' },
+  { id: 'praise', label: 'Praise', hint: 'Something you loved' },
 ];
 const SEVERITY = [
-  { id: 'blocker', label: 'Blocker', hint: 'I can’t continue' },
-  { id: 'major', label: 'Major', hint: 'Works badly, there’s a workaround' },
-  { id: 'minor', label: 'Minor', hint: 'Cosmetic or small' },
+  { id: 'critical', label: 'Critical', hint: 'I can’t continue' },
+  { id: 'high', label: 'High', hint: 'Works badly, there’s a workaround' },
+  { id: 'medium', label: 'Medium', hint: 'Annoying, but I can use it' },
+  { id: 'low', label: 'Low', hint: 'Cosmetic' },
 ];
-const KIND_LABEL: Record<string, string> = { bug: 'Bug', feedback: 'Feedback', idea: 'Idea', question: 'Question' };
+const KIND_LABEL: Record<string, string> = { bug: 'Bug', feedback: 'Feedback', idea: 'Idea', question: 'Question', praise: 'Praise' };
+const sevLabel = (s: string | null) => (s ? LABEL.severity[s] ?? s : '');
+const pill = (r: { tone?: string; status: string }) => `pill ${r.tone ?? 'info'}`;
 const when = (iso: string) => new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 export default function TesterPortal({ slug, expired }: { slug: string; expired: boolean }) {
@@ -93,6 +99,12 @@ export default function TesterPortal({ slug, expired }: { slug: string; expired:
       {view === 'list' && (
         <>
           {me.program.welcome && me.reports.length === 0 && <div className="card" style={{ whiteSpace: 'pre-wrap' }}>{me.program.welcome}</div>}
+          {me.reports.some((r) => r.retest) && (
+            <div className="card ask" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <b>We fixed {me.reports.filter((r) => r.retest).length === 1 ? 'something you reported' : `${me.reports.filter((r) => r.retest).length} things you reported`} — could you try again?</b>
+              {me.reports.filter((r) => r.retest).map((r) => <button key={r.id} type="button" className="linkish" onClick={() => setView(r.id)}>{r.title} →</button>)}
+            </div>
+          )}
           <div className="card">
             <h2 style={{ marginBottom: 6 }}>Your reports</h2>
             {me.reports.length === 0 ? (
@@ -104,9 +116,9 @@ export default function TesterPortal({ slug, expired }: { slug: string; expired:
                     {r.unread > 0 ? <span className="dot" aria-label="New reply" /> : <span style={{ width: 8, flexShrink: 0 }} />}
                     <span style={{ flex: 1, minWidth: 0 }}>
                       <b style={{ display: 'block' }}>{r.title}</b>
-                      <span className="faint">{KIND_LABEL[r.kind]}{r.severity ? ` · ${r.severity}` : ''} · {when(r.createdAt)}{r.teamReplies ? ` · ${r.teamReplies} repl${r.teamReplies === 1 ? 'y' : 'ies'} from the team` : ''}</span>
+                      <span className="faint">{KIND_LABEL[r.kind]}{r.severity ? ` · ${sevLabel(r.severity)}` : ''} · {when(r.createdAt)}{r.teamReplies ? ` · ${r.teamReplies} repl${r.teamReplies === 1 ? 'y' : 'ies'} from the team` : ''}</span>
                     </span>
-                    <span className={`pill ${r.status}`}>{r.statusLabel}</span>
+                    <span className={pill(r)}>{r.retest ? 'Please retest' : r.statusLabel}</span>
                   </button>
                 ))}
               </div>
@@ -118,9 +130,9 @@ export default function TesterPortal({ slug, expired }: { slug: string; expired:
 
       {me.chat && <PlainChat chat={me.chat} />}
       {view === 'new' && (me.program.open
-        ? <NewReport slug={slug} platform={me.tester.platform ?? ''} onDone={(id, problem) => { setNotice(problem); setView(id, true); load(); }} />
+        ? <NewReport slug={slug} platform={me.tester.platform ?? ''} areas={me.program.testAreas ?? []} onDone={(id, problem) => { setNotice(problem); setView(id, true); load(); }} />
         : <div className="card"><p className="muted" style={{ margin: 0 }}>This beta isn’t taking new reports right now.</p></div>)}
-      {view !== 'list' && view !== 'new' && <ReportView slug={slug} id={view} canAttach={me.program.open} notice={notice} onNotice={setNotice} onGone={toList} />}
+      {view !== 'list' && view !== 'new' && <ReportView slug={slug} id={view} canAttach={me.program.open} notice={notice} onNotice={setNotice} onGone={toList} onChanged={load} />}
     </TesterShell>
   );
 }
@@ -152,6 +164,15 @@ const FILE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'video
 const fileProblem = (f: File) => f.size > MAX_BYTES ? `${f.name} is over 10 MB` : !FILE_TYPES.includes(f.type) ? `${f.name} isn’t an image, video, PDF or text file` : null;
 const mb = (n: number) => n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1024 / 1024).toFixed(1)} MB`;
 
+/** A first guess at the device; the tester can change it. */
+function guessDevice() {
+  if (typeof navigator === 'undefined') return '';
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad/.test(ua)) return 'ios';
+  if (/Android/.test(ua)) return 'android';
+  return /Mobi/.test(ua) ? 'mobile_web' : 'desktop_web';
+}
+
 async function uploadFiles(slug: string, reportId: string, files: File[]) {
   const failed: string[] = [];
   for (const file of files) {
@@ -162,8 +183,8 @@ async function uploadFiles(slug: string, reportId: string, files: File[]) {
   return failed;
 }
 
-function NewReport({ slug, platform, onDone }: { slug: string; platform: string; onDone: (id: string, problem: string | null) => void }) {
-  const [f, setF] = useState({ kind: 'bug', severity: 'minor', title: '', body: '', steps: '', expected: '', actual: '', platform, pageUrl: '' });
+function NewReport({ slug, platform, areas, onDone }: { slug: string; platform: string; areas: string[]; onDone: (id: string, problem: string | null) => void }) {
+  const [f, setF] = useState({ kind: 'bug', claimedSeverity: 'medium', title: '', body: '', steps: '', expected: '', actual: '', platform, pageUrl: '', testArea: '', device: guessDevice(), browser: '' });
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -173,7 +194,7 @@ function NewReport({ slug, platform, onDone }: { slug: string; platform: string;
   async function send(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setErr(null);
-    const res = await fetch(`/api/tester/reports?slug=${encodeURIComponent(slug)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(f) }).catch(() => null);
+    const res = await fetch(`/api/tester/reports?slug=${encodeURIComponent(slug)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...f, claimedSeverity: f.kind === 'bug' ? f.claimedSeverity : null }) }).catch(() => null);
     const d = await res?.json().catch(() => ({}));
     if (!res?.ok) { setBusy(false); setErr(d?.error ?? 'Couldn’t send it — check your connection and try again.'); return; }
     const failed = await uploadFiles(slug, d.id, files);
@@ -204,7 +225,7 @@ function NewReport({ slug, platform, onDone }: { slug: string; platform: string;
           <div className="field">
             <label id="sev">How bad is it?</label>
             <div className="seg" role="group" aria-labelledby="sev">
-              {SEVERITY.map((s) => <button type="button" key={s.id} aria-pressed={f.severity === s.id} aria-label={`${s.label}: ${s.hint}`} onClick={() => set('severity', s.id)}><b>{s.label}</b><span>{s.hint}</span></button>)}
+              {SEVERITY.map((s) => <button type="button" key={s.id} aria-pressed={f.claimedSeverity === s.id} aria-label={`${s.label}: ${s.hint}`} onClick={() => set('claimedSeverity', s.id)}><b>{s.label}</b><span>{s.hint}</span></button>)}
             </div>
           </div>
           <div className="field"><label htmlFor="steps">Steps to make it happen <span className="faint">(optional)</span></label><textarea id="steps" rows={3} value={f.steps} onChange={(e) => set('steps', e.target.value)} placeholder={'1. Open …\n2. Tap …'} /></div>
@@ -215,8 +236,17 @@ function NewReport({ slug, platform, onDone }: { slug: string; platform: string;
         </>
       )}
       <div className="grid2">
-        <div className="field"><label htmlFor="plat">Device / browser</label><input id="plat" value={f.platform} onChange={(e) => set('platform', e.target.value)} /></div>
+        {areas.length > 0 && (
+          <div className="field"><label htmlFor="area">Which part <span className="faint">(optional)</span></label>
+            <select id="area" value={f.testArea} onChange={(e) => set('testArea', e.target.value)}><option value="">Not sure</option>{areas.map((a) => <option key={a} value={a}>{a}</option>)}</select>
+          </div>
+        )}
         <div className="field"><label htmlFor="where">Where in the product <span className="faint">(screen or link)</span></label><input id="where" value={f.pageUrl} onChange={(e) => set('pageUrl', e.target.value)} /></div>
+        <div className="field"><label htmlFor="dev">Device</label>
+          <select id="dev" value={f.device} onChange={(e) => set('device', e.target.value)}><option value="">—</option>{DEVICES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+        </div>
+        <div className="field"><label htmlFor="br">Browser or app version <span className="faint">(optional)</span></label><input id="br" value={f.browser} onChange={(e) => set('browser', e.target.value)} placeholder="e.g. Safari 18, app 2.4.1" /></div>
+        <div className="field"><label htmlFor="plat">What you test on</label><input id="plat" value={f.platform} onChange={(e) => set('platform', e.target.value)} /></div>
       </div>
       <div className="field">
         <label htmlFor="files">Screenshots or a recording <span className="faint">(up to 5, 10 MB each)</span></label>
@@ -230,12 +260,16 @@ function NewReport({ slug, platform, onDone }: { slug: string; platform: string;
   );
 }
 
-function ReportView({ slug, id, canAttach, notice, onNotice, onGone }: { slug: string; id: string; canAttach: boolean; notice: string | null; onNotice: (m: string | null) => void; onGone: () => void }) {
+function ReportView({ slug, id, canAttach, notice, onNotice, onGone, onChanged }: { slug: string; id: string; canAttach: boolean; notice: string | null; onNotice: (m: string | null) => void; onGone: () => void; onChanged: () => void }) {
   const [r, setR] = useState<Detail | null>(null);
   const [reply, setReply] = useState('');
   const [busy, setBusy] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [replyErr, setReplyErr] = useState<string | null>(null);
+  const [retestNote, setRetestNote] = useState('');
+  const [retestBusy, setRetestBusy] = useState(false);
+  const [retestErr, setRetestErr] = useState<string | null>(null);
+  const [retestDone, setRetestDone] = useState<string | null>(null);
   const q = `slug=${encodeURIComponent(slug)}`;
   const load = useCallback(async () => {
     const res = await fetch(`/api/tester/reports/${id}?${q}`).catch(() => null);
@@ -255,6 +289,14 @@ function ReportView({ slug, id, canAttach, notice, onNotice, onGone }: { slug: s
     const d = await res?.json().catch(() => ({}));
     setReplyErr(d?.error ?? 'Couldn’t send — check your connection and try again. Your message is still here.');
   }
+  async function retest(works: boolean) {
+    setRetestBusy(true); setRetestErr(null);
+    const res = await fetch(`/api/tester/reports/${id}/retest?${q}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ works, note: retestNote }) }).catch(() => null);
+    setRetestBusy(false);
+    if (!res?.ok) { const d = await res?.json().catch(() => ({})); setRetestErr(d?.error ?? 'Couldn’t send — try again.'); return; }
+    setRetestNote(''); setRetestDone(works ? 'Thanks! We’ve marked it fixed.' : 'Thanks — we’ve sent it back to the team.');
+    load(); onChanged();
+  }
   async function addFiles(list: FileList | null) {
     if (!r) return;
     const chosen = Array.from(list ?? []);
@@ -272,15 +314,30 @@ function ReportView({ slug, id, canAttach, notice, onNotice, onGone }: { slug: s
 
   if (!r) return <p className="muted">Loading…</p>;
   const facts = [
-    r.severity && ['Severity', r.severity], r.platform && ['Device', r.platform], r.pageUrl && ['Where', r.pageUrl],
-    r.expected && ['Expected', r.expected], r.actual && ['Actual', r.actual],
+    r.severity && ['How bad', sevLabel(r.severity)], r.testArea && ['Part', r.testArea],
+    (r.device || r.browser || r.platform) && ['Device', [r.device && LABEL.device[r.device], r.browser, r.platform].filter(Boolean).join(' · ')],
+    r.pageUrl && ['Where', r.pageUrl], r.expected && ['Expected', r.expected], r.actual && ['Actual', r.actual],
   ].filter(Boolean) as [string, string][];
   return (
     <>
+      {(r.retest || retestDone) && (
+        <div className="card ask" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {retestDone ? <b>{retestDone}</b> : <>
+            <h2>A fix is live — does it work now?</h2>
+            <p className="muted" style={{ margin: 0 }}>Try what you reported again and tell us. If it’s still broken, a note on what you saw helps.</p>
+            <textarea rows={2} style={{ minHeight: 56 }} maxLength={2000} value={retestNote} onChange={(e) => setRetestNote(e.target.value)} placeholder="Optional note" aria-label="Retest note" />
+            {retestErr && <div className="err" role="alert">{retestErr}</div>}
+            <div className="row">
+              <button className="btn primary" type="button" disabled={retestBusy} onClick={() => retest(true)}>Works now</button>
+              <button className="btn" type="button" disabled={retestBusy} onClick={() => retest(false)}>Still broken</button>
+            </div>
+          </>}
+        </div>
+      )}
       <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <span className="faint">{KIND_LABEL[r.kind]} · sent {when(r.createdAt)}</span>
-          <span className={`pill ${r.status}`}>{r.statusLabel}</span>
+          <span className={pill(r)}>{r.statusLabel}</span>
         </div>
         <h2>{r.title}</h2>
         <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{r.body}</p>

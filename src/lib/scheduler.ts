@@ -130,6 +130,15 @@ export const JOB_HANDLERS: Record<string, JobHandler> = {
       return syncBetaToPlain();
     },
   },
+  notion_sync: {
+    type: 'notion_sync',
+    label: 'Sync beta programs with Notion',
+    description: 'Pull edits from each program’s connected Notion boards and push the CRM’s changes (field by field). Does nothing without NOTION_TOKEN or connected boards.',
+    run: async () => {
+      const { syncAllPrograms } = await import('@/lib/notionSync');
+      return syncAllPrograms();
+    },
+  },
   slack_report: {
     type: 'slack_report',
     label: 'Scheduled Slack report',
@@ -157,7 +166,7 @@ export const jobTypeList = () =>
  * in CoreJobState purely for display + due-checking. The custom cron harness
  * (CronJob table) remains for ad-hoc admin jobs.
  */
-export const CORE_TYPES = ['refresh_onchain', 'refresh_sheet', 'plain_reconcile', 'task_reminders', 'wallet_watch', 'plain_beta_sync'];
+export const CORE_TYPES = ['refresh_onchain', 'refresh_sheet', 'plain_reconcile', 'task_reminders', 'wallet_watch', 'plain_beta_sync', 'notion_sync'];
 
 // The DevRel sources (Google Sheet submissions, onchain token data) are off by default since the
 // pivot to community + support: the sheet is no longer the source of truth. Their tooling stays —
@@ -169,6 +178,7 @@ export const CORE_JOBS: { type: string; name: string; intervalMs: number; defaul
   { type: 'task_reminders', name: 'Task due reminders', intervalMs: 15 * 60_000, defaultEnabled: true },
   { type: 'wallet_watch', name: 'Wallet balance watch', intervalMs: 5 * 60_000, defaultEnabled: true },
   { type: 'plain_beta_sync', name: 'Send beta reports to Plain', intervalMs: 5 * 60_000, defaultEnabled: true },
+  { type: 'notion_sync', name: 'Sync beta programs with Notion', intervalMs: 5 * 60_000, defaultEnabled: true },
 ];
 
 export const coreJobEnabled = (core: { defaultEnabled: boolean }, state?: { enabled: boolean | null } | null) =>

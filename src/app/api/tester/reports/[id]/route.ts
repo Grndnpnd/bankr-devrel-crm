@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { STATUS_LABEL } from '@/lib/beta';
+import { TESTER_TONE } from '@/lib/betaModel';
 import { requireTester } from '@/lib/testerHttp';
 
 export const dynamic = 'force-dynamic';
@@ -19,6 +20,13 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   });
   if (!report) return NextResponse.json({ error: 'not found' }, { status: 404 });
   await prisma.testerReport.update({ where: { id }, data: { testerSeenAt: new Date() } });
-  const { taskId, testerId, programId, testerSeenAt, ...rest } = report;
-  return NextResponse.json({ report: { ...rest, statusLabel: STATUS_LABEL[report.status] ?? report.status } });
+  // Only what the tester wrote and what they should see — not the team's triage notes.
+  const x = report;
+  return NextResponse.json({ report: {
+    id: x.id, kind: x.kind, title: x.title, body: x.body, severity: x.claimedSeverity, steps: x.steps, expected: x.expected, actual: x.actual,
+    platform: x.platform, pageUrl: x.pageUrl, device: x.device, browser: x.browser, testArea: x.testArea, status: x.status, createdAt: x.createdAt,
+    statusLabel: STATUS_LABEL[x.status] ?? x.status, tone: TESTER_TONE[x.status] ?? 'info',
+    retest: x.kind === 'bug' && ['fix_live', 'retest_needed'].includes(x.status),
+    replies: x.replies, attachments: x.attachments,
+  } });
 }

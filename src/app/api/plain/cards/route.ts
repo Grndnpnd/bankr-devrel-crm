@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { badge, divider, linkButton, md, plainHmacSecret, plainText, row, spacer, text, verifyPlainRequest, type PlainComponent } from '@/lib/plain';
 import { STATUS_LABEL } from '@/lib/beta';
+import { effectiveSeverity, LABEL } from '@/lib/betaModel';
 import { STATUS_LABEL as TASK_STATUS } from '@/lib/tasks';
 
 export const dynamic = 'force-dynamic';
@@ -15,7 +16,8 @@ export const dynamic = 'force-dynamic';
  */
 const APP_URL = () => (process.env.APP_URL || '').replace(/\/$/, '');
 const REPORT_COLOR: Record<string, 'GREY' | 'GREEN' | 'YELLOW' | 'RED' | 'BLUE'> = {
-  new: 'BLUE', triaged: 'GREY', in_progress: 'YELLOW', fixed: 'GREEN', wont_fix: 'GREY', duplicate: 'GREY', answered: 'GREEN',
+  new: 'BLUE', triaged: 'GREY', escalated: 'YELLOW', fix_in_review: 'YELLOW', fix_live: 'GREEN', retest_needed: 'YELLOW', verified: 'GREEN',
+  duplicate: 'GREY', already_known: 'GREY', wont_fix: 'GREY', noted: 'GREEN', passed_on: 'GREEN', shipped: 'GREEN', answered: 'GREEN',
 };
 const TASK_COLOR: Record<string, 'GREY' | 'GREEN' | 'YELLOW' | 'RED' | 'BLUE'> = { TODO: 'BLUE', IN_PROGRESS: 'YELLOW', BLOCKED: 'RED', DONE: 'GREEN' };
 const day = (d: Date) => d.toISOString().slice(0, 10);
@@ -26,7 +28,7 @@ async function betaCard(email: string | null, threadExternalId: string | null): 
     where: { email: email.toLowerCase() },
     include: {
       program: { select: { id: true, name: true, status: true } },
-      reports: { orderBy: { createdAt: 'desc' }, take: 20, select: { id: true, title: true, kind: true, severity: true, status: true, createdAt: true } },
+      reports: { orderBy: { createdAt: 'desc' }, take: 20, select: { id: true, title: true, kind: true, severity: true, claimedSeverity: true, status: true, createdAt: true } },
     },
     orderBy: { createdAt: 'desc' },
   });
@@ -44,7 +46,7 @@ async function betaCard(email: string | null, threadExternalId: string | null): 
     const list = [...(focus ? [focus] : []), ...t.reports.filter((r) => r.id !== focusId)].slice(0, 4);
     for (const r of list) {
       out.push(row(
-        [text(`${r.id === focusId ? '**This thread:** ' : ''}${r.kind === 'bug' ? `Bug (${r.severity})` : r.kind}: ${md(r.title.slice(0, 250))}`)],
+        [text(`${r.id === focusId ? '**This thread:** ' : ''}${r.kind === 'bug' ? `Bug (${LABEL.severity[effectiveSeverity(r) ?? 'medium']})` : LABEL.kind[r.kind] ?? r.kind}: ${md(r.title.slice(0, 250))}`)],
         [badge(STATUS_LABEL[r.status] ?? r.status, REPORT_COLOR[r.status] ?? 'GREY')],
       ));
     }

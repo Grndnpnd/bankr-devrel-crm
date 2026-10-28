@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth';
 import { can } from '@/lib/access';
 import { prisma } from '@/lib/prisma';
 import { checkProgramInput, cleanQuestions, joinUrl, token, uniqueSlug } from '@/lib/beta';
+import { BUG_OPEN, values } from '@/lib/betaModel';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,7 @@ export async function GET() {
       _count: { select: { testers: { where: { status: 'active' } }, reports: true } },
     },
   });
-  const open = await prisma.testerReport.groupBy({ by: ['programId'], where: { status: { in: ['new', 'triaged', 'in_progress'] } }, _count: true });
+  const open = await prisma.testerReport.groupBy({ by: ['programId'], where: { OR: [{ kind: 'bug', status: { in: values(BUG_OPEN) } }, { kind: { not: 'bug' }, status: 'new' }] }, _count: true });
   const fresh = await prisma.testerReport.groupBy({ by: ['programId'], where: { status: 'new' }, _count: true });
   const o = new Map(open.map((x) => [x.programId, x._count])), n = new Map(fresh.map((x) => [x.programId, x._count]));
   return NextResponse.json({

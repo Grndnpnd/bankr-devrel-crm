@@ -4,6 +4,7 @@ import { getSession } from '@/lib/auth';
 import { can } from '@/lib/access';
 import { prisma } from '@/lib/prisma';
 import { checkProgramInput, cleanQuestions, joinUrl, token } from '@/lib/beta';
+import { canApprove, programOverview } from '@/lib/betaFlow';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,9 +20,15 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const counts = await prisma.testerReport.groupBy({ by: ['status'], where: { programId: id }, _count: true });
   const testers = await prisma.tester.count({ where: { programId: id, status: 'active' } });
   const { joinToken, ...rest } = p;
+  const [overview, people, boards] = await Promise.all([
+    programOverview(id, session.id),
+    prisma.user.findMany({ where: { active: true }, select: { id: true, name: true, email: true }, orderBy: { name: 'asc' } }),
+    prisma.notionBoard.findMany({ where: { programId: id }, select: { kind: true, title: true, url: true, enabled: true, lastPullAt: true, lastPushAt: true, lastError: true } }),
+  ]);
   return NextResponse.json({
     program: { ...rest, joinUrl: joinUrl(p), questions: cleanQuestions(p.questions) },
-    counts: Object.fromEntries(counts.map((c) => [c.status, c._count])), testers,
+    counts: Object.fromEntries(counts.map((c) => [c.status, c._count])), testers, overview, people, notionBoards: boards,
+    me: { id: session.id, canApprove: canApprove(p, session), isLead: p.leadId === session.id, isSender: p.senderId === session.id },
     canManage: can(session.role, 'beta.manage'),
   });
 }
@@ -47,6 +54,15 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (b?.plainEnabled !== undefined) data.plainEnabled = !!b.plainEnabled;
   if (b?.plainLabelTypeId !== undefined) data.plainLabelTypeId = b.plainLabelTypeId ? String(b.plainLabelTypeId).slice(0, 60) : null;
   if (b?.regenerateLink) data.joinToken = token(18);
+  for (const k of ['leadId', 'senderId'] as const) {
+    if (b?.[k] === undefined) continue;
+    if (b[k] && !(await prisma.user.findFirst({ where: { id: String(b[k]), active: true }, select: { id: true } }))) return NextResponse.json({ error: 'Pick someone on the team.' }, { status: 400 });
+    data[k] = b[k] ? String(b[k]) : null;
+  }
+  if (b?.testAreas !== undefined) {
+    if (!Array.isArray(b.testAreas)) return NextResponse.json({ error: 'testAreas must be a list' }, { status: 400 });
+    data.testAreas = [...new Set(b.testAreas.map((x: unknown) => String(x).trim().slice(0, 60)).filter(Boolean))].slice(0, 30) as string[];
+  }
   const p = await prisma.betaProgram.update({ where: { id }, data });
   return NextResponse.json({ ok: true, joinUrl: joinUrl(p) });
 }

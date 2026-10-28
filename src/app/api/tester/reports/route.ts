@@ -2,6 +2,7 @@ import { NextResponse, after } from 'next/server';
 import { isInputError, rateLimited, submitReport } from '@/lib/beta';
 import { requireTester } from '@/lib/testerHttp';
 import { pushReportToPlain } from '@/lib/plainBeta';
+import { pushSoon } from '@/lib/notionSync';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +18,11 @@ export async function POST(req: Request) {
     const report = await submitReport(r.tester, body);
     // A few seconds' grace so the screenshots the portal uploads next are counted on the thread.
     // If this fails, plain_beta_sync retries it.
-    after(async () => { await new Promise((ok) => setTimeout(ok, 5000)); await pushReportToPlain(report.id).catch(() => {}); });
+    after(async () => {
+      await new Promise((ok) => setTimeout(ok, 5000));
+      await pushReportToPlain(report.id).catch(() => {});
+      await pushSoon(report.programId); // onto the program's Notion board
+    });
     return NextResponse.json({ id: report.id }, { status: 201 });
   } catch (e) {
     if (isInputError(e)) return NextResponse.json({ error: e.message }, { status: 400 });

@@ -645,29 +645,58 @@ model BetaProgram {
   createdById      String?
   plainEnabled     Boolean        @default(true) // reports open Plain threads, portal shows Plain chat (when Plain is configured)
   plainLabelTypeId String? // Plain label put on this program's threads and chats
+  leadId           String? // feature lead: approves outreach, owns triage (User id)
+  senderId         String? // sends approved outreach to testers (User id)
+  testAreas        String[]       @default(["General UX"]) // what testers can be assigned to and reports filed under
   testers          Tester[]
   reports          TesterReport[]
+  outreach         BetaOutreach[]
+  payouts          BetaPayout[]
+  calls            BetaCall[]
+  notionBoards     NotionBoard[]
+  notionLockUntil  DateTime? // a Notion sync is running for this program until then
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
 }
 
 model Tester {
-  id              String         @id @default(cuid())
+  id              String           @id @default(cuid())
   programId       String
-  program         BetaProgram    @relation(fields: [programId], references: [id], onDelete: Cascade)
-  email           String // lowercase
+  program         BetaProgram      @relation(fields: [programId], references: [id], onDelete: Cascade)
+  email           String? // lowercase; the team can add testers without one
   name            String
-  contact         String? // Telegram / Discord handle
+  contact         String? // legacy free-text handle from the join form
   platform        String? // device / OS / browser they test on
   answers         Json?
-  accessHash      String         @unique // sha256 of the personal portal token (the link shown when they joined)
-  status          String         @default("active") // active | removed
+  accessHash      String           @unique // sha256 of the personal portal token (the link shown when they joined)
+  status          String           @default("active") // active | removed (removed = "Declined" on the board)
+  stage           String           @default("onboarding") // to_contact | invited | onboarding | active | feedback_in | completed | dropped
+  types           String[]         @default([]) // Internal Team, Power Trader, Agent User, …
+  usage           String           @default("unknown") // daily | weekly | low | none | unknown
+  sendFunds       String           @default("not_asked") // yes | no | not_asked
+  channel         String? // x | discord | telegram | email | phone — where the team reaches them
+  handle          String? // their handle on that channel
+  walletAddress   String?
+  testAreas       String[]         @default([])
+  wave            String?
+  notes           String?
+  invitedAt       DateTime?
+  lastCheckInAt   DateTime?
   lastSeenAt      DateTime?
   emailVerifiedAt DateTime? // they opened a link we emailed, or answered a Plain email from this address
+  notionPageId    String?          @unique // the row on the program's Notion board
+  notionEditedAt  DateTime? // Notion's last_edited_time we last synced
+  notionDirty     Boolean          @default(false) // changed here, not yet pushed
+  notionError     String?
+  notionSnapshot  Json? // the mapped fields as Notion last had them (for field-by-field merge)
   reports         TesterReport[]
   replies         TesterReply[]
   links           TesterLink[]
-  createdAt       DateTime       @default(now())
+  outreach        BetaOutreach[]
+  payouts         BetaPayout[]
+  calls           BetaCallTester[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @default(now()) @updatedAt
 
   @@unique([programId, email])
 }
@@ -687,32 +716,60 @@ model TesterLink {
 }
 
 model TesterReport {
-  id            String             @id @default(cuid())
-  programId     String
-  program       BetaProgram        @relation(fields: [programId], references: [id], onDelete: Cascade)
-  testerId      String
-  tester        Tester             @relation(fields: [testerId], references: [id], onDelete: Cascade)
-  kind          String // bug | feedback | idea | question
-  title         String
-  body          String
-  severity      String? // bugs: blocker | major | minor
-  steps         String?
-  expected      String?
-  actual        String?
-  platform      String?
-  pageUrl       String?
-  status        String             @default("new") // new | triaged | in_progress | fixed | wont_fix | duplicate | answered
-  taskId        String?            @unique
-  task          Task?              @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  testerSeenAt  DateTime? // last time the tester opened it (for "new reply" badges)
-  plainThreadId String?            @unique // the Plain thread this report opened (externalId beta_report_<id>)
-  plainSyncedAt DateTime?
-  plainError    String?
-  plainTries    Int                @default(0)
-  replies       TesterReply[]
-  attachments   TesterAttachment[]
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  id              String             @id @default(cuid())
+  programId       String
+  program         BetaProgram        @relation(fields: [programId], references: [id], onDelete: Cascade)
+  testerId        String
+  tester          Tester             @relation(fields: [testerId], references: [id], onDelete: Cascade)
+  kind            String // bug | feedback | idea | question | praise
+  title           String
+  body            String
+  claimedSeverity String? // bugs, as the tester saw it: critical | high | medium | low
+  severity        String? // bugs, set by the team after review (same values)
+  steps           String?
+  expected        String?
+  actual          String?
+  platform        String? // free-text device line from the tester
+  device          String? // desktop_web | mobile_web | ios | android
+  browser         String? // browser / app version
+  environment     String? // production | staging | local
+  testArea        String?
+  occurredAt      DateTime?
+  pageUrl         String? // source link: where in the product
+  tokenContract   String?
+  txHash          String?
+  wallet          String?
+  plainTicket     String? // a Plain ticket ref typed by the team (T-123)
+  trackedIn       String? // issue tracker link
+  fixPr           String?
+  nextStep        String?
+  waitingOnId     String? // User id
+  nextActionDue   DateTime?
+  duplicateOfId   String?
+  duplicateOf     TesterReport?      @relation("ReportDuplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicates      TesterReport[]     @relation("ReportDuplicates")
+  callId          String?
+  call            BetaCall?          @relation(fields: [callId], references: [id], onDelete: SetNull)
+  loggedById      String? // a team member filed it for the tester (User id)
+  status          String             @default("new") // bugs: new | triaged | escalated | fix_in_review | fix_live | retest_needed | verified | duplicate | already_known | wont_fix; others: new | noted | passed_on | shipped | answered
+  taskId          String?            @unique
+  task            Task?              @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  testerSeenAt    DateTime? // last time the tester opened it (for "new reply" badges)
+  plainThreadId   String?            @unique // the Plain thread this report opened (externalId beta_report_<id>)
+  plainSyncedAt   DateTime?
+  plainError      String?
+  plainTries      Int                @default(0)
+  replies         TesterReply[]
+  attachments     TesterAttachment[]
+  outreach        BetaOutreach[]
+  payouts         BetaPayout[]
+  notionPageId    String?            @unique // the row on the program's Notion board
+  notionEditedAt  DateTime? // Notion's last_edited_time we last synced
+  notionDirty     Boolean            @default(false) // changed here, not yet pushed
+  notionError     String?
+  notionSnapshot  Json? // the mapped fields as Notion last had them (for field-by-field merge)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
   @@index([programId, status])
   @@index([testerId])
@@ -787,4 +844,123 @@ model RateLimit {
   key         String   @id
   windowStart DateTime
   count       Int
+}
+
+/// A message the team needs to send a tester. Anyone can suggest one; the program's lead approves;
+/// the sender sends it on the tester's channel and logs the answer; the requester closes it.
+model BetaOutreach {
+  id             String        @id @default(cuid())
+  programId      String
+  program        BetaProgram   @relation(fields: [programId], references: [id], onDelete: Cascade)
+  testerId       String
+  tester         Tester        @relation(fields: [testerId], references: [id], onDelete: Cascade)
+  reportId       String?
+  report         TesterReport? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  callId         String?
+  call           BetaCall?     @relation(fields: [callId], references: [id], onDelete: SetNull)
+  type           String        @default("need_info") // need_info | question | bug_logged | fix_live_retest | funds | other
+  status         String        @default("suggested") // suggested | approved | sent | answered | closed | cancelled
+  outcome        String? // report_updated | retest_passed | retest_failed | not_needed | no_reply
+  title          String // what we need
+  message        String? // the message to send
+  answer         String? // their answer
+  requestedById  String? // User ids
+  approvedById   String?
+  waitingOnId    String?
+  sentAt         DateTime?
+  answeredAt     DateTime?
+  nextActionDue  DateTime?
+  auto           Boolean       @default(false) // suggested by the CRM (bug escalated / fix live)
+  notionPageId   String?       @unique // the row on the program's Notion board
+  notionEditedAt DateTime? // Notion's last_edited_time we last synced
+  notionDirty    Boolean       @default(false) // changed here, not yet pushed
+  notionError    String?
+  notionSnapshot Json? // the mapped fields as Notion last had them (for field-by-field merge)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([programId, status])
+  @@index([waitingOnId, status])
+}
+
+model BetaPayout {
+  id             String        @id @default(cuid())
+  programId      String
+  program        BetaProgram   @relation(fields: [programId], references: [id], onDelete: Cascade)
+  testerId       String
+  tester         Tester        @relation(fields: [testerId], references: [id], onDelete: Cascade)
+  reportId       String?
+  report         TesterReport? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+  amount         Float
+  token          String        @default("USDC")
+  reason         String        @default("bug_reward") // test_funds | bug_reward | thank_you | other
+  tx             String? // tx hash or explorer link
+  sentAt         DateTime      @default(now())
+  sentById       String? // User id
+  notes          String?
+  notionPageId   String?       @unique // the row on the program's Notion board
+  notionEditedAt DateTime? // Notion's last_edited_time we last synced
+  notionDirty    Boolean       @default(false) // changed here, not yet pushed
+  notionError    String?
+  notionSnapshot Json? // the mapped fields as Notion last had them (for field-by-field merge)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@index([programId])
+  @@index([testerId])
+}
+
+/// A live feedback call with testers; reports and outreach can point at it.
+model BetaCall {
+  id             String           @id @default(cuid())
+  programId      String
+  program        BetaProgram      @relation(fields: [programId], references: [id], onDelete: Cascade)
+  title          String
+  date           DateTime
+  summary        String?
+  recordingUrl   String?
+  testers        BetaCallTester[]
+  reports        TesterReport[]
+  outreach       BetaOutreach[]
+  notionPageId   String?          @unique // the row on the program's Notion board
+  notionEditedAt DateTime? // Notion's last_edited_time we last synced
+  notionDirty    Boolean          @default(false) // changed here, not yet pushed
+  notionError    String?
+  notionSnapshot Json? // the mapped fields as Notion last had them (for field-by-field merge)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([programId, date])
+}
+
+model BetaCallTester {
+  callId   String
+  call     BetaCall @relation(fields: [callId], references: [id], onDelete: Cascade)
+  testerId String
+  tester   Tester   @relation(fields: [testerId], references: [id], onDelete: Cascade)
+
+  @@id([callId, testerId])
+}
+
+/// A program's Notion board for one kind of record, synced both ways.
+model NotionBoard {
+  id           String      @id @default(cuid())
+  programId    String
+  program      BetaProgram @relation(fields: [programId], references: [id], onDelete: Cascade)
+  kind         String // testers | reports | outreach | payouts | calls
+  databaseId   String
+  dataSourceId String
+  title        String?
+  url          String?
+  mapping      Json // { field: { property, type, options?: { ourValue: notionOption } } }
+  scope        Json? // shared boards: { property, value } — only rows with this value belong to the program
+  enabled      Boolean     @default(true)
+  pullCursor   DateTime? // rows edited in Notion since then are pulled
+  lastPullAt   DateTime?
+  lastPushAt   DateTime?
+  lastError    String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@unique([programId, kind])
 }

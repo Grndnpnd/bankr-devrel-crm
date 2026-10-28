@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { programOpen, STATUS_LABEL } from '@/lib/beta';
+import { TESTER_TONE } from '@/lib/betaModel';
 import { requireTester } from '@/lib/testerHttp';
 import { chatSignature, plainChatConfigured } from '@/lib/plain';
 
@@ -21,7 +22,7 @@ export async function GET(req: Request) {
   // tester has proved they own; otherwise Plain's widget asks for the email and checks it with a code.
   const chat = plainChatConfigured() && p.plainEnabled ? {
     appId: process.env.PLAIN_CHAT_APP_ID,
-    ...(tester.emailVerifiedAt ? {
+    ...(tester.emailVerifiedAt && tester.email ? {
       customerDetails: { email: tester.email, fullName: tester.name, shortName: tester.name.split(' ')[0] },
       customerDetailsSignature: chatSignature(tester.email),
     } : { requireAuthentication: true }),
@@ -31,9 +32,10 @@ export async function GET(req: Request) {
   return NextResponse.json({
     chat,
     tester: { name: tester.name, email: tester.email, platform: tester.platform },
-    program: { name: tester.program.name, product: tester.program.product, welcome: tester.program.welcome, open: programOpen(tester.program) },
+    program: { name: tester.program.name, product: tester.program.product, welcome: tester.program.welcome, open: programOpen(tester.program), testAreas: tester.program.testAreas },
     reports: reports.map(({ replies, ...x }) => ({
-      id: x.id, kind: x.kind, title: x.title, severity: x.severity, status: x.status, statusLabel: STATUS_LABEL[x.status] ?? x.status,
+      id: x.id, kind: x.kind, title: x.title, severity: x.claimedSeverity, status: x.status, statusLabel: STATUS_LABEL[x.status] ?? x.status, tone: TESTER_TONE[x.status] ?? 'info',
+      retest: x.kind === 'bug' && ['fix_live', 'retest_needed'].includes(x.status),
       createdAt: x.createdAt, teamReplies: replies.length,
       unread: replies.filter((rp) => !x.testerSeenAt || rp.createdAt > x.testerSeenAt).length,
     })),

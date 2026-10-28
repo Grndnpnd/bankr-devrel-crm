@@ -9,6 +9,7 @@
  * Pushes are retried by the plain_beta_sync job, so a Plain outage never loses a report.
  */
 import { prisma } from '@/lib/prisma';
+import { effectiveSeverity, LABEL, priorityFor } from '@/lib/betaModel';
 import {
   addPlainThreadEvent, badge, md, createPlainThread, divider, linkButton, markPlainThreadTodo, plainConfigured,
   plainText, PlainError, replyOnPlainThread, row, spacer, text, upsertPlainCustomer, type PlainComponent,
@@ -20,21 +21,20 @@ export const reportExternalId = (id: string) => `beta_report_${id}`;
 export const isBetaThread = (thread: any) => typeof thread?.externalId === 'string' && thread.externalId.startsWith('beta_report_');
 
 const KIND = (kind: string, severity: string | null) =>
-  kind === 'bug' ? `Bug · ${severity ?? 'minor'}` : kind[0].toUpperCase() + kind.slice(1);
-const PRIORITY: Record<string, number> = { blocker: 0, major: 1, minor: 2 };
-const SEVERITY_COLOR: Record<string, 'RED' | 'YELLOW' | 'GREY'> = { blocker: 'RED', major: 'YELLOW', minor: 'GREY' };
+  kind === 'bug' ? `Bug · ${LABEL.severity[severity ?? 'medium'] ?? severity}` : LABEL.kind[kind] ?? kind;
+const SEVERITY_COLOR: Record<string, 'RED' | 'YELLOW' | 'GREY'> = { critical: 'RED', high: 'YELLOW', medium: 'GREY', low: 'GREY' };
 
 function reportComponents(r: any): PlainComponent[] {
   const c: PlainComponent[] = [
-    row([text(`**${KIND(r.kind, r.severity)}** from ${md(r.tester.name)} in ${md(r.program.name)}`)],
-      [...(r.severity ? [badge(r.severity, SEVERITY_COLOR[r.severity] ?? 'GREY')] : []), ...(r.tester.emailVerifiedAt ? [] : [badge('email not verified', 'GREY')])]),
+    row([text(`**${KIND(r.kind, effectiveSeverity(r))}** from ${md(r.tester.name)} in ${md(r.program.name)}`)],
+      [...(effectiveSeverity(r) ? [badge(LABEL.severity[effectiveSeverity(r)!], SEVERITY_COLOR[effectiveSeverity(r)!] ?? 'GREY')] : []), ...(r.tester.emailVerifiedAt ? [] : [badge('email not verified', 'GREY')])]),
     spacer('S'),
     plainText(r.body),
   ];
   if (r.steps) c.push(spacer('S'), text('**Steps**'), plainText(r.steps));
   if (r.expected) c.push(spacer('S'), text('**Expected**'), plainText(r.expected));
   if (r.actual) c.push(spacer('S'), text('**Actual**'), plainText(r.actual));
-  const meta = [r.platform && `Platform: ${r.platform}`, r.pageUrl && `Where: ${r.pageUrl}`, r._count?.attachments && `${r._count.attachments} attachment(s) in the CRM`].filter(Boolean);
+  const meta = [r.testArea && `Area: ${r.testArea}`, r.device && `Device: ${LABEL.device[r.device]}`, r.platform && `Platform: ${r.platform}`, r.pageUrl && `Where: ${r.pageUrl}`, r._count?.attachments && `${r._count.attachments} attachment(s) in the CRM`].filter(Boolean);
   if (meta.length) c.push(spacer('S'), plainText(meta.join('\n'), 'MUTED'));
   c.push(divider(), linkButton('Open in the CRM', `${APP_URL()}/beta/${r.programId}?report=${r.id}`));
   return c;
@@ -56,15 +56,15 @@ export async function pushReportToPlain(reportId: string): Promise<string | null
     where: { id: reportId },
     include: { tester: true, program: true, _count: { select: { attachments: true } } },
   });
-  if (!r || !r.program.plainEnabled) return null;
+  if (!r || !r.program.plainEnabled || !r.tester.email) return null; // no email (added by the team): nothing to thread
   if (r.plainThreadId) return r.plainThreadId;
   try {
-    const customerId = await upsertPlainCustomer({ email: r.tester.email, fullName: r.tester.name });
+    const customerId = await upsertPlainCustomer({ email: r.tester.email!, fullName: r.tester.name });
     const threadId = await createPlainThread({
       customerId, externalId: reportExternalId(r.id),
-      title: `[${r.program.name}] ${KIND(r.kind, r.severity)}: ${r.title}`,
+      title: `[${r.program.name}] ${KIND(r.kind, effectiveSeverity(r))}: ${r.title}`,
       description: r.body.slice(0, 300),
-      priority: r.kind === 'bug' ? PRIORITY[r.severity ?? 'minor'] ?? 2 : r.kind === 'idea' ? 3 : 2,
+      priority: priorityFor(r.kind, effectiveSeverity(r)),
       labelTypeIds: r.program.plainLabelTypeId ? [r.program.plainLabelTypeId] : [],
       components: reportComponents(r),
     });
@@ -120,7 +120,7 @@ export async function syncBetaToPlain() {
   if (!plainConfigured()) return { skipped: 'PLAIN_API_KEY not set' };
   const since = new Date(Date.now() - 14 * 86_400_000);
   const reports = await prisma.testerReport.findMany({
-    where: { plainThreadId: null, plainTries: { lt: MAX_TRIES }, createdAt: { gte: since }, program: { plainEnabled: true } },
+    where: { plainThreadId: null, plainTries: { lt: MAX_TRIES }, createdAt: { gte: since }, program: { plainEnabled: true }, tester: { email: { not: null } } },
     orderBy: { createdAt: 'asc' }, take: 25, select: { id: true },
   });
   let threads = 0, replies = 0, failed = 0;

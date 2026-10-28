@@ -3,21 +3,33 @@ import { getSession } from '@/lib/auth';
 import { can } from '@/lib/access';
 import { prisma } from '@/lib/prisma';
 import { newTesterLink, portalUrl, resetTesterLinks } from '@/lib/beta';
+import { loadProgram, updateTester } from '@/lib/betaFlow';
+import { run } from '@/lib/betaHttp';
 
 export const dynamic = 'force-dynamic';
 
 const findTester = (id: string) => prisma.tester.findUnique({ where: { id }, include: { program: { select: { slug: true } } } });
 
-/** Remove (or restore) a tester: { status: 'removed' | 'active' }. A removed tester's links stop working. */
+/**
+ * Change a tester: { status: 'removed' | 'active' } removes or restores them (a removed tester's links
+ * stop working); anything else edits their record ({ stage, types, usage, sendFunds, channel, handle,
+ * walletAddress, testAreas, name, email, notes, wave }, or { checkIn: true } to log today's check-in).
+ */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   const session = await getSession();
-  if (!session || !can(session.role, 'beta.manage')) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
-  const status = (await req.json().catch(() => ({})))?.status;
-  if (status !== 'removed' && status !== 'active') return NextResponse.json({ error: 'status must be removed or active' }, { status: 400 });
-  if (!(await findTester(id))) return NextResponse.json({ error: 'not found' }, { status: 404 });
-  await prisma.tester.update({ where: { id }, data: { status } });
-  return NextResponse.json({ ok: true });
+  if (!session || !can(session.role, 'tasks.use')) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  const b = await req.json().catch(() => ({}));
+  const t = await findTester(id);
+  if (!t) return NextResponse.json({ error: 'not found' }, { status: 404 });
+  if (b?.status !== undefined) {
+    if (!can(session.role, 'beta.manage')) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    if (b.status !== 'removed' && b.status !== 'active') return NextResponse.json({ error: 'status must be removed or active' }, { status: 400 });
+    await prisma.tester.update({ where: { id }, data: { status: b.status } });
+    return NextResponse.json({ ok: true });
+  }
+  const p = (await loadProgram(t.programId))!;
+  return run(async () => ({ tester: await updateTester(p, id, b) }));
 }
 
 /**

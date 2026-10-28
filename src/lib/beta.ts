@@ -12,6 +12,7 @@ import { prisma } from '@/lib/prisma';
 import { createTask } from '@/lib/tasks';
 import { notify, teamMemberIds } from '@/lib/notify';
 import { emailConfigured, sendEmail } from '@/lib/email';
+import { DEVICES, ENVIRONMENTS, KINDS, LABEL, priorityFor, SEVERITY, TESTER_STATUS, values } from '@/lib/betaModel';
 
 /** A problem the tester can fix; its message is safe to show them. Anything else is a 500. */
 export class BetaInputError extends Error {}
@@ -19,13 +20,10 @@ export const isInputError = (e: unknown): e is BetaInputError => e instanceof Be
 const fail = (m: string): never => { throw new BetaInputError(m); };
 const str = (v: unknown, n: number) => (typeof v === 'string' || typeof v === 'number' ? String(v).trim().slice(0, n) : '');
 
-export const REPORT_KINDS = ['bug', 'feedback', 'idea', 'question'] as const;
-export type ReportKind = (typeof REPORT_KINDS)[number];
-export const SEVERITIES = ['blocker', 'major', 'minor'] as const;
-export const REPORT_STATUSES = ['new', 'triaged', 'in_progress', 'fixed', 'wont_fix', 'duplicate', 'answered'] as const;
-export const STATUS_LABEL: Record<string, string> = {
-  new: 'New', triaged: 'Seen', in_progress: 'Being worked on', fixed: 'Fixed', wont_fix: 'Won’t fix', duplicate: 'Duplicate', answered: 'Answered',
-};
+/** What the tester sees for a status. */
+export const STATUS_LABEL = TESTER_STATUS;
+/** The old three-level severity from earlier portal versions. */
+const LEGACY_SEVERITY: Record<string, string> = { blocker: 'critical', major: 'high', minor: 'medium' };
 
 const APP_URL = () => (process.env.APP_URL || '').replace(/\/$/, '');
 export const token = (bytes = 24) => randomBytes(bytes).toString('base64url');
@@ -217,7 +215,7 @@ export async function joinProgram(p: BetaProgram, input: unknown, signedInAs: Te
       const tester = await prisma.tester.update({ where: { id: existing.id }, data: { name, contact: contact ?? existing.contact, platform: platform ?? existing.platform, answers } });
       return { status: 'updated', tester };
     }
-    if (existing.status === 'active' && emailConfigured()) {
+    if (existing.status === 'active' && existing.email && emailConfigured()) {
       await emailTesterLink(p, existing.email, existing.name, portalUrl(p.slug, await newTesterLink(existing.id, 'email')), false);
     }
     return already(); // the same answer for removed testers, so it says nothing about them
@@ -241,50 +239,70 @@ export async function joinProgram(p: BetaProgram, input: unknown, signedInAs: Te
 
 // ───────── reports ─────────
 
-export interface ReportInput {
-  kind: string; title: string; body: string; severity?: string;
-  steps?: string; expected?: string; actual?: string; platform?: string; pageUrl?: string;
-}
+export type ReportInput = Record<string, unknown>;
 
-const PRIORITY: Record<string, number> = { blocker: 0, major: 1, minor: 2 };
-
-export async function submitReport(tester: Tester & { program: BetaProgram }, input: ReportInput) {
+/**
+ * File a report — by the tester from their page, or by the team for them (`by`, e.g. from a call
+ * or a DM). The tester's severity is kept as "claimed"; the team sets the official one in triage.
+ */
+export async function submitReport(tester: Tester & { program: BetaProgram }, input: unknown, by?: { id: string; name?: string | null }) {
   const p = tester.program;
-  if (!programOpen(p)) fail('This beta isn’t taking new reports right now.');
-  input = (input && typeof input === 'object' ? input : {}) as ReportInput;
-  const kind = (REPORT_KINDS as readonly string[]).includes(input.kind) ? (input.kind as ReportKind) : fail('Pick what kind of report this is.');
-  const title = str(input.title, 200);
-  const body = str(input.body, 10_000);
+  if (!by && !programOpen(p)) fail('This beta isn’t taking new reports right now.');
+  const b = (input && typeof input === 'object' ? input : {}) as ReportInput;
+  const kind = values(KINDS).includes(String(b.kind)) ? String(b.kind) : fail('Pick what kind of report this is.');
+  const title = str(b.title, 200);
+  const body = str(b.body, 10_000);
   if (!title) fail('Give it a short title.');
   if (!body) fail('Tell us a bit more in the description.');
-  const severity = kind === 'bug' ? ((SEVERITIES as readonly string[]).includes(String(input.severity)) ? String(input.severity) : 'minor') : null;
+  const pick = (v: unknown, opts: readonly (readonly [string, string])[]) => (values(opts).includes(String(v)) ? String(v) : null);
+  const sev = LEGACY_SEVERITY[String(b.severity ?? b.claimedSeverity)] ?? pick(b.claimedSeverity ?? b.severity, SEVERITY);
+  const claimedSeverity = kind === 'bug' ? sev ?? 'medium' : null;
   const clip = (v: unknown, n = 4000) => str(v, n) || null;
+  const occurred = b.occurredAt ? new Date(String(b.occurredAt)) : null;
+  let duplicateOfId: string | null = null;
+  if (by && b.duplicateOfId) {
+    const target = await prisma.testerReport.findFirst({ where: { id: String(b.duplicateOfId), programId: p.id, duplicateOfId: null } });
+    duplicateOfId = target?.id ?? fail('Pick an original report in this program to mark it a duplicate of.');
+  }
+  const status = duplicateOfId ? 'duplicate' : 'new';
 
   const report = await prisma.testerReport.create({
     data: {
-      programId: p.id, testerId: tester.id, kind, title, body, severity,
-      steps: clip(input.steps), expected: clip(input.expected, 2000), actual: clip(input.actual, 2000),
-      platform: clip(input.platform, 120) ?? tester.platform, pageUrl: clip(input.pageUrl, 500),
+      programId: p.id, testerId: tester.id, kind, title, body, claimedSeverity, status,
+      steps: clip(b.steps), expected: clip(b.expected, 2000), actual: clip(b.actual, 2000),
+      platform: clip(b.platform, 120) ?? tester.platform, pageUrl: clip(b.pageUrl, 500),
+      device: pick(b.device, DEVICES), environment: pick(b.environment, ENVIRONMENTS) ?? (kind === 'bug' ? 'production' : null),
+      browser: clip(b.browser, 120), testArea: p.testAreas.includes(String(b.testArea)) ? String(b.testArea) : null,
+      occurredAt: occurred && !Number.isNaN(occurred.getTime()) ? occurred : null,
+      tokenContract: clip(b.tokenContract, 200), txHash: clip(b.txHash, 200), wallet: tester.walletAddress,
+      plainTicket: by ? clip(b.plainTicket, 60) : null, duplicateOfId, loggedById: by?.id ?? null,
+      callId: by && b.callId ? String(b.callId) : null,
+      waitingOnId: status === 'new' ? p.leadId : null,
     },
   });
+  // Filing a report makes an invited or onboarding tester active.
+  if (!by && ['invited', 'onboarding', 'to_contact'].includes(tester.stage)) await prisma.tester.update({ where: { id: tester.id }, data: { stage: 'active' } }).catch(() => {});
 
   // Route it: a task for the right team, priority from severity.
   const teamId = (kind === 'bug' ? p.bugTeamId ?? p.teamId : p.teamId) ?? null;
   const triage = `${APP_URL()}/beta/${p.id}?report=${report.id}`;
+  const what = kind === 'bug' ? `Bug (${LABEL.severity[claimedSeverity!]}, as reported)` : LABEL.kind[kind];
   const detail = [
-    `${kind === 'bug' ? `Bug (${severity})` : kind[0].toUpperCase() + kind.slice(1)} from ${tester.name} <${tester.email}> in ${p.name}`,
-    report.platform ? `Platform: ${report.platform}` : null,
+    `${what} from ${tester.name}${tester.email ? ` <${tester.email}>` : ''} in ${p.name}${by ? ` · logged by ${by.name ?? 'the team'}` : ''}`,
+    report.testArea ? `Area: ${report.testArea}` : null,
+    [report.device && LABEL.device[report.device], report.browser, report.platform].filter(Boolean).join(' · ') || null,
     report.pageUrl ? `Where: ${report.pageUrl}` : null,
     '', body,
     report.steps ? `\nSteps:\n${report.steps}` : null,
     report.expected ? `\nExpected: ${report.expected}` : null,
     report.actual ? `Actual: ${report.actual}` : null,
+    report.txHash ? `Tx: ${report.txHash}` : null,
   ].filter((x) => x !== null).join('\n');
   try {
-    const { task } = await createTask({ id: 'system', name: `${tester.name} (beta tester)` }, {
-      title: `[${p.name}] ${kind === 'bug' ? 'Bug' : kind[0].toUpperCase() + kind.slice(1)}: ${title}`,
-      body: detail, teamId,
-      priority: kind === 'bug' ? PRIORITY[severity!] : kind === 'idea' ? 3 : 2,
+    const { task } = await createTask({ id: by?.id ?? 'system', name: by?.name ?? `${tester.name} (beta tester)` }, {
+      title: `[${p.name}] ${kind === 'bug' ? 'Bug' : LABEL.kind[kind]}: ${title}`,
+      body: detail, teamId, priority: priorityFor(kind, claimedSeverity),
+      status: duplicateOfId ? 'DONE' : 'TODO',
       source: 'beta', sourceRef: report.id, sourceUrl: triage,
     });
     await prisma.testerReport.update({ where: { id: report.id }, data: { taskId: task.id } });

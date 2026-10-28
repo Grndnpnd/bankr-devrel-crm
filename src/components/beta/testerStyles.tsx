@@ -24,8 +24,11 @@ export const TESTER_CSS = `
 .tp .seg button[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--card)}
 .tp .seg b{display:block;font-size:14px} .tp .seg span{font-size:12.5px;color:var(--muted)}
 .tp .pill{display:inline-block;font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;white-space:nowrap}
-.tp .pill.new,.tp .pill.triaged{color:var(--info);background:var(--info-bg)} .tp .pill.in_progress{color:var(--warn);background:var(--warn-bg)}
-.tp .pill.fixed,.tp .pill.answered{color:var(--ok);background:var(--ok-bg)} .tp .pill.wont_fix,.tp .pill.duplicate{color:var(--muted);background:var(--bg)}
+.tp .pill.info{color:var(--info);background:var(--info-bg)} .tp .pill.warn{color:var(--warn);background:var(--warn-bg)}
+.tp .pill.ok{color:var(--ok);background:var(--ok-bg)} .tp .pill.muted{color:var(--muted);background:var(--bg)}
+.tp .pill.ask{color:var(--accent);background:transparent;box-shadow:inset 0 0 0 1.5px var(--accent)}
+.tp .card.ask{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.tp .linkish{background:none;border:0;padding:0;color:var(--accent);font:inherit;text-align:left;cursor:pointer}
 .tp .err{color:var(--bad);background:var(--bad-bg);border-radius:10px;padding:10px 12px;font-size:14px}
 .tp .row{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
 .tp .list{display:flex;flex-direction:column}
