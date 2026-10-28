@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { LayoutDashboard, Inbox, BarChart3, Settings, Shield, ClipboardCheck, ChevronLeft, ChevronRight, TerminalSquare, LayoutGrid, Plus, LifeBuoy, Layers, CheckSquare, Wallet, FlaskConical } from 'lucide-react';
@@ -28,8 +28,13 @@ const navItems: NavItem[] = [
   { to: '/admin', label: 'Admin', icon: Shield, adminOnly: true },
 ];
 
-const Sidebar: React.FC = () => {
-  const [collapsed, setCollapsed] = useState(false);
+interface SidebarProps { collapsed: boolean; onToggle: () => void; open: boolean; onClose: () => void }
+
+const Sidebar: React.FC<SidebarProps> = ({ collapsed: wantCollapsed, onToggle, open, onClose }) => {
+  // On phones the sidebar is a full-width menu, never the icon strip.
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => { const m = window.matchMedia('(max-width: 767px)'); const on = () => setNarrow(m.matches); on(); m.addEventListener('change', on); return () => m.removeEventListener('change', on); }, []);
+  const collapsed = wantCollapsed && !narrow;
   const pathname = usePathname();
   const me = useSubmissionStore((st) => st.me);
   const pendingCount = useSubmissionStore((st) => st.proposals.length);
@@ -51,9 +56,9 @@ const Sidebar: React.FC = () => {
 
   return (
     <aside
-      className="fixed left-0 top-0 h-full flex flex-col transition-all duration-300"
+      className={`hub-side fixed left-0 top-0 h-full flex flex-col transition-all duration-300${open ? ' open' : ''}`}
+      aria-label="Main menu"
       style={{
-        width: collapsed ? '56px' : '220px',
         backgroundColor: '#1A1A1A',
         borderRight: '1px solid rgba(255,255,255,0.06)',
         zIndex: 100,
@@ -85,7 +90,7 @@ const Sidebar: React.FC = () => {
             <Link
               key={item.to}
               href={item.to}
-              onClick={item.to === '/' ? () => clearActiveLayout() : undefined}
+              onClick={() => { if (item.to === '/') clearActiveLayout(); onClose(); }}
               className={`flex items-center gap-3 rounded-md transition-all duration-200 relative ${
                 collapsed ? 'justify-center w-10 h-10 mx-auto' : 'px-4 h-10'
               }`}
@@ -166,8 +171,8 @@ const Sidebar: React.FC = () => {
 
       <div className="px-2 pb-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <button
-          onClick={() => setCollapsed(!collapsed)}
-          className="flex items-center justify-center w-10 h-10 rounded-md transition-all duration-200 mx-auto mt-2"
+          onClick={onToggle}
+          className="hub-collapse flex items-center justify-center w-10 h-10 rounded-md transition-all duration-200 mx-auto mt-2"
           style={{ color: '#525252', backgroundColor: 'transparent' }}
           onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#222'; e.currentTarget.style.color = '#F0F0F0'; }}
           onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'transparent'; e.currentTarget.style.color = '#525252'; }}

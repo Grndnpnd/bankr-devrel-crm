@@ -39,9 +39,33 @@ export const effectiveSeverity = (r: { severity?: string | null; claimedSeverity
 /** Task priority (0 urgent … 3 low) for a report. */
 export const priorityFor = (kind: string, severity: string | null) => (kind === 'bug' ? SEVERITY_RANK[severity ?? 'medium'] ?? 2 : kind === 'idea' || kind === 'praise' ? 3 : 2);
 
+/** One line on what each status means, for the team's pickers (plain words, no jargon). */
+export const STATUS_HELP: Record<string, string> = {
+  new: 'Nobody has looked at it yet.',
+  triaged: 'Someone read it and confirmed it is real.',
+  escalated: 'Sent to the engineers to fix.',
+  fix_in_review: 'A fix is written and is being checked.',
+  fix_live: 'The fix is released. The tester is asked to try again.',
+  retest_needed: 'We asked the tester to try again and are waiting for their answer.',
+  verified: 'The tester (or the team) confirmed the fix works. Closed.',
+  duplicate: 'Someone already reported the same thing. Closed; link it to the first report.',
+  already_known: 'The team already knew about it. Closed.',
+  wont_fix: 'The team decided not to change this. Closed.',
+  noted: 'Read and recorded. Closed.',
+  passed_on: 'Given to the team that owns it. Closed.',
+  shipped: 'The idea or change is now in the product. Closed.',
+  answered: 'The question was answered. Closed.',
+};
+export const SEVERITY_HELP: Record<string, string> = {
+  critical: 'Cannot use the product at all, or money is at risk.',
+  high: 'A main feature is broken; there may be a workaround.',
+  medium: 'Annoying, but the product still works.',
+  low: 'Looks wrong; small or cosmetic.',
+};
+
 /** What the tester sees for each status (warmer than the team's words). */
 export const TESTER_STATUS: Record<string, string> = {
-  new: 'Received', triaged: 'Seen', escalated: 'Being worked on', fix_in_review: 'Fix in progress', fix_live: 'Fixed — please retest',
+  new: 'Received by the team', triaged: 'Seen', escalated: 'Being worked on', fix_in_review: 'Fix in progress', fix_live: 'Fixed — please retest',
   retest_needed: 'Please retest', verified: 'Fixed', duplicate: 'Already reported', already_known: 'Already known', wont_fix: 'Won’t fix',
   noted: 'Noted', passed_on: 'Passed to the team', shipped: 'Shipped', answered: 'Answered',
 };
@@ -57,7 +81,18 @@ export const OUTREACH_TYPES: Opt[] = [
 ];
 export const OUTREACH_STATUSES: Opt[] = [['suggested', 'Suggested'], ['approved', 'Approved'], ['sent', 'Sent'], ['answered', 'Answered'], ['closed', 'Closed'], ['cancelled', 'Cancelled']];
 export const OUTREACH_OPEN = ['suggested', 'approved', 'sent', 'answered'];
-export const OUTCOMES: Opt[] = [['report_updated', 'Report updated'], ['retest_passed', 'Retest passed'], ['retest_failed', 'Retest failed'], ['not_needed', 'Not needed'], ['no_reply', 'No reply']];
+/** Which close-outcomes fit a message type (retest results only for retests). */
+export const outcomesFor = (type: string): Opt[] =>
+  type === 'fix_live_retest' ? OUTCOMES.filter(([v]) => ['retest_passed', 'retest_failed', 'not_needed'].includes(v)) : OUTCOMES.filter(([v]) => ['answered', 'report_updated', 'not_needed'].includes(v));
+export const OUTREACH_TYPE_HELP: Record<string, string> = {
+  need_info: 'We need more details from them about a report.',
+  question: 'A question for them that is not about one report.',
+  bug_logged: 'Tell them we confirmed their bug and are fixing it.',
+  fix_live_retest: 'Tell them the fix is released and ask them to try again.',
+  funds: 'About test funds or a reward we are sending.',
+  other: 'Anything else.',
+};
+export const OUTCOMES: Opt[] = [['report_updated', 'Report updated'], ['retest_passed', 'Retest passed'], ['retest_failed', 'Retest failed'], ['not_needed', 'Not needed'], ['no_reply', 'No reply'], ['answered', 'Got the answer']];
 
 // ───────── payouts ─────────
 export const PAYOUT_REASONS: Opt[] = [['test_funds', 'Test funds'], ['bug_reward', 'Bug reward'], ['thank_you', 'Thank you'], ['other', 'Other']];
@@ -67,6 +102,17 @@ export const LABEL = {
   kind: labels(KINDS), severity: labels(SEVERITY), status: labels([...BUG_OPEN, ...BUG_CLOSED, ...NOTE_STATUSES]), device: labels(DEVICES),
   environment: labels(ENVIRONMENTS), outreachType: labels(OUTREACH_TYPES), outreachStatus: labels(OUTREACH_STATUSES), outcome: labels(OUTCOMES),
   reason: labels(PAYOUT_REASONS),
+};
+
+/**
+ * A date-only value ("2026-10-30") is stored at noon UTC, so it shows as the same day in every
+ * time zone from UTC−11 to UTC+11 (midnight UTC showed as the day before across the Americas).
+ */
+export const parseDay = (v: unknown): Date | null => {
+  if (v === null || v === undefined || v === '') return null;
+  const s = String(v);
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s}T12:00:00Z` : s);
+  return Number.isNaN(d.getTime()) ? null : d;
 };
 
 /** A tx hash becomes an explorer link (Base by default); links pass through. */

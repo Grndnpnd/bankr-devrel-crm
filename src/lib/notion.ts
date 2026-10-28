@@ -43,7 +43,7 @@ export async function notion<T = any>(method: string, path: string, body?: unkno
     }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const hint = res.status === 404 ? ' — is the board shared with the integration (… → Connections)?' : '';
+      const hint = res.status === 404 ? ' — either the link isn’t a board, or the board isn’t shared with the CRM’s Notion integration yet (on the board: … → Connections → add it).' : '';
       throw new NotionError(`${data?.message ?? `Notion error ${res.status}`}${hint}`, res.status, data?.code);
     }
     return data as T;
@@ -73,7 +73,7 @@ export interface NotionPage {
 /** A pasted board link → its database and first data source (with the property schema). */
 export async function resolveBoard(link: string) {
   const id = notionIdFrom(link);
-  if (!id) throw new NotionError('Paste the board’s Notion link (Share → Copy link).', 400);
+  if (!id) throw new NotionError('That isn’t a Notion board link. In Notion, open the board as a full page, click Share → Copy link, and paste that here (it looks like https://www.notion.so/…/Board-name-1a2b3c…).', 400);
   let databaseId = id, dataSourceId: string;
   try {
     const db = await notion<{ id: string; title?: { plain_text: string }[]; url?: string; data_sources?: { id: string; name: string }[] }>('GET', `/databases/${id}`);

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { parseDay } from '@/lib/betaModel';
 import { body, staff } from '@/lib/betaHttp';
 
 export const dynamic = 'force-dynamic';
@@ -14,7 +15,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const b = await body(req);
   const data: Record<string, unknown> = {};
   if (b.title !== undefined) { const t = String(b.title).trim().slice(0, 200); if (!t) return NextResponse.json({ error: 'Name the call.' }, { status: 400 }); data.title = t; }
-  if (b.date !== undefined) { const d = new Date(b.date); if (Number.isNaN(d.getTime())) return NextResponse.json({ error: 'That date isn’t a date.' }, { status: 400 }); data.date = d; }
+  if (b.date !== undefined) { const d = parseDay(b.date) ?? new Date(NaN); if (Number.isNaN(d.getTime())) return NextResponse.json({ error: 'That date isn’t a date.' }, { status: 400 }); data.date = d; }
   if (b.summary !== undefined) data.summary = b.summary ? String(b.summary).slice(0, 20_000) : null;
   if (b.recordingUrl !== undefined) {
     const rec = b.recordingUrl ? String(b.recordingUrl).trim().slice(0, 500) : null;

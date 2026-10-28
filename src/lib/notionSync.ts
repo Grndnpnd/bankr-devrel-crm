@@ -17,7 +17,7 @@
 import { prisma } from '@/lib/prisma';
 import {
   CHANNELS, DEVICES, ENVIRONMENTS, KINDS, OUTCOMES, OUTREACH_STATUSES, OUTREACH_TYPES, PAYOUT_REASONS, SEND_FUNDS,
-  SEVERITY, STAGES, TESTER_TYPES, USAGE, ALL_STATUSES, BUG_OPEN, BUG_CLOSED, NOTE_STATUSES, LABEL, type Opt,
+  SEVERITY, STAGES, TESTER_TYPES, USAGE, ALL_STATUSES, parseDay, BUG_OPEN, BUG_CLOSED, NOTE_STATUSES, LABEL, type Opt,
 } from '@/lib/betaModel';
 import { createPage, getDataSource, notionPeople, NotionError, rowsSince, updatePage, type NotionPage, type NotionProperty } from '@/lib/notion';
 
@@ -62,8 +62,8 @@ export const FIELDS: Record<Kind, Field[]> = {
     { key: 'email', label: 'Email', canon: 'text', names: ['Email'], get: (r) => r.email ?? null, put: (v) => (v && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v) ? { email: String(v).toLowerCase() } : {}) },
     { key: 'walletAddress', label: 'Wallet', canon: 'text', names: ['Wallet Address', 'Wallet'], ...plain('walletAddress') },
     { key: 'testAreas', label: 'Test areas', canon: 'enums', names: ['Test Areas', 'Test Area'], get: (r) => r.testAreas, put: (v) => ({ testAreas: v ?? [] }) },
-    { key: 'lastCheckInAt', label: 'Last check-in', canon: 'date', names: ['Last Check-in', 'Last Check-In'], get: (r) => day(r.lastCheckInAt), put: (v) => ({ lastCheckInAt: v ? new Date(v) : null }) },
-    { key: 'invitedAt', label: 'Invited on', canon: 'date', names: ['Invited On'], get: (r) => day(r.invitedAt), put: (v) => ({ invitedAt: v ? new Date(v) : null }) },
+    { key: 'lastCheckInAt', label: 'Last check-in', canon: 'date', names: ['Last Check-in', 'Last Check-In'], get: (r) => day(r.lastCheckInAt), put: (v) => ({ lastCheckInAt: v ? parseDay(v) : null }) },
+    { key: 'invitedAt', label: 'Invited on', canon: 'date', names: ['Invited On'], get: (r) => day(r.invitedAt), put: (v) => ({ invitedAt: v ? parseDay(v) : null }) },
     { key: 'wave', label: 'Wave', canon: 'text', names: ['Wave'], ...plain('wave') },
     { key: 'notes', label: 'Notes', canon: 'text', names: ['Notes'], ...plain('notes') },
   ],
@@ -78,8 +78,8 @@ export const FIELDS: Record<Kind, Field[]> = {
     { key: 'device', label: 'Device', canon: 'enum', options: DEVICES, names: ['Device'], ...plain('device') },
     { key: 'environment', label: 'Environment', canon: 'enum', options: ENVIRONMENTS, names: ['Environment'], ...plain('environment') },
     { key: 'reportedOn', label: 'Reported on', canon: 'date', pushOnly: true, names: ['Reported On'], get: (r) => day(r.createdAt) },
-    { key: 'occurredAt', label: 'Occurred at', canon: 'datetime', names: ['Occurred At'], get: (r) => minute(r.occurredAt), put: (v) => ({ occurredAt: v }) },
-    { key: 'nextActionDue', label: 'Next action due', canon: 'date', names: ['Next Action Due'], get: (r) => day(r.nextActionDue), put: (v) => ({ nextActionDue: v }) },
+    { key: 'occurredAt', label: 'Occurred at', canon: 'datetime', names: ['Occurred At'], get: (r) => minute(r.occurredAt), put: (v) => ({ occurredAt: v ? new Date(v) : null }) },
+    { key: 'nextActionDue', label: 'Next action due', canon: 'date', names: ['Next Action Due'], get: (r) => day(r.nextActionDue), put: (v) => ({ nextActionDue: v ? parseDay(v) : null }) },
     { key: 'body', label: 'Details', canon: 'text', names: ['Details', 'Description'], get: (r) => r.body, put: (v, r) => (v ? { body: v } : r.body ? {} : { body: r.title }) },
     { key: 'steps', label: 'Steps to reproduce', canon: 'text', names: ['Steps to Reproduce', 'Steps'], ...plain('steps') },
     { key: 'expected', label: 'Expected', canon: 'text', names: ['Expected'], ...plain('expected') },
@@ -110,9 +110,9 @@ export const FIELDS: Record<Kind, Field[]> = {
     { key: 'waitingOn', label: 'Waiting on', canon: 'person', names: ['Waiting On'], get: (r) => r.waitingOnId ?? null, put: (v) => ({ waitingOnId: v ?? null }) },
     { key: 'approvedBy', label: 'Approved by', canon: 'person', names: ['Approved By'], get: (r) => r.approvedById ?? null, put: (v) => ({ approvedById: v ?? null }) },
     { key: 'requestedBy', label: 'Requested by', canon: 'person', names: ['Requested By'], get: (r) => r.requestedById ?? null, put: (v) => ({ requestedById: v ?? null }) },
-    { key: 'sentAt', label: 'Sent on', canon: 'date', names: ['Sent On'], get: (r) => day(r.sentAt), put: (v) => ({ sentAt: v ? new Date(v) : null }) },
-    { key: 'answeredAt', label: 'Answered on', canon: 'date', names: ['Answered On'], get: (r) => day(r.answeredAt), put: (v) => ({ answeredAt: v ? new Date(v) : null }) },
-    { key: 'nextActionDue', label: 'Next action due', canon: 'date', names: ['Next Action Due'], get: (r) => day(r.nextActionDue), put: (v) => ({ nextActionDue: v ? new Date(v) : null }) },
+    { key: 'sentAt', label: 'Sent on', canon: 'date', names: ['Sent On'], get: (r) => day(r.sentAt), put: (v) => ({ sentAt: v ? parseDay(v) : null }) },
+    { key: 'answeredAt', label: 'Answered on', canon: 'date', names: ['Answered On'], get: (r) => day(r.answeredAt), put: (v) => ({ answeredAt: v ? parseDay(v) : null }) },
+    { key: 'nextActionDue', label: 'Next action due', canon: 'date', names: ['Next Action Due'], get: (r) => day(r.nextActionDue), put: (v) => ({ nextActionDue: v ? parseDay(v) : null }) },
   ],
   payouts: [
     { key: 'title', label: 'Payout', canon: 'title', pushOnly: true, names: ['Payout', 'Name'], get: (r) => `${LABEL.reason[r.reason] ?? r.reason}: ${r.tester?.name ?? 'tester'}` },
@@ -122,13 +122,13 @@ export const FIELDS: Record<Kind, Field[]> = {
     { key: 'token', label: 'Token', canon: 'text', names: ['Token'], get: (r) => r.token, put: (v) => (v ? { token: v } : {}) },
     { key: 'reason', label: 'Reason', canon: 'enum', options: PAYOUT_REASONS, names: ['Reason'], get: (r) => r.reason, put: (v) => ({ reason: v ?? 'other' }) },
     { key: 'tx', label: 'Tx', canon: 'text', names: ['Tx', 'Tx Hash'], ...plain('tx') },
-    { key: 'sentAt', label: 'Sent on', canon: 'date', names: ['Sent On'], get: (r) => day(r.sentAt), put: (v) => (v ? { sentAt: new Date(v) } : {}) },
+    { key: 'sentAt', label: 'Sent on', canon: 'date', names: ['Sent On'], get: (r) => day(r.sentAt), put: (v) => (v ? { sentAt: parseDay(v) } : {}) },
     { key: 'sentBy', label: 'Sent by', canon: 'person', names: ['Sent By'], get: (r) => r.sentById ?? null, put: (v) => ({ sentById: v ?? null }) },
     { key: 'notes', label: 'Notes', canon: 'text', names: ['Notes'], ...plain('notes') },
   ],
   calls: [
     { key: 'title', label: 'Call', canon: 'title', names: ['Call', 'Name'], ...plain('title') },
-    { key: 'date', label: 'Date', canon: 'date', names: ['Date'], get: (r) => day(r.date), put: (v) => (v ? { date: new Date(v) } : {}) },
+    { key: 'date', label: 'Date', canon: 'date', names: ['Date'], get: (r) => day(r.date), put: (v) => (v ? { date: parseDay(v) } : {}) },
     { key: 'summary', label: 'Summary', canon: 'text', names: ['Summary'], ...plain('summary') },
     { key: 'recordingUrl', label: 'Recording', canon: 'text', names: ['Recording'], get: (r) => r.recordingUrl ?? null, put: (v) => (!v || /^https:\/\//.test(v) ? { recordingUrl: v ?? null } : {}) },
     { key: 'testers', label: 'Testers', canon: 'relations', target: 'testers', names: ['Testers'], get: (r) => (r.testers ?? []).map((x: any) => x.testerId) },
@@ -373,7 +373,7 @@ async function linkOrImport(kind: Kind, b: Board, row: NotionPage, vals: Record<
   }
   if (kind === 'calls') {
     if (!vals.title) return null;
-    const c = await prisma.betaCall.create({ data: { programId, title: vals.title, date: vals.date ? new Date(vals.date) : new Date(row.last_edited_time), summary: vals.summary ?? null, recordingUrl: vals.recordingUrl ?? null } });
+    const c = await prisma.betaCall.create({ data: { programId, title: vals.title, date: vals.date ? parseDay(vals.date)! : new Date(row.last_edited_time), summary: vals.summary ?? null, recordingUrl: vals.recordingUrl ?? null } });
     if (vals.testers?.length) await prisma.betaCallTester.createMany({ data: vals.testers.map((testerId: string) => ({ callId: c.id, testerId })), skipDuplicates: true });
     return { id: c.id, created: true };
   }
@@ -398,7 +398,7 @@ async function linkOrImport(kind: Kind, b: Board, row: NotionPage, vals: Record<
   }
   if (kind === 'payouts') {
     if (typeof vals.amount !== 'number' || vals.amount <= 0) return null;
-    const p = await prisma.betaPayout.create({ data: { programId, testerId, amount: vals.amount, token: vals.token || 'USDC', reason: vals.reason ?? 'other', sentAt: vals.sentAt ? new Date(vals.sentAt) : new Date(row.last_edited_time) } });
+    const p = await prisma.betaPayout.create({ data: { programId, testerId, amount: vals.amount, token: vals.token || 'USDC', reason: vals.reason ?? 'other', sentAt: vals.sentAt ? parseDay(vals.sentAt)! : new Date(row.last_edited_time) } });
     return { id: p.id, created: true };
   }
   return null;

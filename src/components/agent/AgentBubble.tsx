@@ -87,6 +87,7 @@ const AgentBubble: React.FC = () => {
         <button
           onClick={() => setOpen(true)}
           aria-label="Open assistant"
+          className="hub-bubble"
           style={{
             position: 'fixed', bottom: 24, right: 24, zIndex: 50,
             width: 56, height: 56, borderRadius: 28,

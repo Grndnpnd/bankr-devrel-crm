@@ -94,7 +94,7 @@ export default function NotionBoards({ programId, canManage }: { programId: stri
                     {open === kind ? <ChevronDown size={13} /> : <ChevronRight size={13} />} Fields
                   </button>
                   {canManage && <button onClick={async () => {
-                    if (!window.confirm(`Disconnect the ${label} board? Nothing is deleted in Notion or here; they just stop syncing.`)) return;
+                    if (!window.confirm(`Disconnect the ${label} board? Nothing is deleted in Notion or here; they just stop updating each other.`)) return;
                     await fetch(`/api/beta/programs/${programId}/notion?kind=${kind}`, { method: 'DELETE' }); toast.success('Disconnected'); load();
                   }} style={{ fontSize: 12.5, color: faint }}>Disconnect</button>}
                 </>
@@ -112,19 +112,25 @@ export default function NotionBoards({ programId, canManage }: { programId: stri
 function Connect({ programId, kind, onDone }: { programId: string; kind: string; onDone: () => void }) {
   const [link, setLink] = useState('');
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
   async function go() {
-    setBusy(true);
+    if (busy) return;
+    if (!link.trim()) { setErr('Paste the board’s link from Notion first (Share → Copy link).'); return; }
+    setBusy(true); setErr(null);
     const res = await fetch(`/api/beta/programs/${programId}/notion`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, link }) }).catch(() => null);
     const j = await res?.json().catch(() => ({}));
     setBusy(false);
-    if (!res?.ok) { toast.error(j?.error ?? 'Could not connect'); return; }
+    if (!res?.ok) { setErr(j?.error ?? 'Couldn’t reach the server — check your connection.'); return; }
     toast.success(j.unmapped?.length ? `Connected. Not on this board: ${j.unmapped.join(', ')}. Importing its rows now.` : 'Connected — importing its rows now');
     setLink(''); onDone();
   }
   return (
-    <div className="flex items-center gap-2" style={{ flex: 1, minWidth: 260 }}>
-      <input value={link} onChange={(e) => setLink(e.target.value)} placeholder="Paste the board’s Notion link" aria-label={`Notion link for ${kind}`} style={field} />
-      <button onClick={go} disabled={busy || !link.trim()} className="rounded-lg" style={{ background: accent, color: '#0D0D0D', fontSize: 12.5, fontWeight: 600, padding: '7px 12px', whiteSpace: 'nowrap', opacity: busy || !link.trim() ? 0.5 : 1 }}>{busy ? 'Connecting…' : 'Connect'}</button>
+    <div className="flex flex-col gap-1" style={{ flex: '1 1 260px', minWidth: 0 }}>
+      <div className="flex items-center gap-2">
+        <input value={link} onChange={(e) => { setLink(e.target.value); setErr(null); }} placeholder="Paste the board’s Notion link" aria-label={`Notion link for ${kind}`} style={field} />
+        <button onClick={go} disabled={busy} className="rounded-lg" style={{ background: accent, color: '#0D0D0D', fontSize: 12.5, fontWeight: 600, padding: '7px 12px', whiteSpace: 'nowrap', opacity: busy ? 0.6 : 1 }}>{busy ? 'Connecting…' : 'Connect'}</button>
+      </div>
+      {err && <div role="alert" style={{ fontSize: 12, color: '#EF4444', overflowWrap: 'anywhere' }}>{err}</div>}
     </div>
   );
 }

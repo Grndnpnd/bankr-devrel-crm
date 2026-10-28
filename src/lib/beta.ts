@@ -18,7 +18,8 @@ import { DEVICES, ENVIRONMENTS, KINDS, LABEL, priorityFor, SEVERITY, TESTER_STAT
 export class BetaInputError extends Error {}
 export const isInputError = (e: unknown): e is BetaInputError => e instanceof BetaInputError;
 const fail = (m: string): never => { throw new BetaInputError(m); };
-const str = (v: unknown, n: number) => (typeof v === 'string' || typeof v === 'number' ? String(v).trim().slice(0, n) : '');
+// Text in, trimmed and clipped; zero-width characters don't count, so a name of only those is empty.
+const str = (v: unknown, n: number) => (typeof v === 'string' || typeof v === 'number' ? String(v).replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g, '').trim().slice(0, n) : '');
 
 /** What the tester sees for a status. */
 export const STATUS_LABEL = TESTER_STATUS;
@@ -59,6 +60,14 @@ export function cleanQuestions(q: unknown): Question[] {
 /** Reject settings that would fail in the database: unknown teams, bad dates. Returns the problem, or null. */
 export async function checkProgramInput(b: any): Promise<string | null> {
   if (b?.endsAt && Number.isNaN(new Date(b.endsAt).getTime())) return 'That end date isn’t a date.';
+  if (typeof b?.name === 'string' && b.name.trim().length > 100) return 'Keep the program name under 100 characters.';
+  if (b?.maxTesters !== undefined && b.maxTesters !== null && b.maxTesters !== '') {
+    const n = Number(b.maxTesters);
+    if (!/^\s*\d+\s*$/.test(String(b.maxTesters)) || n < 1 || n > 100_000) return 'Max testers must be a whole number from 1 to 100,000 (or empty for no limit).';
+  }
+  if (Array.isArray(b?.testAreas) && b.testAreas.filter((x: unknown) => String(x).trim()).length > 30) return 'Up to 30 test areas.';
+  if (b?.contactEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(b.contactEmail).trim())) return 'The contact email doesn’t look right.';
+  if (b?.privacyUrl && !/^https:\/\/\S+$/.test(String(b.privacyUrl).trim())) return 'The privacy policy must be an https:// link.';
   for (const k of ['teamId', 'bugTeamId'] as const) {
     if (b?.[k] && !(await prisma.team.findUnique({ where: { id: String(b[k]) }, select: { id: true } }))) return 'That team doesn’t exist any more — pick another.';
   }
@@ -141,7 +150,7 @@ export async function testerForToken(slug: string, raw: string | null | undefine
 }
 
 /** A new sign-in link for a tester; their other links keep working. */
-export async function newTesterLink(testerId: string, kind: 'email' | 'team', createdById?: string) {
+export async function newTesterLink(testerId: string, kind: 'email' | 'team' | 'self', createdById?: string) {
   const raw = token();
   await prisma.testerLink.create({ data: { testerId, hash: hashToken(raw), kind, createdById: createdById ?? null } });
   return raw;
@@ -271,7 +280,7 @@ export async function submitReport(tester: Tester & { program: BetaProgram }, in
       programId: p.id, testerId: tester.id, kind, title, body, claimedSeverity, status,
       steps: clip(b.steps), expected: clip(b.expected, 2000), actual: clip(b.actual, 2000),
       platform: clip(b.platform, 120) ?? tester.platform, pageUrl: clip(b.pageUrl, 500),
-      device: pick(b.device, DEVICES), environment: pick(b.environment, ENVIRONMENTS) ?? (kind === 'bug' ? 'production' : null),
+      device: pick(b.device, DEVICES), environment: pick(b.environment, ENVIRONMENTS),
       browser: clip(b.browser, 120), testArea: p.testAreas.includes(String(b.testArea)) ? String(b.testArea) : null,
       occurredAt: occurred && !Number.isNaN(occurred.getTime()) ? occurred : null,
       tokenContract: clip(b.tokenContract, 200), txHash: clip(b.txHash, 200), wallet: tester.walletAddress,
@@ -280,6 +289,8 @@ export async function submitReport(tester: Tester & { program: BetaProgram }, in
       waitingOnId: status === 'new' ? p.leadId : null,
     },
   });
+  // The area they tested counts toward "who is testing what".
+  if (report.testArea && !tester.testAreas.includes(report.testArea)) await prisma.tester.update({ where: { id: tester.id }, data: { testAreas: [...tester.testAreas, report.testArea] } }).catch(() => {});
   // Filing a report makes an invited or onboarding tester active.
   if (!by && ['invited', 'onboarding', 'to_contact'].includes(tester.stage)) await prisma.tester.update({ where: { id: tester.id }, data: { stage: 'active' } }).catch(() => {});
 
@@ -306,6 +317,11 @@ export async function submitReport(tester: Tester & { program: BetaProgram }, in
       source: 'beta', sourceRef: report.id, sourceUrl: triage,
     });
     await prisma.testerReport.update({ where: { id: report.id }, data: { taskId: task.id } });
+    // The task tells the program's team; the lead and whoever set the program up hear about it too.
+    const owners = [p.leadId, p.createdById].filter((x): x is string => !!x && x !== by?.id);
+    if (owners.length) {
+      await notify({ userIds: owners, kind: 'beta.report', url: `/beta/${p.id}?report=${report.id}`, title: `New ${kind === 'bug' ? 'bug' : LABEL.kind[kind].toLowerCase()} in ${p.name}: ${title}`, body: `From ${tester.name}${claimedSeverity ? ` · ${LABEL.severity[claimedSeverity]}` : ''}` }).catch(() => {});
+    }
   } catch (e) {
     // No half-filed reports: without its task nobody would see it, and the tester will retry.
     await prisma.testerReport.delete({ where: { id: report.id } }).catch(() => {});
@@ -334,4 +350,21 @@ export const TESTER_QUOTA_BYTES = 150 * 1024 * 1024; // all of one tester's file
 export const PROGRAM_QUOTA_BYTES = 3 * 1024 * 1024 * 1024; // all files in a program (they live in Postgres for now)
 const ALLOWED = /^(image\/(png|jpeg|gif|webp)|video\/(mp4|webm|quicktime)|application\/pdf|text\/plain)$/;
 export const attachmentTypeOk = (t: string) => ALLOWED.test(t);
+
+/** Does the file's content match its declared type? (A renamed .exe isn't an image.) */
+export function contentMatches(type: string, b: Uint8Array) {
+  const at = (off: number, ...bytes: number[]) => bytes.every((x, i) => b[off + i] === x);
+  const ascii = (off: number, s: string) => at(off, ...[...s].map((c) => c.charCodeAt(0)));
+  switch (type) {
+    case 'image/png': return at(0, 0x89, 0x50, 0x4e, 0x47);
+    case 'image/jpeg': return at(0, 0xff, 0xd8, 0xff);
+    case 'image/gif': return ascii(0, 'GIF8');
+    case 'image/webp': return ascii(0, 'RIFF') && ascii(8, 'WEBP');
+    case 'application/pdf': return ascii(0, '%PDF');
+    case 'video/mp4': case 'video/quicktime': return ['ftyp', 'moov', 'wide', 'mdat', 'free', 'skip'].some((x) => ascii(4, x));
+    case 'video/webm': return at(0, 0x1a, 0x45, 0xdf, 0xa3);
+    case 'text/plain': return !b.subarray(0, 4096).includes(0); // text has no NUL bytes
+    default: return false;
+  }
+}
 export const inlineType = (t: string) => /^(image|video)\//.test(t);

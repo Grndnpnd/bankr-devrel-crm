@@ -25,7 +25,7 @@ export async function GET() {
   const o = new Map(open.map((x) => [x.programId, x._count])), n = new Map(fresh.map((x) => [x.programId, x._count]));
   return NextResponse.json({
     programs: programs.map(({ joinToken, ...p }) => ({
-      ...p, joinUrl: joinUrl({ slug: p.slug, joinToken }), testers: p._count.testers, reports: p._count.reports,
+      ...p, ended: !!p.endsAt && p.endsAt < new Date(), joinUrl: joinUrl({ slug: p.slug, joinToken }), testers: p._count.testers, reports: p._count.reports,
       openReports: o.get(p.id) ?? 0, newReports: n.get(p.id) ?? 0,
     })),
     canManage: can(session.role, 'beta.manage'),
@@ -47,6 +47,9 @@ export async function POST(req: Request) {
       product: b?.product ? String(b.product).slice(0, 100) : null,
       description: b?.description ? String(b.description).slice(0, 4000) : null,
       welcome: b?.welcome ? String(b.welcome).slice(0, 4000) : null,
+      runBy: b?.runBy ? String(b.runBy).trim().slice(0, 100) : null,
+      contactEmail: b?.contactEmail ? String(b.contactEmail).trim().slice(0, 300) : null,
+      privacyUrl: b?.privacyUrl ? String(b.privacyUrl).trim().slice(0, 300) : null,
       status: ['draft', 'open', 'closed'].includes(b?.status) ? b.status : 'open',
       teamId: b?.teamId || null, bugTeamId: b?.bugTeamId || null,
       maxTesters: Number(b?.maxTesters) > 0 ? Math.floor(Number(b.maxTesters)) : null,

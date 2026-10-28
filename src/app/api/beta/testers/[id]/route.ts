@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { newTesterLink, portalUrl, resetTesterLinks } from '@/lib/beta';
 import { loadProgram, updateTester } from '@/lib/betaFlow';
 import { run } from '@/lib/betaHttp';
+import { eraseTester } from '@/lib/betaErase';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,4 +49,13 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (action === 'link') return NextResponse.json({ url: portalUrl(t.program.slug, await newTesterLink(t.id, 'team', session.id)) });
   if (action === 'reset') return NextResponse.json({ url: portalUrl(t.program.slug, await resetTesterLinks(t.id)) });
   return NextResponse.json({ error: 'action must be link or reset' }, { status: 400 });
+}
+
+/** Delete a tester and all their data (see eraseTester). For a tester who asks the team to erase them. */
+export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+  const session = await getSession();
+  if (!session || !can(session.role, 'beta.manage')) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  if (!(await eraseTester(id))) return NextResponse.json({ error: 'not found' }, { status: 404 });
+  return NextResponse.json({ ok: true });
 }

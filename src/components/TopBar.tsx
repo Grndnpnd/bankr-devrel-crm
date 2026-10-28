@@ -1,17 +1,19 @@
 'use client';
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { Search, LogOut } from 'lucide-react';
+import { Search, LogOut, Menu } from 'lucide-react';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import NotificationBell from '@/components/NotificationBell';
 
-interface TopBarProps { title: string }
+interface TopBarProps { title: string; onMenu: () => void; me?: { name: string | null; email: string } }
 
-const TopBar: React.FC<TopBarProps> = ({ title }) => {
+const TopBar: React.FC<TopBarProps> = ({ title, onMenu, me: sessionMe }) => {
   const router = useRouter();
   const { searchQuery, setSearch, me } = useSubmissionStore();
 
-  const initials = (me?.name || me?.email || 'BK').slice(0, 2).toUpperCase();
+  // The server session is known on first paint; the store copy arrives a moment later.
+  const who = me ?? sessionMe;
+  const initials = (who?.name || who?.email || '').slice(0, 2).toUpperCase();
 
   const logout = async () => {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -21,9 +23,8 @@ const TopBar: React.FC<TopBarProps> = ({ title }) => {
 
   return (
     <header
-      className="fixed top-0 right-0 flex items-center justify-between"
+      className="hub-top fixed top-0 right-0 flex items-center justify-between"
       style={{
-        left: '220px',
         zIndex: 90,
         height: '48px',
         backgroundColor: '#1A1A1A',
@@ -31,11 +32,14 @@ const TopBar: React.FC<TopBarProps> = ({ title }) => {
         padding: '0 24px',
       }}
     >
-      <h1 style={{ fontFamily: "'Manrope', sans-serif", fontSize: '16px', fontWeight: 600, color: '#F0F0F0', lineHeight: 1 }}>
+      <button onClick={onMenu} className="hub-burger items-center justify-center rounded-md" aria-label="Open menu" style={{ width: 36, height: 36, color: '#F0F0F0', flexShrink: 0 }}>
+        <Menu size={20} />
+      </button>
+      <h1 style={{ fontFamily: "'Manrope', sans-serif", fontSize: '16px', fontWeight: 600, color: '#F0F0F0', lineHeight: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: '0 1 auto', minWidth: 0 }}>
         {title}
       </h1>
 
-      <div className="relative flex-1 flex justify-center" style={{ maxWidth: '320px', margin: '0 auto' }}>
+      <div className="hub-search relative flex-1 flex justify-center" style={{ maxWidth: '320px', margin: '0 auto' }}>
         <div className="relative w-full">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: '#525252' }} />
           <input
@@ -59,7 +63,7 @@ const TopBar: React.FC<TopBarProps> = ({ title }) => {
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2" style={{ marginLeft: 'auto', flexShrink: 0 }}>
         {/* Sheets import and onchain refresh moved to Settings → Core Refresh (paused since the pivot). */}
         <NotificationBell />
         <button
@@ -72,7 +76,7 @@ const TopBar: React.FC<TopBarProps> = ({ title }) => {
         >
           <LogOut size={14} />
         </button>
-        <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: '#222', border: '1px solid rgba(255,255,255,0.06)' }} title={me?.email || ''}>
+        <div className="w-8 h-8 rounded-full flex items-center justify-center" style={{ backgroundColor: '#222', border: '1px solid rgba(255,255,255,0.06)' }} title={who?.email || ''}>
           <span style={{ fontFamily: "'Inter', sans-serif", fontSize: '12px', fontWeight: 600, color: '#F5A623' }}>{initials}</span>
         </div>
       </div>

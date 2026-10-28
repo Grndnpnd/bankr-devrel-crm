@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { parseDay } from '@/lib/betaModel';
 import { body, staffProgram } from '@/lib/betaHttp';
 
 export const dynamic = 'force-dynamic';
@@ -27,7 +28,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if ('error' in s) return s.error;
   const b = await body(req);
   const title = String(b.title ?? '').trim().slice(0, 200);
-  const date = new Date(b.date ?? Date.now());
+  const date = b.date ? parseDay(b.date) ?? new Date(NaN) : new Date();
   if (!title) return NextResponse.json({ error: 'Name the call.' }, { status: 400 });
   if (Number.isNaN(date.getTime())) return NextResponse.json({ error: 'That date isn’t a date.' }, { status: 400 });
   const rec = b.recordingUrl ? String(b.recordingUrl).trim().slice(0, 500) : null;

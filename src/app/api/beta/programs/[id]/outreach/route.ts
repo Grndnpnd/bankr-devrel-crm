@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
-import { createOutreach } from '@/lib/betaFlow';
+import { canApprove, createOutreach } from '@/lib/betaFlow';
 import { body, run, staffProgram } from '@/lib/betaHttp';
 import { OUTREACH_OPEN } from '@/lib/betaModel';
 
@@ -15,7 +15,10 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const view = new URL(req.url).searchParams.get('view') || 'open';
   const where: Prisma.BetaOutreachWhereInput = { programId: id };
   if (view === 'open') where.status = { in: OUTREACH_OPEN };
-  if (view === 'mine') { where.status = { in: OUTREACH_OPEN }; where.waitingOnId = s.session.id; }
+  if (view === 'mine') {
+    where.status = { in: OUTREACH_OPEN };
+    where.OR = [{ waitingOnId: s.session.id }, ...(canApprove(s.p, s.session) ? [{ status: 'suggested', waitingOnId: null }] : [])];
+  }
   const items = await prisma.betaOutreach.findMany({
     where, orderBy: [{ nextActionDue: { sort: 'asc', nulls: 'last' } }, { createdAt: 'asc' }], take: 500,
     include: {

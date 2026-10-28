@@ -13,6 +13,11 @@ export function withTesterCookie(res: NextResponse, slug: string, portalToken: s
 export async function requireTester(req: Request) {
   const slug = new URL(req.url).searchParams.get('slug') || '';
   const tester = slug ? await testerFromRequest(req, slug) : null;
-  if (!tester) return { error: NextResponse.json({ error: 'Your tester link has expired or was replaced. Open the newest link from the team, or join again.' }, { status: 401 }) } as const;
+  if (!tester) {
+    const { portalProblem } = await import('@/lib/betaPortal');
+    const reason = slug ? await portalProblem(slug) : 'ended';
+    const error = reason === 'ended' ? 'This beta has ended.' : 'This browser isn’t signed in to your beta page. Open the personal link you saved when you joined.';
+    return { error: NextResponse.json({ error, reason }, { status: 401 }) } as const;
+  }
   return { tester, slug } as const;
 }

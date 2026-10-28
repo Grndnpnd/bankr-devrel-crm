@@ -27,14 +27,17 @@ function LoginForm() {
   }, [search]);
 
   async function submit() {
+    if (busy) return;
     setBusy(true); setErr('');
     const res = await fetch('/api/auth/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
-    });
+    }).catch(() => null);
+    // On success stay on "Signing in…" until the next page has loaded, so it's clear something is happening.
+    if (res?.ok) { router.push('/'); router.refresh(); return; }
     setBusy(false);
-    if (res.ok) { router.push('/'); router.refresh(); }
-    else { const d = await res.json().catch(() => ({})); setErr(d.error || 'login failed'); }
+    const d = await res?.json().catch(() => ({}));
+    setErr(res ? d?.error || 'Wrong email or password.' : 'Couldn’t reach the server — check your connection.');
   }
 
   const field: React.CSSProperties = {
@@ -59,14 +62,14 @@ function LoginForm() {
         </div>
         <div style={{ fontSize: 12, color: '#525252', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 22 }}>BANKRcrm</div>
 
-        <label style={lab}>Email</label>
-        <input style={field} value={email} autoComplete="username" onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} />
-        <label style={lab}>Password</label>
-        <input style={field} type="password" value={password} autoComplete="current-password" onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} />
+        <label htmlFor="login-email" style={lab}>Email</label>
+        <input id="login-email" style={field} type="email" value={email} autoComplete="username" onChange={(e) => setEmail(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} />
+        <label htmlFor="login-password" style={lab}>Password</label>
+        <input id="login-password" style={field} type="password" value={password} autoComplete="current-password" onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} />
 
         <button disabled={busy || !email || !password} onClick={submit}
           style={{ width: '100%', marginTop: 22, height: 42, backgroundColor: '#F5A623', color: '#0D0D0D', border: 'none', borderRadius: 8, fontWeight: 800, fontSize: 14, fontFamily: "'Inter', sans-serif", cursor: busy ? 'default' : 'pointer', opacity: busy || !email || !password ? 0.5 : 1 }}>
-          {busy ? '…' : 'Sign in'}
+          {busy ? 'Signing in…' : 'Sign in'}
         </button>
 
         <div className="flex items-center gap-3" style={{ margin: '18px 0 14px' }}>
@@ -86,7 +89,7 @@ function LoginForm() {
           Continue with Google
         </a>
 
-        {err && <div style={{ color: '#EF4444', fontSize: 12, marginTop: 14, textAlign: 'center' }}>{err}</div>}
+        {err && <div role="alert" style={{ color: '#EF4444', fontSize: 12, marginTop: 14, textAlign: 'center' }}>{err}</div>}
       </div>
     </div>
   );

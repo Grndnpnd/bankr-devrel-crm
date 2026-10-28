@@ -18,7 +18,7 @@ import { notify } from '@/lib/notify';
 import { updateTask, type Actor as TaskActor } from '@/lib/tasks';
 import {
   BUG_OPEN, CHANNELS, DEVICES, ENVIRONMENTS, effectiveSeverity, isOpen, KINDS, LABEL, OUTCOMES, OUTREACH_OPEN, OUTREACH_TYPES,
-  PAYOUT_REASONS, priorityFor, SEND_FUNDS, SEVERITY, STAGES, statusesFor, TESTER_TYPES, TESTING_STAGES, USAGE, values,
+  PAYOUT_REASONS, parseDay, priorityFor, SEND_FUNDS, SEVERITY, STAGES, statusesFor, TESTER_TYPES, TESTING_STAGES, USAGE, values,
 } from '@/lib/betaModel';
 
 export interface Actor extends TaskActor { role?: string }
@@ -27,7 +27,7 @@ const fail = (m: string, status = 400): never => { throw new FlowError(m, status
 
 const DAY = 86_400_000;
 const daysFromNow = (n: number) => new Date(Date.now() + n * DAY);
-const str = (v: unknown, n = 4000) => (typeof v === 'string' || typeof v === 'number' ? String(v).trim().slice(0, n) || null : null);
+const str = (v: unknown, n = 4000) => (typeof v === 'string' || typeof v === 'number' ? String(v).replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\uFEFF]/g, '').trim().slice(0, n) || null : null);
 const oneOf = (v: unknown, opts: readonly (readonly [string, string])[], field: string) => {
   if (v === null || v === '' || v === undefined) return null;
   return values(opts).includes(String(v)) ? String(v) : fail(`Unknown ${field}: ${v}`);
@@ -36,8 +36,7 @@ const manyOf = (v: unknown, opts: readonly (readonly [string, string])[]) =>
   Array.isArray(v) ? [...new Set(v.map(String).filter((x) => values(opts).includes(x)))] : [];
 const date = (v: unknown, field: string) => {
   if (v === null || v === '' || v === undefined) return null;
-  const d = new Date(String(v));
-  return Number.isNaN(d.getTime()) ? fail(`${field} isn’t a date.`) : d;
+  return parseDay(v) ?? fail(`${field} isn’t a date.`);
 };
 const link = (v: unknown, field: string) => {
   const s = str(v, 500);
@@ -161,6 +160,15 @@ export async function updateReport(actor: Actor, id: string, b: any, opts: { fro
   const before = await prisma.testerReport.findUnique({ where: { id } });
   if (!before) fail('not found', 404);
   const p = (await loadProgram(before!.programId))!;
+  if (b.expect && typeof b.expect === 'object') {
+    const norm = (v: unknown) => (v instanceof Date ? v.toISOString().slice(0, 10) : v ?? '') + '';
+    for (const [k, v] of Object.entries(b.expect as Record<string, unknown>)) {
+      const now = (before as any)[k];
+      if (k in before! && norm(now).slice(0, 10) !== norm(v).slice(0, 10) && norm(now) !== norm(v)) {
+        fail(`Someone else changed this just now (it is now “${LABEL.status[now as string] ?? LABEL.severity[now as string] ?? now ?? 'empty'}”). Reload to see their change.`, 409);
+      }
+    }
+  }
   const d = await reportPatch(p, before!, b);
   const kind = (d.kind as string) ?? before!.kind;
   const status = (d.status as string) ?? before!.status;
@@ -237,8 +245,9 @@ export async function createOutreach(actor: Actor, p: Program, b: any) {
   if (!tester) fail('Pick a tester in this program.');
   const reportId = b.reportId ? ((await prisma.testerReport.findFirst({ where: { id: String(b.reportId), programId: p.id } }))?.id ?? fail('Unknown report.')) : null;
   const title = str(b.title, 200) ?? fail('Say what we need from them.');
-  // The lead's and the sender's own requests skip approval.
-  const trusted = isLead(p, actor) || isSender(p, actor) || (b.auto && isLead(p, actor));
+  // The lead's and the sender's own requests skip approval. With no lead set there's nobody to approve,
+  // so anyone who runs betas sends straight to the queue.
+  const trusted = isLead(p, actor) || isSender(p, actor) || (!p.leadId && !!actor.role && can(actor.role as any, 'beta.manage'));
   const o = await prisma.betaOutreach.create({
     data: {
       programId: p.id, testerId: tester!.id, reportId, title,
@@ -247,8 +256,8 @@ export async function createOutreach(actor: Actor, p: Program, b: any) {
       callId: b.callId ? String(b.callId) : null, auto: !!b.auto,
       requestedById: actor.id === 'system' ? null : actor.id,
       status: trusted ? 'approved' : 'suggested',
-      approvedById: trusted ? actor.id : null,
-      waitingOnId: trusted ? p.senderId ?? p.leadId : p.leadId,
+      approvedById: isLead(p, actor) ? actor.id : null, // the lead's own request counts as approved; nobody else's skip is an approval
+      waitingOnId: trusted ? p.senderId ?? p.leadId ?? (actor.id === 'system' ? null : actor.id) : p.leadId,
     },
   });
   const url = `/beta/${p.id}?tab=outreach&o=${o.id}`;
@@ -268,17 +277,25 @@ export async function outreachAction(actor: Actor, id: string, action: string, b
   let d: Record<string, unknown> = {};
   switch (action) {
     case 'approve':
+      if (o!.status === 'approved') return o!; // approved already (another tab)
       need(o!.status === 'suggested', 'Only suggested messages need approval.');
       if (!canApprove(p, actor)) fail('Only the program’s lead (or an admin) approves outreach.', 403);
-      d = { status: 'approved', approvedById: actor.id, waitingOnId: p.senderId ?? p.leadId, ...(b.message !== undefined ? { message: str(b.message, 4000) } : {}) };
+      d = { status: 'approved', approvedById: actor.id, waitingOnId: p.senderId ?? p.leadId ?? actor.id, ...(b.message !== undefined ? { message: str(b.message, 4000) } : {}) };
       break;
     case 'edit':
       need(open, 'This one is closed.');
       d = { ...(b.message !== undefined ? { message: str(b.message, 4000) } : {}), ...(b.title !== undefined ? { title: str(b.title, 200) ?? fail('Say what we need.') } : {}), ...(b.nextActionDue !== undefined ? { nextActionDue: date(b.nextActionDue, 'Send by') } : {}) };
       break;
     case 'sent':
-      need(o!.status === 'approved', 'Approve it before sending.');
-      d = { status: 'sent', sentAt: new Date(), nextActionDue: daysFromNow(3), waitingOnId: p.senderId ?? actor.id };
+    case 'send_portal':
+      if (o!.status === 'sent' || o!.status === 'answered') {
+        const via = action === 'send_portal' ? 'portal' : 'manual';
+        if ((o!.sentVia ?? 'manual') === via) return o!; // the same action from another tab
+        fail(o!.sentVia === 'portal' ? 'This message is already on their beta page.' : 'This message was already marked as sent by hand.', 409);
+      }
+      need(o!.status === 'approved', o!.status === 'suggested' ? 'This message needs approval first.' : 'This message is closed.');
+      if (action === 'send_portal' && o!.tester.status !== 'active') fail('This tester was removed, so they can’t see their beta page.');
+      d = { status: 'sent', sentAt: new Date(), nextActionDue: daysFromNow(3), waitingOnId: p.senderId ?? actor.id, sentVia: action === 'send_portal' ? 'portal' : 'manual', ...(b.message !== undefined ? { message: str(b.message, 4000) } : {}) };
       break;
     case 'nudged':
       need(o!.status === 'sent', 'Only sent messages can be nudged.');
@@ -324,6 +341,17 @@ export async function outreachAction(actor: Actor, id: string, action: string, b
   return after;
 }
 
+/** The tester answered a message the team put on their beta page. */
+export async function testerAnswer(testerId: string, outreachId: string, answerText: string) {
+  const o = await prisma.betaOutreach.findFirst({ where: { id: outreachId, testerId, sentVia: 'portal' }, include: { tester: true } });
+  if (!o || !['sent', 'answered'].includes(o.status)) fail('This message can’t be answered any more.', 409);
+  const answer = str(answerText, 4000) ?? fail('Write your answer first.');
+  const p = (await loadProgram(o!.programId))!;
+  const updated = await prisma.betaOutreach.update({ where: { id: o!.id }, data: { status: 'answered', answer, answeredAt: new Date(), waitingOnId: o!.requestedById ?? p.leadId, nextActionDue: daysFromNow(2) } });
+  await tell(updated.waitingOnId, { id: 'system', name: o!.tester.name }, `${o!.tester.name} answered: ${o!.title}`, `/beta/${p.id}?tab=outreach&o=${o!.id}`, answer.slice(0, 140));
+  return updated;
+}
+
 /** The tester answered a retest on their own page. */
 export async function testerRetest(testerId: string, reportId: string, works: boolean, note: string | null) {
   const r = await prisma.testerReport.findFirst({ where: { id: reportId, testerId } });
@@ -345,24 +373,32 @@ export async function testerRetest(testerId: string, reportId: string, works: bo
 export async function logPayout(actor: Actor, p: Program, b: any) {
   const tester = await prisma.tester.findFirst({ where: { id: String(b.testerId ?? ''), programId: p.id } });
   if (!tester) fail('Pick a tester in this program.');
-  const amount = Number(b.amount);
-  if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000) fail('Enter the amount sent.');
+  const amount = typeof b.amount === 'number' ? b.amount : /^\s*\d+(\.\d+)?\s*$/.test(String(b.amount ?? '')) ? Number(b.amount) : NaN;
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 1_000_000_000) fail('Enter the amount sent as a positive number, like 25 or 0.5.');
+  const tx = str(b.tx, 300);
+  if (tx && !/^0x[0-9a-fA-F]{64}$/.test(tx) && !/^https:\/\//.test(tx)) fail('The transaction should be a 0x… hash (66 characters) or an https:// explorer link.');
+  if (tx) {
+    const dup = await prisma.betaPayout.findFirst({ where: { programId: p.id, tx }, include: { tester: { select: { name: true } } } });
+    if (dup) fail(`This transaction is already logged (${dup.amount} ${dup.token} to ${dup.tester.name}). Log each transfer once.`, 409);
+  }
+  const token = str(b.token, 100) ?? 'USDC';
+  if (!/^[A-Za-z0-9.$-]{1,20}$/.test(token)) fail('The token should be its symbol, like USDC or ETH (up to 20 letters or digits).');
   const reportId = b.reportId ? ((await prisma.testerReport.findFirst({ where: { id: String(b.reportId), programId: p.id } }))?.id ?? fail('Unknown report.')) : null;
   return prisma.betaPayout.create({
     data: {
       programId: p.id, testerId: tester!.id, reportId, amount: Math.round(amount * 1e6) / 1e6,
-      token: str(b.token, 20) ?? 'USDC', reason: oneOf(b.reason, PAYOUT_REASONS, 'reason') ?? 'bug_reward',
-      tx: str(b.tx, 300), notes: str(b.notes, 2000), sentAt: date(b.sentAt, 'Sent on') ?? new Date(), sentById: actor.id === 'system' ? null : actor.id,
+      token, reason: oneOf(b.reason, PAYOUT_REASONS, 'reason') ?? 'bug_reward',
+      tx, notes: str(b.notes, 2000), sentAt: date(b.sentAt, 'Sent on') ?? new Date(), sentById: actor.id === 'system' ? null : actor.id,
     },
   });
 }
 
 // ───────── overview ─────────
 
-export async function programOverview(programId: string, userId: string) {
+export async function programOverview(programId: string, userId: string, approver = false) {
   const [p, testers, reports, outreach, payouts] = await Promise.all([
     loadProgram(programId),
-    prisma.tester.findMany({ where: { programId }, select: { id: true, status: true, stage: true, testAreas: true, sendFunds: true, walletAddress: true, lastCheckInAt: true } }),
+    prisma.tester.findMany({ where: { programId }, select: { id: true, status: true, stage: true, testAreas: true, sendFunds: true, walletAddress: true, lastCheckInAt: true, createdAt: true } }),
     prisma.testerReport.findMany({ where: { programId }, select: { id: true, kind: true, status: true, severity: true, claimedSeverity: true, waitingOnId: true, nextActionDue: true } }),
     prisma.betaOutreach.findMany({ where: { programId, status: { in: OUTREACH_OPEN } }, select: { id: true, status: true, nextActionDue: true, waitingOnId: true } }),
     prisma.betaPayout.findMany({ where: { programId }, select: { testerId: true, amount: true, token: true, reason: true } }),
@@ -376,9 +412,9 @@ export async function programOverview(programId: string, userId: string) {
   const openBugs = reports.filter((r) => r.kind === 'bug' && values(BUG_OPEN).includes(r.status));
   const testing = active.filter((t) => TESTING_STAGES.includes(t.stage));
   const byToken: Record<string, number> = {};
-  for (const x of payouts) byToken[x.token] = (byToken[x.token] ?? 0) + x.amount;
+  for (const x of payouts) { const k = x.token.toUpperCase(); byToken[k] = (byToken[k] ?? 0) + x.amount; }
   return {
-    testers: { total: active.length, testingNow: active.filter((t) => ['onboarding', 'active'].includes(t.stage)).length, staleCheckIns: testing.filter((t) => !t.lastCheckInAt || now - t.lastCheckInAt.getTime() > 5 * DAY).length },
+    testers: { total: active.length, testingNow: active.filter((t) => ['onboarding', 'active'].includes(t.stage)).length, staleCheckIns: testing.filter((t) => now - (t.lastCheckInAt ?? t.createdAt).getTime() > 5 * DAY).length },
     outreach: {
       toSend: outreach.filter((o) => o.status === 'approved').length,
       awaitingApproval: outreach.filter((o) => o.status === 'suggested').length,
@@ -389,7 +425,7 @@ export async function programOverview(programId: string, userId: string) {
     paid: { byToken, testers: new Set(payouts.map((x) => x.testerId)).size },
     coverage: p.testAreas.map((area) => ({ area, testers: testing.filter((t) => t.testAreas.includes(area)).length })),
     waitingOnMe: {
-      outreach: outreach.filter((o) => o.waitingOnId === userId).length,
+      outreach: outreach.filter((o) => o.waitingOnId === userId || (approver && o.status === 'suggested' && !o.waitingOnId)).length,
       reports: reports.filter((r) => r.waitingOnId === userId && isOpen(r.kind, r.status)).length,
     },
   };

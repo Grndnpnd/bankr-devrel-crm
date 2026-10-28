@@ -1,6 +1,6 @@
 import { NextResponse, after } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { attachmentTypeOk, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS, PROGRAM_QUOTA_BYTES, programOpen, rateLimited, TESTER_QUOTA_BYTES } from '@/lib/beta';
+import { attachmentTypeOk, contentMatches, MAX_ATTACHMENT_BYTES, MAX_ATTACHMENTS, PROGRAM_QUOTA_BYTES, programOpen, rateLimited, TESTER_QUOTA_BYTES } from '@/lib/beta';
 import { requireTester } from '@/lib/testerHttp';
 import { noteAttachmentInPlain } from '@/lib/plainBeta';
 
@@ -16,7 +16,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (!programOpen(r.tester.program)) return NextResponse.json({ error: 'This beta has ended, so files can’t be added any more.' }, { status: 403 });
   if (await rateLimited(`upload:${r.tester.id}`, 40, 3600_000)) return NextResponse.json({ error: 'Too many uploads — wait a bit.' }, { status: 429 });
   const report = await prisma.testerReport.findFirst({ where: { id, testerId: r.tester.id }, include: { _count: { select: { attachments: true } } } });
-  if (!report) return NextResponse.json({ error: 'not found' }, { status: 404 });
+  if (!report) return NextResponse.json({ error: 'This report was withdrawn.', gone: true }, { status: 404 });
   if (report._count.attachments >= MAX_ATTACHMENTS) return NextResponse.json({ error: `Up to ${MAX_ATTACHMENTS} files per report.` }, { status: 400 });
   if (Number(req.headers.get('content-length') || 0) > MAX_ATTACHMENT_BYTES + 512 * 1024) return NextResponse.json({ error: 'Files can be up to 10 MB.' }, { status: 413 });
   const form = await req.formData().catch(() => null);
@@ -34,6 +34,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     return NextResponse.json({ error: 'This beta can’t take more files right now — paste a link to the file in your report instead.' }, { status: 413 });
   }
   const data = Buffer.from(await file.arrayBuffer());
+  if (!contentMatches(type, data)) return NextResponse.json({ error: `${file.name || 'That file'} isn’t really a ${type.split('/')[1].toUpperCase()} file. It may be renamed or damaged` }, { status: 415 });
   const filename = (file.name || 'attachment').replace(/[\u0000-\u001f\u007f\\/:*?"<>|]+/g, '_').trim().slice(0, 120) || 'attachment';
   // Lock the report row so parallel uploads take turns and can't slip past the per-report cap.
   const a = await prisma.$transaction(async (tx) => {

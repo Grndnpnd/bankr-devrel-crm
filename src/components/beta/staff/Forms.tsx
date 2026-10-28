@@ -1,10 +1,10 @@
 'use client';
 import React, { useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { DEVICES, ENVIRONMENTS, KINDS, OUTREACH_TYPES, PAYOUT_REASONS, SEVERITY } from '@/lib/betaModel';
-import { api, type Ctx, Field, faint, field, grid, ink, linkBtn, Modal, muted, primaryBtn, Select } from './ui';
+import { DEVICES, ENVIRONMENTS, KINDS, OUTREACH_TYPE_HELP, OUTREACH_TYPES, PAYOUT_REASONS, SEVERITY } from '@/lib/betaModel';
+import { apiResult, type Ctx, Field, faint, field, FormError, grid, Help, ink, linkBtn, Modal, muted, primaryBtn, Select, testerOptions } from './ui';
 
-const testerOpts = (ctx: Ctx) => ctx.testers.filter((t) => t.status === 'active').map((t) => [t.id, t.name] as const);
+const testerOpts = (ctx: Ctx) => testerOptions(ctx.testers.filter((t) => t.status === 'active'));
 const reportOpts = (ctx: Ctx, testerId?: string) =>
   ctx.reports.filter((r) => !testerId || r.testerId === testerId).map((r) => [r.id, `${r.title} · ${r.tester.name}`] as const);
 
@@ -15,33 +15,42 @@ export function OutreachForm({ ctx, prefill, onClose }: { ctx: Ctx; prefill: Rec
     title: String(prefill.title ?? ''), message: String(prefill.message ?? ''), nextActionDue: '',
   });
   const [busy, setBusy] = useState(false);
-  const set = (k: keyof typeof f, v: string) => setF((x) => ({ ...x, [k]: v }));
-  const trusted = ctx.data.me.isLead || ctx.data.me.isSender;
+  const [err, setErr] = useState<string | null>(null);
+  const set = (k: keyof typeof f, v: string) => { setF((x) => ({ ...x, [k]: v })); setErr(null); };
+  // Same rule as the server: the lead's and sender's own messages skip approval, and so does everyone's
+  // when no lead is set (there's nobody to approve).
+  const leadId = ctx.data.program.leadId;
+  const leadName = ctx.people.find((x) => x.id === leadId)?.name ?? 'the program’s lead';
+  const trusted = ctx.data.me.isLead || ctx.data.me.isSender || (!leadId && ctx.data.canManage);
   const tester = ctx.testers.find((t) => t.id === f.testerId);
   async function save() {
+    if (busy) return;
+    if (!f.testerId) { setErr('Pick the tester this message is for.'); return; }
+    if (!f.title.trim()) { setErr('Say in a few words what you need from them.'); return; }
     setBusy(true);
-    const d = await api(`/api/beta/programs/${ctx.programId}/outreach`, 'POST', { ...f, reportId: f.reportId || null, nextActionDue: f.nextActionDue || null });
+    const r = await apiResult(`/api/beta/programs/${ctx.programId}/outreach`, 'POST', { ...f, reportId: f.reportId || null, nextActionDue: f.nextActionDue || null });
     setBusy(false);
-    if (!d) return;
-    toast.success(trusted ? 'Added to the send list' : 'Suggested — waiting for the lead to approve');
+    if (!r.ok) { setErr(r.error); return; }
+    toast.success(trusted ? 'Added to the send list' : `Suggested — waiting for ${leadName} to approve`);
     ctx.reload(); onClose();
   }
   return (
-    <Modal title="New outreach request" onClose={onClose}>
+    <Modal title="New message to a tester" onClose={onClose}>
       <p style={{ fontSize: 12.5, color: muted }}>
-        {trusted ? 'You’re the program’s lead or sender, so this goes straight to the send list.' : 'This waits for the program’s lead to approve before anyone sends it.'}
+        {trusted ? (leadId ? 'You’re the program’s lead or sender, so this goes straight to the send list.' : 'No lead is set, so this goes straight to the send list.') : `${leadName} approves it before anyone sends it.`}
       </p>
       <div style={grid(200)}>
         <Field name="Tester"><Select value={f.testerId} onChange={(v) => set('testerId', v)} opts={testerOpts(ctx)} empty="Pick a tester" /></Field>
-        <Field name="Type"><Select value={f.type} onChange={(v) => set('type', v)} opts={OUTREACH_TYPES} /></Field>
+        <Field name="Type"><Select value={f.type} onChange={(v) => set('type', v)} opts={OUTREACH_TYPES} />{OUTREACH_TYPE_HELP[f.type] && <Help>{OUTREACH_TYPE_HELP[f.type]}</Help>}</Field>
         <Field name="About report (optional)" span><Select value={f.reportId} onChange={(v) => set('reportId', v)} opts={reportOpts(ctx, f.testerId || undefined)} empty="None" /></Field>
         <Field name="What we need" span><input value={f.title} onChange={(e) => set('title', e.target.value)} maxLength={200} placeholder="e.g. Which app version were they on?" style={field} /></Field>
-        <Field name="Message to send" span><textarea value={f.message} onChange={(e) => set('message', e.target.value)} rows={4} maxLength={4000} placeholder={tester ? `Hi ${tester.name.split(' ')[0]}! …` : 'What the sender will paste to them'} style={{ ...field, resize: 'vertical' }} /></Field>
-        <Field name="Send by"><input type="date" value={f.nextActionDue} onChange={(e) => set('nextActionDue', e.target.value)} style={{ ...field, colorScheme: 'dark' }} /></Field>
+        <Field name="Message to send" span><textarea value={f.message} onChange={(e) => set('message', e.target.value)} rows={4} maxLength={4000} placeholder={tester ? `e.g. Hi ${tester.name.split(' ')[0]}! Which app version were you on?` : 'e.g. Hi! Which app version were you on?'} style={{ ...field, resize: 'vertical' }} /></Field>
+        <Field name="Send by (optional)"><input type="date" value={f.nextActionDue} onChange={(e) => set('nextActionDue', e.target.value)} style={{ ...field, colorScheme: 'dark' }} /></Field>
       </div>
-      <div className="flex justify-end gap-2">
-        <button onClick={onClose} style={{ color: muted, fontSize: 13, padding: '8px 12px' }}>Cancel</button>
-        <button onClick={save} disabled={busy || !f.testerId || !f.title.trim()} style={{ ...primaryBtn, opacity: busy || !f.testerId || !f.title.trim() ? 0.5 : 1 }}>{busy ? 'Saving…' : 'Add to outreach'}</button>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <FormError text={err} />
+        <button onClick={onClose} className="bp-tap" style={{ color: muted, fontSize: 13, padding: '8px 12px' }}>Cancel</button>
+        <button onClick={save} disabled={busy} style={{ ...primaryBtn, opacity: busy ? 0.6 : 1 }}>{busy ? 'Saving…' : trusted ? 'Add to send list' : 'Suggest it'}</button>
       </div>
     </Modal>
   );
@@ -53,13 +62,18 @@ export function PayoutForm({ ctx, prefill, onClose }: { ctx: Ctx; prefill: Recor
     token: String(prefill.token ?? 'USDC'), tx: '', reportId: String(prefill.reportId ?? ''), notes: '', sentAt: new Date().toISOString().slice(0, 10),
   });
   const [busy, setBusy] = useState(false);
-  const set = (k: keyof typeof f, v: string) => setF((x) => ({ ...x, [k]: v }));
+  const [err, setErr] = useState<string | null>(null);
+  const set = (k: keyof typeof f, v: string) => { setF((x) => ({ ...x, [k]: v })); setErr(null); };
   const tester = ctx.testers.find((t) => t.id === f.testerId);
   async function save() {
+    if (busy) return;
+    if (!f.testerId) { setErr('Pick who you paid.'); return; }
+    if (!f.amount.trim()) { setErr('Enter the amount you sent, like 25 or 0.5.'); return; }
     setBusy(true);
-    const d = await api(`/api/beta/programs/${ctx.programId}/payouts`, 'POST', { ...f, reportId: f.reportId || null, tx: f.tx || null, notes: f.notes || null });
+    // Sent exactly as typed — the server says what's wrong with it rather than us quietly changing it.
+    const r = await apiResult(`/api/beta/programs/${ctx.programId}/payouts`, 'POST', { ...f, amount: f.amount.trim(), reportId: f.reportId || null, tx: f.tx.trim() || null, notes: f.notes || null });
     setBusy(false);
-    if (!d) return;
+    if (!r.ok) { setErr(r.error); return; }
     toast.success('Payout logged'); ctx.reload(); onClose();
   }
   return (
@@ -68,17 +82,18 @@ export function PayoutForm({ ctx, prefill, onClose }: { ctx: Ctx; prefill: Recor
       <div style={grid(170)}>
         <Field name="Tester"><Select value={f.testerId} onChange={(v) => set('testerId', v)} opts={testerOpts(ctx)} empty="Pick a tester" /></Field>
         <Field name="Reason"><Select value={f.reason} onChange={(v) => set('reason', v)} opts={PAYOUT_REASONS} /></Field>
-        <Field name="Amount"><input inputMode="decimal" value={f.amount} onChange={(e) => set('amount', e.target.value.replace(/[^\d.]/g, ''))} placeholder="25" style={field} /></Field>
-        <Field name="Token"><input value={f.token} onChange={(e) => set('token', e.target.value.toUpperCase())} maxLength={20} style={field} /></Field>
+        <Field name="Amount"><input type="text" inputMode="decimal" value={f.amount} onChange={(e) => set('amount', e.target.value)} placeholder="e.g. 25" style={field} /></Field>
+        <Field name="Token"><input value={f.token} onChange={(e) => set('token', e.target.value)} placeholder="e.g. USDC" style={field} /></Field>
         <Field name="Sent on"><input type="date" value={f.sentAt} onChange={(e) => set('sentAt', e.target.value)} style={{ ...field, colorScheme: 'dark' }} /></Field>
         <Field name="For report (optional)"><Select value={f.reportId} onChange={(v) => set('reportId', v)} opts={reportOpts(ctx, f.testerId || undefined)} empty="None" /></Field>
-        <Field name="Tx hash or link (optional)" span><input value={f.tx} onChange={(e) => set('tx', e.target.value.trim())} placeholder="0x…" style={{ ...field, fontFamily: 'ui-monospace, monospace' }} /></Field>
+        <Field name="Transaction hash or link (optional)" span><input value={f.tx} onChange={(e) => set('tx', e.target.value)} placeholder="e.g. 0x… (66 characters) or an explorer link" style={{ ...field, fontFamily: 'ui-monospace, monospace' }} /></Field>
         <Field name="Notes" span><input value={f.notes} onChange={(e) => set('notes', e.target.value)} maxLength={2000} style={field} /></Field>
       </div>
       {tester && <p style={{ fontSize: 12, color: tester.walletAddress ? faint : '#EF4444' }}>{tester.walletAddress ? <>Wallet on file: <code style={{ color: ink }}>{tester.walletAddress}</code></> : 'No wallet on file for this tester yet.'}</p>}
-      <div className="flex justify-end gap-2">
-        <button onClick={onClose} style={{ color: muted, fontSize: 13, padding: '8px 12px' }}>Cancel</button>
-        <button onClick={save} disabled={busy || !f.testerId || !Number(f.amount)} style={{ ...primaryBtn, opacity: busy || !f.testerId || !Number(f.amount) ? 0.5 : 1 }}>{busy ? 'Saving…' : 'Log payout'}</button>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <FormError text={err} />
+        <button onClick={onClose} className="bp-tap" style={{ color: muted, fontSize: 13, padding: '8px 12px' }}>Cancel</button>
+        <button onClick={save} disabled={busy} style={{ ...primaryBtn, opacity: busy ? 0.6 : 1 }}>{busy ? 'Saving…' : 'Log payout'}</button>
       </div>
     </Modal>
   );
@@ -95,7 +110,8 @@ export function LogReportForm({ ctx, prefill, onClose }: { ctx: Ctx; prefill: Re
     tokenContract: '', txHash: '', plainTicket: '', pageUrl: '', callId: String(prefill.callId ?? ''),
   });
   const [busy, setBusy] = useState(false);
-  const set = (k: keyof typeof f, v: string) => setF((x) => ({ ...x, [k]: v }));
+  const [err, setErr] = useState<string | null>(null);
+  const set = (k: keyof typeof f, v: string) => { setF((x) => ({ ...x, [k]: v })); setErr(null); };
   const bug = f.kind === 'bug';
   const similar = useMemo(() => {
     const w = words(f.title);
@@ -106,13 +122,17 @@ export function LogReportForm({ ctx, prefill, onClose }: { ctx: Ctx; prefill: Re
   }, [f.title, f.duplicateOfId, ctx.reports]);
   const dup = ctx.reports.find((r) => r.id === f.duplicateOfId);
   async function save() {
+    if (busy) return;
+    if (!f.testerId) { setErr('Pick the tester who reported it.'); return; }
+    if (!f.title.trim()) { setErr('Give it a short summary.'); return; }
+    if (!f.body.trim()) { setErr('Add the details — what happened.'); return; }
     setBusy(true);
     const body = Object.fromEntries(Object.entries(f).filter(([, v]) => v !== ''));
     if (f.occurredAt) body.occurredAt = new Date(f.occurredAt).toISOString();
-    const d = await api<{ id: string }>(`/api/beta/programs/${ctx.programId}/reports`, 'POST', body);
+    const r = await apiResult<{ id: string }>(`/api/beta/programs/${ctx.programId}/reports`, 'POST', body);
     setBusy(false);
-    if (!d) return;
-    toast.success(dup ? 'Logged as a duplicate' : 'Report logged'); ctx.reload(); onClose(); ctx.openReport(d.id);
+    if (!r.ok || !r.data) { setErr(r.error); return; }
+    toast.success(dup ? 'Logged as a duplicate' : 'Report logged'); ctx.reload(); onClose(); ctx.openReport(r.data.id);
   }
   return (
     <Modal title="Log a report for a tester" onClose={onClose} width={680}>
@@ -122,7 +142,7 @@ export function LogReportForm({ ctx, prefill, onClose }: { ctx: Ctx; prefill: Re
         {bug && <Field name="Severity they claim"><Select value={f.claimedSeverity} onChange={(v) => set('claimedSeverity', v)} opts={SEVERITY} /></Field>}
         <Field name="Test area"><Select value={f.testArea} onChange={(v) => set('testArea', v)} opts={p.testAreas.map((a) => [a, a] as const)} empty="—" /></Field>
         <Field name="Summary" span>
-          <input value={f.title} onChange={(e) => set('title', e.target.value)} maxLength={200} placeholder="Short title" style={field} />
+          <input value={f.title} onChange={(e) => set('title', e.target.value)} maxLength={200} placeholder="e.g. Swap button does nothing on iPhone" style={field} />
           {similar.length > 0 && (
             <div style={{ marginTop: 6, fontSize: 12.5, color: muted }}>
               Looks like it might be one of these:
@@ -143,13 +163,14 @@ export function LogReportForm({ ctx, prefill, onClose }: { ctx: Ctx; prefill: Re
         </>}
         <Field name="Device"><Select value={f.device} onChange={(v) => set('device', v)} opts={DEVICES} empty="—" /></Field>
         <Field name="Browser / version"><input value={f.browser} onChange={(e) => set('browser', e.target.value)} style={field} /></Field>
-        <Field name="Source link"><input value={f.pageUrl} onChange={(e) => set('pageUrl', e.target.value)} placeholder="Where it came from" style={field} /></Field>
-        <Field name="Plain ticket"><input value={f.plainTicket} onChange={(e) => set('plainTicket', e.target.value)} placeholder="T-123" style={field} /></Field>
+        <Field name="Where it came from (optional)"><input value={f.pageUrl} onChange={(e) => set('pageUrl', e.target.value)} placeholder="e.g. a Discord message link" style={field} /></Field>
+        <Field name="Plain ticket (optional)"><input value={f.plainTicket} onChange={(e) => set('plainTicket', e.target.value)} placeholder="e.g. T-123" style={field} /></Field>
       </div>
-      <p style={{ fontSize: 12, color: faint }}>The team sets the official bug severity after review. Screenshots can be added by the tester from their page.</p>
-      <div className="flex justify-end gap-2">
-        <button onClick={onClose} style={{ color: muted, fontSize: 13, padding: '8px 12px' }}>Cancel</button>
-        <button onClick={save} disabled={busy || !f.testerId || !f.title.trim() || !f.body.trim()} style={{ ...primaryBtn, opacity: busy || !f.testerId || !f.title.trim() || !f.body.trim() ? 0.5 : 1 }}>{busy ? 'Saving…' : 'Log report'}</button>
+      <Help>The team sets the official bug severity after review. Screenshots can be added by the tester from their page.</Help>
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        <FormError text={err} />
+        <button onClick={onClose} className="bp-tap" style={{ color: muted, fontSize: 13, padding: '8px 12px' }}>Cancel</button>
+        <button onClick={save} disabled={busy} style={{ ...primaryBtn, opacity: busy ? 0.6 : 1 }}>{busy ? 'Saving…' : 'Log report'}</button>
       </div>
     </Modal>
   );

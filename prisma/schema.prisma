@@ -645,6 +645,9 @@ model BetaProgram {
   createdById      String?
   plainEnabled     Boolean        @default(true) // reports open Plain threads, portal shows Plain chat (when Plain is configured)
   plainLabelTypeId String? // Plain label put on this program's threads and chats
+  runBy            String? // who runs the beta, shown to testers ("Bankr Inc.")
+  contactEmail     String? // where testers can reach a person
+  privacyUrl       String? // the company's privacy policy
   leadId           String? // feature lead: approves outreach, owns triage (User id)
   senderId         String? // sends approved outreach to testers (User id)
   testAreas        String[]       @default(["General UX"]) // what testers can be assigned to and reports filed under
@@ -871,6 +874,7 @@ model BetaOutreach {
   answeredAt     DateTime?
   nextActionDue  DateTime?
   auto           Boolean       @default(false) // suggested by the CRM (bug escalated / fix live)
+  sentVia        String? // portal (shown on the tester's beta page) | manual (sent by hand on their channel)
   notionPageId   String?       @unique // the row on the program's Notion board
   notionEditedAt DateTime? // Notion's last_edited_time we last synced
   notionDirty    Boolean       @default(false) // changed here, not yet pushed

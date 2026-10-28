@@ -269,6 +269,8 @@ const DashboardInner: React.FC = () => {
         )}
       </div>
 
+      {!editing && <BetaEntry />}
+
       {/* Add container picker (edit mode) — scales past a handful of saved panels */}
       {editing && (
         <div className="mb-5 flex items-center gap-3" style={{ padding: 12, borderRadius: 10, border: '1px dashed rgba(255,255,255,0.12)' }}>
@@ -460,3 +462,30 @@ const Dashboard: React.FC = () => (
 );
 
 export default Dashboard;
+
+/** A way into beta programs from the landing page: what's open, what's new, and a button. Hidden without access. */
+function BetaEntry() {
+  const [d, setD] = React.useState<{ programs: { status: string; ended?: boolean; newReports: number; openReports: number }[]; canManage: boolean } | null>(null);
+  React.useEffect(() => {
+    fetch('/api/beta/programs').then((r) => (r.ok ? r.json() : null)).then(setD).catch(() => {});
+  }, []);
+  if (!d) return null;
+  const open = d.programs.filter((p) => p.status === 'open' && !p.ended);
+  const fresh = d.programs.reduce((n, p) => n + p.newReports, 0);
+  const openReports = d.programs.reduce((n, p) => n + p.openReports, 0);
+  if (!d.programs.length && !d.canManage) return null;
+  return (
+    <div className="mb-5 flex flex-wrap items-center gap-3 rounded-xl" style={{ background: '#1A1A1A', border: '1px solid rgba(255,255,255,0.07)', padding: '12px 16px' }}>
+      <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#525252' }}>Beta programs</div>
+        <div style={{ fontSize: 13.5, color: '#F0F0F0', marginTop: 2 }}>
+          {d.programs.length === 0 ? 'No beta yet — invite outside testers to try a launch and report bugs.'
+            : <>{open.length} open · <span style={{ color: fresh ? '#F5A623' : '#F0F0F0' }}>{fresh} new {fresh === 1 ? 'report' : 'reports'}</span> · {openReports} open {openReports === 1 ? 'report' : 'reports'}</>}
+        </div>
+      </div>
+      <a href="/beta" className="inline-flex items-center rounded-md" style={{ minHeight: 36, padding: '0 14px', fontSize: 13, fontWeight: 600, background: d.programs.length ? 'transparent' : '#F5A623', color: d.programs.length ? '#F0F0F0' : '#0D0D0D', border: d.programs.length ? '1px solid rgba(255,255,255,0.12)' : 'none', textDecoration: 'none' }}>
+        {d.programs.length ? 'Go to beta programs' : 'Start a beta'}
+      </a>
+    </div>
+  );
+}

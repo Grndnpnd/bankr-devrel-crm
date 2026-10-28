@@ -34,18 +34,47 @@ export const TESTER_CSS = `
 .tp .list{display:flex;flex-direction:column}
 .tp .item{display:flex;gap:12px;align-items:flex-start;padding:14px 0;border-top:1px solid var(--line);cursor:pointer;background:none;border-left:0;border-right:0;border-bottom:0;text-align:left;color:inherit;font:inherit;width:100%}
 .tp .item:first-child{border-top:0}
+.tp a.item{text-decoration:none} .tp a.linkish{text-decoration:none}
 .tp .dot{width:8px;height:8px;border-radius:4px;background:var(--accent);flex-shrink:0;margin-top:8px}
 .tp .bubble{border-radius:12px;padding:10px 12px;max-width:90%;white-space:pre-wrap;word-break:break-word}
 .tp .bubble.team{background:var(--info-bg);align-self:flex-start} .tp .bubble.tester{background:var(--bg);border:1px solid var(--line);align-self:flex-end}
 .tp .thumb{display:block;width:120px;height:84px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
 .tp .ok{color:var(--ok);background:var(--ok-bg);border-radius:10px;padding:10px 12px;font-size:14px}
 .tp code.link{display:block;font:13px ui-monospace,monospace;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;word-break:break-all}
+.tp .wrap-text,.tp h1,.tp h2,.tp p,.tp dd,.tp .bubble,.tp .item b{overflow-wrap:anywhere;word-break:break-word;min-width:0}
+.tp .req{color:var(--faint);font-weight:500;font-size:12.5px}
+.tp details summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:14px}
+.tp details[open] summary{margin-bottom:8px}
+.tp .progress{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.tp .progress>span{display:block;height:100%;background:var(--accent);transition:width .2s}
+.tp .foot{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:6px;padding:4px}
+.tp .foot a{color:var(--accent)}
+.tp a.mail{color:var(--accent);text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere}
+.tp .note{background:var(--info-bg);color:var(--ink);border-radius:10px;padding:10px 12px;font-size:14px}
+.tp .thumb-wrap{position:relative;display:inline-block}
+.tp .thumb-x{position:absolute;top:-8px;right:-8px;width:28px;height:28px;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--ink);font:600 15px/1 Inter,system-ui,sans-serif;cursor:pointer}
+.tp .file-chip{display:inline-flex;align-items:center;gap:6px}
+.tp .danger{color:var(--bad)}
+.tp .skeleton{height:18px;border-radius:6px;background:var(--line);opacity:.6}
+@media (max-width:767px){
+  .tp{padding:16px 12px 96px}
+  .tp input,.tp textarea,.tp select{font-size:16px}
+  .tp .actionbar{position:sticky;bottom:0;z-index:5;background:var(--card);margin:0 -20px -20px;padding:12px 20px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--line);border-radius:0 0 14px 14px}
+  .tp .actionbar .btn.primary{flex:1}
+  .tp .acct .btn,.tp .acct .linkish,.tp .tap-row .btn,.tp .tap-row .linkish{min-height:44px;display:inline-flex;align-items:center}
+  .tp .acct-actions{flex-direction:column;align-items:flex-start;gap:8px}
+  .tp .thumb-x{width:44px;height:44px;border-radius:22px;top:-16px;right:-16px}
+}
 `;
+
+import { KEEP_TYPED_SCRIPT } from '@/components/beta/tester/common';
 
 export function TesterShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="tp">
       <style>{TESTER_CSS}</style>
+      {/* Records typing that happens before the page's script loads (slow phones); see useKeepTyped. */}
+      <script suppressHydrationWarning dangerouslySetInnerHTML={{ __html: KEEP_TYPED_SCRIPT }} />
       <main className="wrap">{children}</main>
     </div>
   );

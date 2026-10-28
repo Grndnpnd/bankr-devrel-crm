@@ -10,8 +10,33 @@ export function contentDisposition(kind: 'inline' | 'attachment', filename: stri
   return `${kind}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
-/** Serve an uploaded tester file safely: sandboxed, no sniffing; anything but images/video downloads. */
-export function attachmentResponse(a: { filename: string; contentType: string; data: Uint8Array | Buffer }) {
+/** A small preview of an image (for thumbnails on slow phones); null when it can't be made. */
+async function thumbnail(data: Uint8Array | Buffer): Promise<Buffer | null> {
+  try {
+    const sharp = (await import('sharp')).default;
+    return await sharp(Buffer.from(data), { failOn: 'none', limitInputPixels: 80_000_000 }).rotate()
+      .resize({ width: 360, height: 360, fit: 'inside', withoutEnlargement: true }).webp({ quality: 72 }).toBuffer();
+  } catch {
+    return null;
+  }
+}
+
+/** Serve an uploaded tester file safely: sandboxed, no sniffing; anything but images/video downloads. thumb → small preview. */
+export async function attachmentResponse(a: { filename: string; contentType: string; data: Uint8Array | Buffer }, opts: { thumb?: boolean } = {}) {
+  if (opts.thumb && a.contentType.startsWith('image/')) {
+    const small = await thumbnail(a.data);
+    if (small) {
+      return new Response(new Uint8Array(small), {
+        headers: {
+          'Content-Type': 'image/webp',
+          'Content-Disposition': contentDisposition('inline', a.filename.replace(/\.\w+$/, '') + '.webp'),
+          'Content-Security-Policy': "sandbox; default-src 'none'",
+          'X-Content-Type-Options': 'nosniff',
+          'Cache-Control': 'private, max-age=86400',
+        },
+      });
+    }
+  }
   return new Response(new Uint8Array(a.data), {
     headers: {
       'Content-Type': a.contentType,

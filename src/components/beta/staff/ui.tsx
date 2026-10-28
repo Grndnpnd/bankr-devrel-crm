@@ -34,9 +34,56 @@ export const localDateTime = (iso: string | Date | null | undefined) => {
   const d = new Date(iso);
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 };
+/** The program's end date has passed (sign-ups and new reports are closed). */
+export const programEnded = (p: { endsAt: string | null }) => !!p.endsAt && new Date(p.endsAt).getTime() < Date.now();
 export const overdue = (iso: string | Date | null | undefined) => !!iso && new Date(iso).getTime() < new Date(new Date().toISOString().slice(0, 10)).getTime();
 export const short = (s: string | null | undefined, n = 6) => (!s ? '' : s.length <= n * 2 + 1 ? s : `${s.slice(0, n)}…${s.slice(-4)}`);
 export const copy = (text: string, what = 'Copied') => navigator.clipboard.writeText(text).then(() => toast.success(what)).catch(() => toast.error('Could not copy'));
+
+/** "1 tester", "3 testers". */
+export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** Layout rules for the staff beta pages that inline styles can't express (phone widths). */
+export const STAFF_CSS = `
+.bp-tabs{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.bp-tabs::-webkit-scrollbar{display:none}
+.bp-row{display:flex;align-items:center;gap:12px}
+.bp-row-title{flex:1;min-width:0}
+.bp-row-meta{display:flex;align-items:center;gap:12px;flex-shrink:0}
+.bp-help{font-size:12px;color:#8A8A8A;line-height:1.45;margin-top:4px}
+.bp-head{position:sticky;top:-18px;z-index:3;background:#1A1A1A;margin:-18px -16px 0;padding:18px 16px 10px;border-bottom:1px solid rgba(255,255,255,0.07)}
+.bp-close{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;border-radius:8px}
+@media (max-width:767px){
+  .bp-tap{min-height:44px;display:inline-flex !important;align-items:center;padding-left:8px !important;padding-right:8px !important}
+  .bp-sq{min-width:44px;min-height:44px;display:inline-flex !important;align-items:center;justify-content:center}
+  .bp-tap-sel{min-height:44px}
+  .bp-close{width:44px;height:44px;margin:-8px -8px 0 0}
+  .bp-row{flex-wrap:wrap;align-items:flex-start;gap:6px 10px}
+  .bp-row-title{flex:1 1 calc(100% - 30px)}
+  .bp-row-meta{width:100%;padding-left:26px;gap:10px}
+  .bp-hide-sm{display:none !important}
+  .bp-stack-sm{flex-direction:column;align-items:stretch !important}
+  .bp-full-sm{width:100% !important;max-width:none !important}
+}
+`;
+
+/** Small always-visible explanation under a field or heading (hover titles don't exist on phones). */
+export function Help({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return <div className="bp-help" style={style}>{children}</div>;
+}
+
+/** fetch JSON without toasting, for forms that show the API's error next to the field. */
+export async function apiResult<T = any>(url: string, method = 'GET', body?: unknown): Promise<{ ok: boolean; data: T | null; error: string | null }> {
+  const res = await fetch(url, { method, ...(body !== undefined ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}) }).catch(() => null);
+  const d = await res?.json().catch(() => ({}));
+  if (!res?.ok) return { ok: false, data: null, error: d?.error ?? (res ? 'Something went wrong — try again.' : 'Couldn’t reach the server — check your connection.') };
+  return { ok: true, data: d as T, error: null };
+}
+
+/** An inline error line for forms. */
+export function FormError({ text }: { text: string | null }) {
+  return text ? <div role="alert" style={{ fontSize: 12.5, color: '#EF4444' }}>{text}</div> : null;
+}
 
 /** fetch JSON; on failure toasts the API's error and returns null. */
 export async function api<T = any>(url: string, method = 'GET', body?: unknown, quiet = false): Promise<T | null> {
@@ -83,9 +130,9 @@ export function Pill({ text, color }: { text: string; color?: string }) {
 export function Modal({ title, onClose, children, width = 560 }: { title: string; onClose: () => void; children: React.ReactNode; width?: number }) {
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, [onClose]);
   return (
-    <div role="dialog" aria-modal="true" aria-label={title} onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 210, display: 'grid', placeItems: 'center', padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ ...card, width: `min(${width}px, 100%)`, maxHeight: '90vh', overflow: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <div className="flex items-center"><h2 style={{ fontSize: 16, fontWeight: 700, color: ink, flex: 1 }}>{title}</h2><button onClick={onClose} aria-label="Close" style={{ color: faint }}><X size={18} /></button></div>
+    <div role="dialog" aria-modal="true" aria-label={title} onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 210, display: 'grid', placeItems: 'center', padding: 12 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ ...card, width: `min(${width}px, 100%)`, maxHeight: 'calc(100dvh - 24px)', overflowY: 'auto', overflowX: 'hidden', padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="flex items-center"><h2 style={{ fontSize: 16, fontWeight: 700, color: ink, flex: 1 }}>{title}</h2><button onClick={onClose} aria-label="Close" className="bp-close" style={{ color: faint }}><X size={18} /></button></div>
         {children}
       </div>
     </div>
@@ -97,7 +144,7 @@ export function Drawer({ label: name, onClose, children, width = 600 }: { label:
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, [onClose]);
   return (
     <div role="dialog" aria-modal="true" aria-label={name} onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 200, display: 'flex', justifyContent: 'flex-end' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: `min(${width}px, 100%)`, height: '100%', background: panel, borderLeft: `1px solid ${line}`, padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: `min(${width}px, 100%)`, height: '100%', background: panel, borderLeft: `1px solid ${line}`, padding: '18px 16px 40px', overflowY: 'auto', overflowX: 'hidden', overflowWrap: 'anywhere', display: 'flex', flexDirection: 'column', gap: 14 }}>
         {children}
       </div>
     </div>
@@ -111,7 +158,10 @@ export function Empty({ children }: { children: React.ReactNode }) {
 export function SectionHead({ title, count, right, hint }: { title: string; count?: number; right?: React.ReactNode; hint?: string }) {
   return (
     <div className="flex flex-wrap items-center gap-2" style={{ margin: '4px 0 8px' }}>
-      <h3 title={hint} style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: muted }}>{title}{count !== undefined && <span style={{ color: faint }}> · {count}</span>}</h3>
+      <div style={{ minWidth: 0 }}>
+        <h3 style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: muted }}>{title}{count !== undefined && <span style={{ color: faint }}> · {count}</span>}</h3>
+        {hint && <div style={{ fontSize: 12, color: faint, marginTop: 1 }}>{hint}</div>}
+      </div>
       <span style={{ flex: 1 }} />
       {right}
     </div>
@@ -120,12 +170,29 @@ export function SectionHead({ title, count, right, hint }: { title: string; coun
 
 export interface Person { id: string; name: string | null; email: string }
 export const personName = (people: Person[], id: string | null | undefined) => { const p = people.find((x) => x.id === id); return p ? p.name || p.email : null; };
+/** Options for a people picker; two people with the same name show their emails so they can be told apart. */
+/** Tester options; when two testers share a name, the email (or channel handle) tells them apart. */
+export const testerOptions = (list: { id: string; name: string; email: string | null; handle?: string | null }[]) => {
+  const count = new Map<string, number>();
+  for (const t of list) { const n = t.name.trim().toLowerCase(); count.set(n, (count.get(n) ?? 0) + 1); }
+  return list.map((t) => [t.id, (count.get(t.name.trim().toLowerCase()) ?? 0) > 1 ? `${t.name} (${t.email || t.handle || `#${t.id.slice(-4)}`})` : t.name] as const);
+};
+
+export const peopleOpts = (people: Person[]) => {
+  const count = new Map<string, number>();
+  for (const p of people) { const n = (p.name || p.email).trim().toLowerCase(); count.set(n, (count.get(n) ?? 0) + 1); }
+  return people.map((p) => {
+    const n = p.name || p.email;
+    return [p.id, (count.get(n.trim().toLowerCase()) ?? 0) > 1 && p.name ? `${n} (${p.email})` : n] as const;
+  });
+};
 
 export interface ProgramData {
   program: {
     id: string; name: string; product: string | null; slug: string; status: string; joinUrl: string; description: string | null; welcome: string | null;
     teamId: string | null; bugTeamId: string | null; maxTesters: number | null; endsAt: string | null;
     plainEnabled: boolean; plainLabelTypeId: string | null; leadId: string | null; senderId: string | null; testAreas: string[];
+    runBy: string | null; contactEmail: string | null; privacyUrl: string | null; updatedAt: string;
     questions: { id: string; label: string; required?: boolean }[];
   };
   counts: Record<string, number>;
