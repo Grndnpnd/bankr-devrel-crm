@@ -5,6 +5,7 @@ import { can } from '@/lib/access';
 import { prisma } from '@/lib/prisma';
 import { checkProgramInput, cleanQuestions, joinUrl, token, uniqueSlug } from '@/lib/beta';
 import { BUG_OPEN, values } from '@/lib/betaModel';
+import { visibleProgramFilter } from '@/lib/betaHttp';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,9 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   const session = await getSession();
   if (!session || !can(session.role, 'tasks.use')) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  const visible = await visibleProgramFilter(session);
   const programs = await prisma.betaProgram.findMany({
+    where: visible ?? undefined,
     orderBy: { createdAt: 'desc' },
     include: {
       team: { select: { id: true, name: true, color: true } },

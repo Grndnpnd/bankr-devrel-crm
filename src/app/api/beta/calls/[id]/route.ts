@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { parseDay } from '@/lib/betaModel';
-import { body, staff } from '@/lib/betaHttp';
+import { body, staffRecord } from '@/lib/betaHttp';
 
 export const dynamic = 'force-dynamic';
 
 /** Edit a call: { title?, date?, summary?, recordingUrl?, testerIds? } */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const s = await staff();
+  const s = await staffRecord('call', id);
   if ('error' in s) return s.error;
   const call = await prisma.betaCall.findUnique({ where: { id } });
   if (!call) return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -34,7 +34,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const s = await staff('beta.manage');
+  const s = await staffRecord('call', id, 'beta.manage');
   if ('error' in s) return s.error;
   await prisma.betaCall.delete({ where: { id } }).catch(() => {});
   return NextResponse.json({ ok: true });

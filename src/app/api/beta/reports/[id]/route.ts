@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { updateReport } from '@/lib/betaFlow';
-import { body, run, staff } from '@/lib/betaHttp';
+import { body, run, staffRecord } from '@/lib/betaHttp';
 import { threadUrl } from '@/lib/plainSupport';
 import { txUrl } from '@/lib/betaModel';
 
@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const s = await staff();
+  const s = await staffRecord('report', id);
   if ('error' in s) return s.error;
   const report = await prisma.testerReport.findUnique({
     where: { id },
@@ -44,7 +44,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 /** Triage: status, official severity, area, device, links, waiting on, duplicate of, … (see betaFlow). */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const s = await staff();
+  const s = await staffRecord('report', id);
   if ('error' in s) return s.error;
   const b = await body(req);
   return run(async () => { await updateReport(s.session, id, b); return { ok: true }; });
@@ -53,7 +53,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 /** Delete a report (spam, a test, a mistake) with its replies, files and task. */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const s = await staff('beta.manage');
+  const s = await staffRecord('report', id, 'beta.manage');
   if ('error' in s) return s.error;
   const r = await prisma.testerReport.findUnique({ where: { id }, select: { taskId: true, notionPageId: true } });
   if (!r) return NextResponse.json({ error: 'not found' }, { status: 404 });

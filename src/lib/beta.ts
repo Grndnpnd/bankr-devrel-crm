@@ -299,7 +299,7 @@ export async function submitReport(tester: Tester & { program: BetaProgram }, in
   const triage = `${APP_URL()}/beta/${p.id}?report=${report.id}`;
   const what = kind === 'bug' ? `Bug (${LABEL.severity[claimedSeverity!]}, as reported)` : LABEL.kind[kind];
   const detail = [
-    `${what} from ${tester.name}${tester.email ? ` <${tester.email}>` : ''} in ${p.name}${by ? ` · logged by ${by.name ?? 'the team'}` : ''}`,
+    `${what} from ${tester.name} in ${p.name}${by ? ` · logged by ${by.name ?? 'the team'}` : ''}`,
     report.testArea ? `Area: ${report.testArea}` : null,
     [report.device && LABEL.device[report.device], report.browser, report.platform].filter(Boolean).join(' · ') || null,
     report.pageUrl ? `Where: ${report.pageUrl}` : null,

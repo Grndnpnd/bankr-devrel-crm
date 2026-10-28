@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { Prisma } from '@prisma/client';
-import { getSession } from '@/lib/auth';
+import { canSeeProgram, staffProgram } from '@/lib/betaHttp';
 import { can } from '@/lib/access';
 import { prisma } from '@/lib/prisma';
 import { checkProgramInput, cleanQuestions, joinUrl, token } from '@/lib/beta';
@@ -10,8 +10,9 @@ export const dynamic = 'force-dynamic';
 
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const session = await getSession();
-  if (!session || !can(session.role, 'tasks.use')) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  const s = await staffProgram(id);
+  if ('error' in s) return s.error;
+  const session = s.session;
   const p = await prisma.betaProgram.findUnique({
     where: { id },
     include: { team: { select: { id: true, name: true, color: true } }, bugTeam: { select: { id: true, name: true, color: true } } },
@@ -22,7 +23,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   const { joinToken, ...rest } = p;
   const [overview, people, boards] = await Promise.all([
     programOverview(id, session.id, canApprove(p, session)),
-    prisma.user.findMany({ where: { active: true }, select: { id: true, name: true, email: true }, orderBy: { name: 'asc' } }),
+    // Only people who can see this program can be given work in it (lead, sender, waiting on).
+    prisma.user.findMany({ where: { active: true }, select: { id: true, name: true, email: true, role: true }, orderBy: { name: 'asc' } })
+      .then(async (us) => (await Promise.all(us.map(async (u) => ((await canSeeProgram({ id: u.id, role: u.role } as any, p)) ? { id: u.id, name: u.name, email: u.email } : null)))).filter(Boolean)),
     prisma.notionBoard.findMany({ where: { programId: id }, select: { kind: true, title: true, url: true, enabled: true, lastPullAt: true, lastPushAt: true, lastError: true } }),
   ]);
   return NextResponse.json({
@@ -36,8 +39,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 /** Change settings; { regenerateLink: true } issues a new join link (the old one stops working). */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const session = await getSession();
-  if (!session || !can(session.role, 'beta.manage')) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  const s = await staffProgram(id, 'beta.manage');
+  if ('error' in s) return s.error;
+  const session = s.session;
   const b = await req.json().catch(() => ({}));
   if (!(await prisma.betaProgram.findUnique({ where: { id }, select: { id: true } }))) return NextResponse.json({ error: 'not found' }, { status: 404 });
   const bad = await checkProgramInput(b);
@@ -57,7 +61,14 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   if (b?.regenerateLink) data.joinToken = token(18);
   for (const k of ['leadId', 'senderId'] as const) {
     if (b?.[k] === undefined) continue;
-    if (b[k] && !(await prisma.user.findFirst({ where: { id: String(b[k]), active: true }, select: { id: true } }))) return NextResponse.json({ error: 'Pick someone on the team.' }, { status: 400 });
+    if (b[k]) {
+      const u = await prisma.user.findFirst({ where: { id: String(b[k]), active: true }, select: { id: true, role: true } });
+      // The lead and sender must already be able to see the program (admin, on one of its teams, or its creator).
+      const teamId = b.teamId !== undefined ? b.teamId || null : s.p.teamId, bugTeamId = b.bugTeamId !== undefined ? b.bugTeamId || null : s.p.bugTeamId;
+      if (!u || !(await canSeeProgram({ id: u.id, role: u.role } as any, { teamId, bugTeamId, leadId: null, senderId: null, createdById: s.p.createdById }))) {
+        return NextResponse.json({ error: 'Add them to the program’s team first. Only people on its teams (or admins) can lead or send.' }, { status: 400 });
+      }
+    }
     data[k] = b[k] ? String(b[k]) : null;
   }
   if (b?.testAreas !== undefined) {
@@ -79,8 +90,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 /** Delete the program with its testers and reports (their tasks stay on the board). */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const session = await getSession();
-  if (!session || !can(session.role, 'beta.manage')) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  const s = await staffProgram(id, 'beta.manage');
+  if ('error' in s) return s.error;
+  const session = s.session;
   const tasks = (await prisma.testerReport.findMany({ where: { programId: id, taskId: { not: null } }, select: { taskId: true } })).map((x) => x.taskId!);
   await prisma.betaProgram.delete({ where: { id } }).catch(() => {});
   if (tasks.length) await prisma.task.deleteMany({ where: { id: { in: tasks } } });

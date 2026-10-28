@@ -107,6 +107,9 @@ export default function Settings({ ctx, teams, onSave, onDelete }: { ctx: Ctx; t
 
       <div className="flex flex-col gap-4" style={{ ...card, padding: 16 }}>
         <span style={{ ...label, marginBottom: 0 }}>Running the beta</span>
+        <p style={{ fontSize: 12.5, color: muted, margin: 0 }}>
+          Who can see this program (its testers, reports, messages, payouts and export): admins, members of the two teams below, the lead, the sender and the person who created it. To let someone else in, add them to one of those teams.
+        </p>
         <div style={grid(160)}>
           <Field name="Feedback, ideas and questions go to">
             <Select disabled={dis} value={f.teamId} onChange={(v) => set('teamId', v)} opts={teams.map((t) => [t.id, t.name] as const)} empty="No team (nobody is told)" />

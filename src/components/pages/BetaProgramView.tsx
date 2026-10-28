@@ -33,7 +33,7 @@ export default function BetaProgramView({ id, initialReport, initialTab, initial
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/beta/programs/${id}`);
-    if (!res.ok) { toast.error('Program not found'); router.push('/beta'); return; }
+    if (!res.ok) { const d = await res.json().catch(() => ({})); toast.error(d?.error && res.status === 403 ? d.error : 'That beta program doesn’t exist any more.'); router.push('/beta'); return; }
     setData(await res.json());
   }, [id, router]);
   const loadLists = useCallback(async () => {

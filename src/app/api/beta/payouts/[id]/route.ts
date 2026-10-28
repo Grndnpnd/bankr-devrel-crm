@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { body, staff } from '@/lib/betaHttp';
+import { body, staffRecord } from '@/lib/betaHttp';
 
 export const dynamic = 'force-dynamic';
 
 /** Add the tx later, or fix notes / amount: { tx?, notes?, amount? } */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const s = await staff('beta.manage');
+  const s = await staffRecord('payout', id, 'beta.manage');
   if ('error' in s) return s.error;
   const b = await body(req);
   if (!(await prisma.betaPayout.findUnique({ where: { id }, select: { id: true } }))) return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -25,7 +25,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
 
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const s = await staff('beta.manage');
+  const s = await staffRecord('payout', id, 'beta.manage');
   if ('error' in s) return s.error;
   await prisma.betaPayout.delete({ where: { id } }).catch(() => {});
   return NextResponse.json({ ok: true });

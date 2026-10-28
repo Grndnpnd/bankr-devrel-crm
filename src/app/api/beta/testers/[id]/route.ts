@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
 import { can } from '@/lib/access';
 import { prisma } from '@/lib/prisma';
 import { newTesterLink, portalUrl, resetTesterLinks } from '@/lib/beta';
 import { loadProgram, updateTester } from '@/lib/betaFlow';
-import { run } from '@/lib/betaHttp';
+import { run, staffRecord } from '@/lib/betaHttp';
 import { eraseTester } from '@/lib/betaErase';
 
 export const dynamic = 'force-dynamic';
@@ -18,8 +17,9 @@ const findTester = (id: string) => prisma.tester.findUnique({ where: { id }, inc
  */
 export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const session = await getSession();
-  if (!session || !can(session.role, 'tasks.use')) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  const s = await staffRecord('tester', id);
+  if ('error' in s) return s.error;
+  const session = s.session;
   const b = await req.json().catch(() => ({}));
   const t = await findTester(id);
   if (!t) return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -40,8 +40,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
  */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const session = await getSession();
-  if (!session || !can(session.role, 'beta.manage')) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  const s = await staffRecord('tester', id, 'beta.manage');
+  if ('error' in s) return s.error;
+  const session = s.session;
   const action = (await req.json().catch(() => ({})))?.action;
   const t = await findTester(id);
   if (!t) return NextResponse.json({ error: 'not found' }, { status: 404 });
@@ -54,8 +55,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
 /** Delete a tester and all their data (see eraseTester). For a tester who asks the team to erase them. */
 export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const session = await getSession();
-  if (!session || !can(session.role, 'beta.manage')) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  const s = await staffRecord('tester', id, 'beta.manage');
+  if ('error' in s) return s.error;
+  const session = s.session;
   if (!(await eraseTester(id))) return NextResponse.json({ error: 'not found' }, { status: 404 });
   return NextResponse.json({ ok: true });
 }

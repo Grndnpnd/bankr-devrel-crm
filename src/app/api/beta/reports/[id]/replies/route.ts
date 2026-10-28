@@ -1,6 +1,5 @@
 import { NextResponse, after } from 'next/server';
-import { getSession } from '@/lib/auth';
-import { can } from '@/lib/access';
+import { staffRecord } from '@/lib/betaHttp';
 import { prisma } from '@/lib/prisma';
 import { pushReplyToPlain } from '@/lib/plainBeta';
 
@@ -9,8 +8,9 @@ export const dynamic = 'force-dynamic';
 /** Reply to the tester: { body }. A first reply moves a new report to "Seen"; answering a question marks it answered. */
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const session = await getSession();
-  if (!session || !can(session.role, 'tasks.use')) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  const s = await staffRecord('report', id);
+  if ('error' in s) return s.error;
+  const session = s.session;
   const body = String((await req.json().catch(() => ({})))?.body ?? '').trim().slice(0, 5000);
   if (!body) return NextResponse.json({ error: 'write a reply first' }, { status: 400 });
   const report = await prisma.testerReport.findUnique({ where: { id }, select: { status: true, kind: true } });
