@@ -10,7 +10,7 @@
  */
 import { prisma } from '@/lib/prisma';
 import {
-  addPlainThreadEvent, badge, createPlainThread, divider, linkButton, markPlainThreadTodo, plainConfigured,
+  addPlainThreadEvent, badge, md, createPlainThread, divider, linkButton, markPlainThreadTodo, plainConfigured,
   plainText, PlainError, replyOnPlainThread, row, spacer, text, upsertPlainCustomer, type PlainComponent,
 } from '@/lib/plain';
 
@@ -26,8 +26,8 @@ const SEVERITY_COLOR: Record<string, 'RED' | 'YELLOW' | 'GREY'> = { blocker: 'RE
 
 function reportComponents(r: any): PlainComponent[] {
   const c: PlainComponent[] = [
-    row([text(`**${KIND(r.kind, r.severity)}** from ${r.tester.name} in ${r.program.name}`)],
-      r.severity ? [badge(r.severity, SEVERITY_COLOR[r.severity] ?? 'GREY')] : []),
+    row([text(`**${KIND(r.kind, r.severity)}** from ${md(r.tester.name)} in ${md(r.program.name)}`)],
+      [...(r.severity ? [badge(r.severity, SEVERITY_COLOR[r.severity] ?? 'GREY')] : []), ...(r.tester.emailVerifiedAt ? [] : [badge('email not verified', 'GREY')])]),
     spacer('S'),
     plainText(r.body),
   ];
@@ -175,6 +175,11 @@ export async function mirrorPlainMessage(eventType: string, payload: any): Promi
   const inbound = eventType === 'thread.email_received' || eventType === 'thread.chat_received';
 
   if (inbound) {
+    // An emailed answer from their own address proves they own it (chat is signed from then on).
+    const from = String(payload.email?.from?.email ?? '').toLowerCase();
+    if (from && from === report.tester.email && !report.tester.emailVerifiedAt) {
+      await prisma.tester.update({ where: { id: report.testerId }, data: { emailVerifiedAt: new Date() } });
+    }
     await prisma.testerReply.create({ data: { reportId: report.id, authorType: 'tester', testerId: report.testerId, body, via: 'plain', plainEntryId: msg.timelineEntryId } });
     const { notifyTesterReply } = await import('@/lib/beta');
     await notifyTesterReply(report.id, report.tester.name, body);

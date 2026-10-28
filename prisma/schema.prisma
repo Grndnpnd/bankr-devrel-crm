@@ -652,22 +652,38 @@ model BetaProgram {
 }
 
 model Tester {
-  id         String         @id @default(cuid())
-  programId  String
-  program    BetaProgram    @relation(fields: [programId], references: [id], onDelete: Cascade)
-  email      String // lowercase
-  name       String
-  contact    String? // Telegram / Discord handle
-  platform   String? // device / OS / browser they test on
-  answers    Json?
-  accessHash String         @unique // sha256 of the personal portal token
-  status     String         @default("active") // active | removed
-  lastSeenAt DateTime?
-  reports    TesterReport[]
-  replies    TesterReply[]
-  createdAt  DateTime       @default(now())
+  id              String         @id @default(cuid())
+  programId       String
+  program         BetaProgram    @relation(fields: [programId], references: [id], onDelete: Cascade)
+  email           String // lowercase
+  name            String
+  contact         String? // Telegram / Discord handle
+  platform        String? // device / OS / browser they test on
+  answers         Json?
+  accessHash      String         @unique // sha256 of the personal portal token (the link shown when they joined)
+  status          String         @default("active") // active | removed
+  lastSeenAt      DateTime?
+  emailVerifiedAt DateTime? // they opened a link we emailed, or answered a Plain email from this address
+  reports         TesterReport[]
+  replies         TesterReply[]
+  links           TesterLink[]
+  createdAt       DateTime       @default(now())
 
   @@unique([programId, email])
+}
+
+/// Extra sign-in links for a tester (emailed to them, or made by the team for someone who lost theirs).
+model TesterLink {
+  id          String    @id @default(cuid())
+  testerId    String
+  tester      Tester    @relation(fields: [testerId], references: [id], onDelete: Cascade)
+  hash        String    @unique // sha256 of the token
+  kind        String // email | team
+  createdById String?
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+
+  @@index([testerId])
 }
 
 model TesterReport {

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { badge, divider, linkButton, plainHmacSecret, plainText, row, spacer, text, verifyPlainRequest, type PlainComponent } from '@/lib/plain';
+import { badge, divider, linkButton, md, plainHmacSecret, plainText, row, spacer, text, verifyPlainRequest, type PlainComponent } from '@/lib/plain';
 import { STATUS_LABEL } from '@/lib/beta';
 import { STATUS_LABEL as TASK_STATUS } from '@/lib/tasks';
 
@@ -37,14 +37,14 @@ async function betaCard(email: string | null, threadExternalId: string | null): 
     if (i) out.push(divider());
     const open = t.reports.filter((r) => ['new', 'triaged', 'in_progress'].includes(r.status)).length;
     out.push(
-      row([text(`**${t.program.name}**`)], [badge(t.status === 'active' ? 'Tester' : 'Removed', t.status === 'active' ? 'GREEN' : 'GREY')]),
+      row([text(`**${md(t.program.name)}**`)], [badge(t.status === 'active' ? 'Tester' : 'Removed', t.status === 'active' ? 'GREEN' : 'GREY')]),
       plainText(`Joined ${day(t.createdAt)} · ${t.reports.length} report(s), ${open} open${t.platform ? ` · ${t.platform}` : ''}`, 'MUTED'),
     );
     const focus = t.reports.find((r) => r.id === focusId);
     const list = [...(focus ? [focus] : []), ...t.reports.filter((r) => r.id !== focusId)].slice(0, 4);
     for (const r of list) {
       out.push(row(
-        [text(`${r.id === focusId ? '**This thread:** ' : ''}${r.kind === 'bug' ? `Bug (${r.severity})` : r.kind}: ${r.title}`.slice(0, 300))],
+        [text(`${r.id === focusId ? '**This thread:** ' : ''}${r.kind === 'bug' ? `Bug (${r.severity})` : r.kind}: ${md(r.title.slice(0, 250))}`)],
         [badge(STATUS_LABEL[r.status] ?? r.status, REPORT_COLOR[r.status] ?? 'GREY')],
       ));
     }

@@ -18,13 +18,16 @@ const STATUS_TINT: Record<string, string> = { open: '#10B981', draft: '#8A8A8A',
 export default function Beta() {
   const router = useRouter();
   const [programs, setPrograms] = useState<Program[] | null>(null);
+  const [loadErr, setLoadErr] = useState(false);
   const [canManage, setCanManage] = useState(false);
   const [creating, setCreating] = useState(false);
   const [teams, setTeams] = useState<Team[]>([]);
 
   const load = useCallback(async () => {
-    const d = await fetch('/api/beta/programs').then((r) => r.json());
-    setPrograms(d.programs ?? []); setCanManage(!!d.canManage);
+    const res = await fetch('/api/beta/programs').catch(() => null);
+    if (!res?.ok) { setLoadErr(true); return; }
+    const d = await res.json();
+    setPrograms(d.programs ?? []); setCanManage(!!d.canManage); setLoadErr(false);
   }, []);
   useEffect(() => { load(); fetch('/api/teams').then((r) => r.json()).then((d) => setTeams(d.teams ?? [])); }, [load]);
 
@@ -43,7 +46,7 @@ export default function Beta() {
         )}
       </div>
 
-      {programs === null ? <div style={{ color: faint, fontSize: 13, padding: 20 }}>Loading…</div> : programs.length === 0 ? (
+      {loadErr ? <div style={{ color: muted, fontSize: 13, padding: 20 }}>Couldn’t load programs. <button onClick={load} style={{ color: accent }}>Try again</button></div> : programs === null ? <div style={{ color: faint, fontSize: 13, padding: 20 }}>Loading…</div> : programs.length === 0 ? (
         <div className="rounded-xl" style={{ border: '1px dashed rgba(255,255,255,0.12)', padding: 40, textAlign: 'center', fontSize: 13.5, color: muted }}>
           No beta programs yet. Create one for your next launch and share its link with testers.
         </div>
@@ -98,15 +101,15 @@ function NewProgram({ teams, onClose, onCreated }: { teams: Team[]; onClose: () 
     <div role="dialog" aria-modal="true" aria-label="New beta program" onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 200, display: 'grid', placeItems: 'center', padding: 16 }}>
       <div onClick={(e) => e.stopPropagation()} className="rounded-xl" style={{ background: panel, border: `1px solid ${line}`, width: 'min(560px, 100%)', maxHeight: '90vh', overflow: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div className="flex items-center"><h2 style={{ fontSize: 16, fontWeight: 700, color: ink, flex: 1 }}>New beta program</h2><button onClick={onClose} aria-label="Close" style={{ color: faint }}><X size={18} /></button></div>
-        <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))' }}>
           <div><span style={label}>Program name</span><input value={f.name} onChange={(e) => set('name', e.target.value)} placeholder="Wallet v2 beta" style={field} autoFocus /></div>
           <div><span style={label}>Product</span><input value={f.product} onChange={(e) => set('product', e.target.value)} placeholder="Wallet v2" style={field} /></div>
         </div>
         <div><span style={label}>What testers see when they join</span><textarea value={f.description} onChange={(e) => set('description', e.target.value)} rows={4} placeholder="What it is, what to try, how long the beta runs." style={{ ...field, resize: 'vertical' }} /></div>
-        <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr 110px' }}>
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))' }}>
           <div><span style={label}>Reports go to</span><select value={f.teamId} onChange={(e) => set('teamId', e.target.value)} style={field}><option value="">No team</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
           <div><span style={label}>Bugs go to</span><select value={f.bugTeamId} onChange={(e) => set('bugTeamId', e.target.value)} style={field}><option value="">Same team</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
-          <div><span style={label}>Max testers</span><input inputMode="numeric" value={f.maxTesters} onChange={(e) => set('maxTesters', e.target.value)} placeholder="No cap" style={field} /></div>
+          <div><span style={label}>Max testers</span><input inputMode="numeric" value={f.maxTesters} onChange={(e) => set('maxTesters', e.target.value.replace(/\D/g, ''))} placeholder="No cap" style={field} /></div>
         </div>
         <p style={{ fontSize: 12, color: faint }}>You can add sign-up questions, a welcome note and an end date on the next page.</p>
         <div className="flex justify-end gap-2">

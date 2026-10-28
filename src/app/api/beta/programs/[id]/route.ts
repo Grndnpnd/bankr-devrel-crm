@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { getSession } from '@/lib/auth';
 import { can } from '@/lib/access';
 import { prisma } from '@/lib/prisma';
-import { cleanQuestions, joinUrl, token } from '@/lib/beta';
+import { checkProgramInput, cleanQuestions, joinUrl, token } from '@/lib/beta';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,6 +32,9 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const session = await getSession();
   if (!session || !can(session.role, 'beta.manage')) return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   const b = await req.json().catch(() => ({}));
+  if (!(await prisma.betaProgram.findUnique({ where: { id }, select: { id: true } }))) return NextResponse.json({ error: 'not found' }, { status: 404 });
+  const bad = await checkProgramInput(b);
+  if (bad) return NextResponse.json({ error: bad }, { status: 400 });
   const data: Prisma.BetaProgramUncheckedUpdateInput = {};
   if (typeof b?.name === 'string' && b.name.trim()) data.name = b.name.trim().slice(0, 100);
   for (const k of ['product', 'description', 'welcome'] as const) if (b?.[k] !== undefined) data[k] = b[k] ? String(b[k]).slice(0, k === 'product' ? 100 : 4000) : null;

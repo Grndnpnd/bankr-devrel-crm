@@ -98,7 +98,7 @@ export default function BetaProgramView({ id, initialReport }: { id: string; ini
         await fetch(`/api/beta/programs/${id}`, { method: 'DELETE' }); toast.success('Program deleted'); router.push('/beta');
       }} />}
 
-      {openReport && <ReportDrawer id={openReport} onClose={() => { setOpenReport(null); load(); if (initialReport) router.replace(`/beta/${id}`); }} />}
+      {openReport && <ReportDrawer id={openReport} canManage={canManage} onClose={() => { setOpenReport(null); load(); if (initialReport) router.replace(`/beta/${id}`); }} />}
     </div>
   );
 }
@@ -113,7 +113,7 @@ function Reports({ programId, onOpen, refreshKey }: { programId: string; onOpen:
     if (status === 'open') sp.set('status', 'new,triaged,in_progress'); else if (status !== 'all') sp.set('status', status);
     if (kind) sp.set('kind', kind);
     if (q.trim()) sp.set('q', q.trim());
-    const d = await fetch(`/api/beta/programs/${programId}/reports?${sp}`).then((r) => r.json());
+    const d = await fetch(`/api/beta/programs/${programId}/reports?${sp}`).then((r) => r.json()).catch(() => ({}));
     setRows(d.reports ?? []);
   }, [programId, status, kind, q]);
   useEffect(() => { const t = setTimeout(load, q ? 250 : 0); return () => clearTimeout(t); }, [load, q, refreshKey]);
@@ -149,8 +149,8 @@ function Reports({ programId, onOpen, refreshKey }: { programId: string; onOpen:
                       {r.lastReplyBy === 'tester' ? ' · tester replied' : ''}
                     </span>
                   </span>
-                  <span style={{ fontSize: 12, color: muted, whiteSpace: 'nowrap' }}>{r.task?.assignee ? (r.task.assignee.name || r.task.assignee.email) : 'Unassigned'}</span>
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: STATUS_COLOR[r.status], minWidth: 90, textAlign: 'right' }}>{STATUSES.find(([v]) => v === r.status)?.[1] ?? r.status}</span>
+                  <span className="hidden sm:inline" style={{ fontSize: 12, color: muted, whiteSpace: 'nowrap' }}>{r.task?.assignee ? (r.task.assignee.name || r.task.assignee.email) : 'Unassigned'}</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: STATUS_COLOR[r.status], minWidth: 64, textAlign: 'right' }}>{STATUSES.find(([v]) => v === r.status)?.[1] ?? r.status}</span>
                   <span style={{ fontSize: 11.5, color: faint, minWidth: 28, textAlign: 'right' }}>{ago(r.createdAt)}</span>
                 </button>
               );
@@ -162,17 +162,26 @@ function Reports({ programId, onOpen, refreshKey }: { programId: string; onOpen:
   );
 }
 
-function ReportDrawer({ id, onClose }: { id: string; onClose: () => void }) {
+function ReportDrawer({ id, canManage, onClose }: { id: string; canManage: boolean; onClose: () => void }) {
   const [r, setR] = useState<any>(null);
   const [reply, setReply] = useState('');
   const [busy, setBusy] = useState(false);
-  const load = useCallback(async () => { const res = await fetch(`/api/beta/reports/${id}`); if (res.ok) setR((await res.json()).report); }, [id]);
+  const load = useCallback(async () => {
+    const res = await fetch(`/api/beta/reports/${id}`);
+    if (res.ok) setR((await res.json()).report);
+    else { toast.error(res.status === 404 ? 'That report was deleted' : 'Could not load the report'); onClose(); }
+  }, [id, onClose]);
   useEffect(() => { load(); }, [load]);
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, [onClose]);
 
   async function setStatus(status: string) {
     const res = await fetch(`/api/beta/reports/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
     if (res.ok) { toast.success('Status updated — the tester sees it'); load(); } else toast.error('Could not update');
+  }
+  async function remove() {
+    if (!window.confirm('Delete this report with its conversation, files and task? The tester won’t see it any more. This can’t be undone.')) return;
+    const res = await fetch(`/api/beta/reports/${id}`, { method: 'DELETE' });
+    if (res.ok) { toast.success('Report deleted'); onClose(); } else toast.error('Could not delete');
   }
   async function send() {
     if (!reply.trim()) return;
@@ -183,7 +192,7 @@ function ReportDrawer({ id, onClose }: { id: string; onClose: () => void }) {
   }
 
   const facts = useMemo(() => r ? ([
-    ['From', `${r.tester.name} <${r.tester.email}>${r.tester.contact ? ` · ${r.tester.contact}` : ''}`],
+    ['From', `${r.tester.name} <${r.tester.email}>${r.tester.emailVerifiedAt ? '' : ' (email not verified)'}${r.tester.contact ? ` · ${r.tester.contact}` : ''}${r.tester.status !== 'active' ? ' · removed' : ''}`],
     r.severity && ['Severity', r.severity], r.platform && ['Device', r.platform], r.pageUrl && ['Where', r.pageUrl],
     r.expected && ['Expected', r.expected], r.actual && ['Actual', r.actual],
   ].filter(Boolean) as [string, string][]) : [], [r]);
@@ -241,8 +250,9 @@ function ReportDrawer({ id, onClose }: { id: string; onClose: () => void }) {
                   </div>
                 ))}
               </div>
-              <textarea value={reply} onChange={(e) => setReply(e.target.value)} rows={3} placeholder={r.plainUrl ? 'Reply to the tester — they see it on their beta page and get it by email from Plain' : 'Reply to the tester — they see it on their beta page'} style={{ ...field, resize: 'vertical' }} />
-              <div className="flex justify-end">
+              <textarea value={reply} onChange={(e) => setReply(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) send(); }} maxLength={5000} rows={3} placeholder={r.plainUrl ? 'Reply to the tester — they see it on their beta page and get it by email from Plain' : 'Reply to the tester — they see it on their beta page'} style={{ ...field, resize: 'vertical' }} />
+              <div className="flex items-center justify-end gap-3">
+                {canManage && <button onClick={remove} className="inline-flex items-center gap-1.5" style={{ fontSize: 12.5, color: faint, marginRight: 'auto' }}><Trash2 size={14} /> Delete report</button>}
                 <button onClick={send} disabled={busy || !reply.trim()} className="rounded-lg" style={{ background: accent, color: '#0D0D0D', fontSize: 13, fontWeight: 600, padding: '8px 16px', opacity: busy || !reply.trim() ? 0.5 : 1 }}>{busy ? 'Sending…' : 'Send reply'}</button>
               </div>
             </div>
@@ -255,40 +265,77 @@ function ReportDrawer({ id, onClose }: { id: string; onClose: () => void }) {
 
 function Testers({ programId, canManage }: { programId: string; canManage: boolean }) {
   const [rows, setRows] = useState<any[] | null>(null);
-  const load = useCallback(async () => { const d = await fetch(`/api/beta/programs/${programId}/testers`).then((r) => r.json()); setRows(d.testers ?? []); }, [programId]);
+  const [questions, setQuestions] = useState<{ id: string; label: string }[]>([]);
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState<string | null>(null);
+  const load = useCallback(async () => {
+    const d = await fetch(`/api/beta/programs/${programId}/testers`).then((r) => r.json()).catch(() => ({}));
+    setRows(d.testers ?? []); setQuestions(d.questions ?? []);
+  }, [programId]);
   useEffect(() => { load(); }, [load]);
   async function setStatus(t: any, status: string) {
-    if (status === 'removed' && !window.confirm(`Remove ${t.name}? Their personal link stops working; their reports stay.`)) return;
+    if (status === 'removed' && !window.confirm(`Remove ${t.name}? Their links stop working; their reports stay.`)) return;
     const res = await fetch(`/api/beta/testers/${t.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status }) });
-    if (res.ok) load();
+    if (res.ok) load(); else toast.error('Could not update');
+  }
+  async function link(t: any, action: 'link' | 'reset') {
+    if (action === 'reset' && !window.confirm(`Sign ${t.name} out on every device? Their saved link and any others stop working; you get one new link to send them.`)) return;
+    const res = await fetch(`/api/beta/testers/${t.id}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) { toast.error(d.error ?? 'Could not make a link'); return; }
+    await navigator.clipboard.writeText(d.url).catch(() => {});
+    window.prompt(`New sign-in link for ${t.name} (copied). Send it to them directly — anyone with it can post as them.`, d.url);
   }
   if (!rows) return <div style={{ color: faint, fontSize: 13 }}>Loading…</div>;
+  const needle = q.trim().toLowerCase();
+  const shown = needle ? rows.filter((t) => `${t.name} ${t.email} ${t.contact ?? ''} ${t.platform ?? ''}`.toLowerCase().includes(needle)) : rows;
+  const cell: React.CSSProperties = { padding: '8px 12px', borderBottom: `1px solid ${line}`, verticalAlign: 'top' };
   return (
     <div>
-      <div className="flex justify-end" style={{ marginBottom: 10 }}>
+      <div className="flex flex-wrap items-center gap-2" style={{ marginBottom: 10 }}>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search testers" aria-label="Search testers" style={{ ...field, width: 'min(280px, 100%)' }} />
+        <span style={{ flex: 1 }} />
         <a href={`/api/beta/programs/${programId}/testers?format=csv`} className="inline-flex items-center gap-1.5 rounded-lg" style={{ fontSize: 12.5, color: muted, border: `1px solid ${line}`, padding: '6px 10px' }}><Download size={13} /> Download CSV</a>
       </div>
-      {rows.length === 0 ? <div style={{ fontSize: 13, color: muted }}>No testers yet.</div> : (
-        <div className="rounded-xl" style={{ border: `1px solid ${line}`, maxHeight: '64vh', overflowY: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead><tr style={{ position: 'sticky', top: 0, background: panel }}>
-              {['Name', 'Email', 'Contact', 'Device', 'Reports', 'Joined', ''].map((h) => <th key={h} style={{ textAlign: 'left', padding: '9px 12px', color: faint, fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: `1px solid ${line}` }}>{h}</th>)}
+      {rows.length === 0 ? <div style={{ fontSize: 13, color: muted }}>No testers yet. Share the join link above.</div> : shown.length === 0 ? <div style={{ fontSize: 13, color: muted }}>Nobody matches.</div> : (
+        <div className="rounded-xl" style={{ border: `1px solid ${line}`, maxHeight: '64vh', overflow: 'auto' }}>
+          <table style={{ width: '100%', minWidth: 720, borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead><tr style={{ position: 'sticky', top: 0, background: panel, zIndex: 1 }}>
+              {['Name', 'Email', 'Device', 'Reports', 'Last seen', 'Joined', ''].map((h) => <th key={h} style={{ textAlign: 'left', padding: '9px 12px', color: faint, fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', borderBottom: `1px solid ${line}` }}>{h}</th>)}
             </tr></thead>
             <tbody>
-              {rows.map((t) => (
-                <tr key={t.id} style={{ opacity: t.status === 'active' ? 1 : 0.5 }}>
-                  <td style={{ padding: '8px 12px', color: ink, borderBottom: `1px solid ${line}` }}>{t.name}</td>
-                  <td style={{ padding: '8px 12px', color: muted, borderBottom: `1px solid ${line}` }}>{t.email}</td>
-                  <td style={{ padding: '8px 12px', color: muted, borderBottom: `1px solid ${line}` }}>{t.contact ?? ''}</td>
-                  <td style={{ padding: '8px 12px', color: muted, borderBottom: `1px solid ${line}` }}>{t.platform ?? ''}</td>
-                  <td style={{ padding: '8px 12px', color: ink, borderBottom: `1px solid ${line}`, fontFamily: 'ui-monospace, monospace' }}>{t.reports}</td>
-                  <td style={{ padding: '8px 12px', color: faint, borderBottom: `1px solid ${line}` }}>{new Date(t.createdAt).toLocaleDateString()}</td>
-                  <td style={{ padding: '8px 12px', borderBottom: `1px solid ${line}`, textAlign: 'right' }}>
-                    {canManage && (t.status === 'active'
-                      ? <button onClick={() => setStatus(t, 'removed')} style={{ fontSize: 12, color: faint }}>Remove</button>
-                      : <button onClick={() => setStatus(t, 'active')} style={{ fontSize: 12, color: muted }}>Restore</button>)}
-                  </td>
-                </tr>
+              {shown.map((t) => (
+                <React.Fragment key={t.id}>
+                  <tr onClick={() => setOpen(open === t.id ? null : t.id)} style={{ opacity: t.status === 'active' ? 1 : 0.5, cursor: 'pointer' }}>
+                    <td style={{ ...cell, color: ink }}>{t.name}{t.status !== 'active' && <span style={{ color: faint }}> · removed</span>}</td>
+                    <td style={{ ...cell, color: muted }}>{t.email}{!t.emailVerifiedAt && <span title="They haven’t proved they own this address yet (opening a link we emailed, or answering an email from Plain does)" style={{ color: faint }}> · unverified</span>}</td>
+                    <td style={{ ...cell, color: muted }}>{t.platform ?? ''}</td>
+                    <td style={{ ...cell, color: ink, fontFamily: 'ui-monospace, monospace' }}>{t.reports}</td>
+                    <td style={{ ...cell, color: faint }}>{t.lastSeenAt ? `${ago(t.lastSeenAt)} ago` : '—'}</td>
+                    <td style={{ ...cell, color: faint }}>{new Date(t.createdAt).toLocaleDateString()}</td>
+                    <td style={{ ...cell, textAlign: 'right', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>
+                      {canManage && (t.status === 'active'
+                        ? <button onClick={() => setStatus(t, 'removed')} style={{ fontSize: 12, color: faint }}>Remove</button>
+                        : <button onClick={() => setStatus(t, 'active')} style={{ fontSize: 12, color: muted }}>Restore</button>)}
+                    </td>
+                  </tr>
+                  {open === t.id && (
+                    <tr><td colSpan={7} style={{ ...cell, background: 'rgba(255,255,255,0.02)' }}>
+                      <dl style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '4px 12px', fontSize: 12.5, margin: 0 }}>
+                        {t.contact && <><dt style={{ color: faint }}>Contact</dt><dd style={{ color: muted }}>{t.contact}</dd></>}
+                        {questions.map((qq) => <React.Fragment key={qq.id}><dt style={{ color: faint }}>{qq.label}</dt><dd style={{ color: muted, whiteSpace: 'pre-wrap' }}>{t.answers?.[qq.id] || '—'}</dd></React.Fragment>)}
+                        {!t.contact && questions.length === 0 && <dd style={{ color: faint }}>No sign-up answers.</dd>}
+                      </dl>
+                      {canManage && t.status === 'active' && (
+                        <div className="flex flex-wrap items-center gap-3" style={{ marginTop: 10 }}>
+                          <button onClick={() => link(t, 'link')} style={{ fontSize: 12.5, color: accent }}>Make a sign-in link</button>
+                          <button onClick={() => link(t, 'reset')} style={{ fontSize: 12.5, color: muted }}>Sign out everywhere</button>
+                          <span style={{ fontSize: 12, color: faint }}>For a tester who lost their link. Send it to them yourself.</span>
+                        </div>
+                      )}
+                    </td></tr>
+                  )}
+                </React.Fragment>
               ))}
             </tbody>
           </table>
@@ -311,16 +358,16 @@ function Settings({ p, teams, canManage, onSave, onDelete }: { p: Program; teams
   const dis = !canManage;
   return (
     <div className="flex flex-col gap-4 rounded-xl" style={{ background: panel, border: `1px solid ${line}`, padding: 18, maxWidth: 720 }}>
-      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))' }}>
         <div><span style={label}>Program name</span><input disabled={dis} value={f.name} onChange={(e) => set('name', e.target.value)} style={field} /></div>
         <div><span style={label}>Product</span><input disabled={dis} value={f.product} onChange={(e) => set('product', e.target.value)} style={field} /></div>
       </div>
       <div><span style={label}>Join page text</span><textarea disabled={dis} rows={4} value={f.description} onChange={(e) => set('description', e.target.value)} style={{ ...field, resize: 'vertical' }} /></div>
       <div><span style={label}>Welcome note (after joining)</span><textarea disabled={dis} rows={3} value={f.welcome} onChange={(e) => set('welcome', e.target.value)} placeholder="What to test first, where to find the build, how long the beta runs." style={{ ...field, resize: 'vertical' }} /></div>
-      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr 110px 150px' }}>
+      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))' }}>
         <div><span style={label}>Reports go to</span><select disabled={dis} value={f.teamId} onChange={(e) => set('teamId', e.target.value)} style={field}><option value="">No team</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
         <div><span style={label}>Bugs go to</span><select disabled={dis} value={f.bugTeamId} onChange={(e) => set('bugTeamId', e.target.value)} style={field}><option value="">Same team</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div>
-        <div><span style={label}>Max testers</span><input disabled={dis} inputMode="numeric" value={f.maxTesters} onChange={(e) => set('maxTesters', e.target.value)} placeholder="No cap" style={field} /></div>
+        <div><span style={label}>Max testers</span><input disabled={dis} inputMode="numeric" value={f.maxTesters} onChange={(e) => set('maxTesters', e.target.value.replace(/\D/g, ''))} placeholder="No cap" style={field} /></div>
         <div><span style={label}>Ends</span><input disabled={dis} type="date" value={f.endsAt} onChange={(e) => set('endsAt', e.target.value)} style={{ ...field, colorScheme: 'dark' }} /></div>
       </div>
       <div>

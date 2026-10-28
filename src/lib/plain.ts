@@ -88,6 +88,8 @@ export async function upsertPlainCustomer(c: { email: string; fullName: string; 
 export type PlainComponent = Record<string, unknown>;
 export const text = (t: string, opts: { color?: 'NORMAL' | 'MUTED' | 'SUCCESS' | 'WARNING' | 'ERROR'; size?: 'S' | 'M' | 'L' } = {}): PlainComponent =>
   ({ componentText: { text: t.slice(0, 10_000), ...(opts.color ? { textColor: opts.color } : {}), ...(opts.size ? { textSize: opts.size } : {}) } });
+/** Escape text we didn't write (names, titles) before it goes into a markdown component. */
+export const md = (t: string) => t.replace(/[\\`*_{}[\]()#+\-.!|<>~]/g, (c) => `\\${c}`);
 export const plainText = (t: string, color?: 'NORMAL' | 'MUTED'): PlainComponent =>
   ({ componentPlainText: { plainText: t.slice(0, 10_000), ...(color ? { plainTextColor: color } : {}) } });
 export const spacer = (size: 'XS' | 'S' | 'M' = 'S'): PlainComponent => ({ componentSpacer: { spacerSize: size } });

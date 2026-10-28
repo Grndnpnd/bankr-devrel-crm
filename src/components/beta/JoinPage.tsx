@@ -17,7 +17,8 @@ export default function JoinPage({ slug, k }: { slug: string; k: string }) {
   const [ts, setTs] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [done, setDone] = useState<{ portalUrl: string; welcome: string | null; rejoined: boolean } | null>(null);
+  const [done, setDone] = useState<{ status: 'joined' | 'updated' | 'emailed' | 'exists'; portalUrl?: string; emailed?: boolean; welcome: string | null } | null>(null);
+  const [copied, setCopied] = useState(false);
   const tsBox = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,29 +49,52 @@ export default function JoinPage({ slug, k }: { slug: string; k: string }) {
     const res = await fetch('/api/tester/join', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ slug, k, ...f, answers, turnstile: ts }),
-    });
-    const d = await res.json().catch(() => ({}));
+    }).catch(() => null);
+    const d = await res?.json().catch(() => ({}));
     setBusy(false);
-    if (!res.ok) { setErr(d.error ?? 'Something went wrong. Try again.'); return; }
+    if (!res?.ok) { setErr(d?.error ?? 'Couldn’t reach us — check your connection and try again.'); return; }
+    if (d.status === 'updated') { location.href = `/b/${slug}/portal`; return; }
     setDone(d);
   }
 
   if (loadErr) return <TesterShell><div className="card"><h1>Invite not found</h1><p className="muted" style={{ marginTop: 8 }}>{loadErr}</p></div></TesterShell>;
   if (!info) return <TesterShell><p className="muted">Loading…</p></TesterShell>;
 
-  if (done) {
+  if (done && done.status !== 'joined') {
+    return (
+      <TesterShell>
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="eyebrow">Welcome back</div>
+          {done.status === 'emailed' ? (
+            <>
+              <h1>Check your email</h1>
+              <p className="muted" style={{ margin: 0 }}>This email has already joined {info.product || info.name}. We’ve sent a link to {f.email} — open it to get back to your reports. It can take a minute; check spam too.</p>
+            </>
+          ) : (
+            <>
+              <h1>You’ve already joined</h1>
+              <p className="muted" style={{ margin: 0 }}>This email is already in the {info.product || info.name} beta. Open the personal link you saved when you joined — it works on any device. Lost it? Ask the team for a new one; your reports are kept.</p>
+            </>
+          )}
+        </div>
+      </TesterShell>
+    );
+  }
+
+  if (done?.portalUrl) {
+    const portalLink = done.portalUrl;
     return (
       <TesterShell>
         <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div className="eyebrow">{done.rejoined ? 'Welcome back' : 'You’re in'}</div>
+          <div className="eyebrow">You’re in</div>
           <h1>Thanks for testing {info.product || info.name}!</h1>
           {done.welcome && <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{done.welcome}</p>}
           <p className="muted" style={{ margin: 0 }}>
-            This is your personal link. Bookmark it or save it somewhere — it’s how you get back to your reports and our replies on any device. Don’t share it.
+            This is your personal link{done.emailed ? ' (we’ve also emailed it to you)' : ''}. Save it somewhere — it’s how you get back to your reports and our replies on another device. Don’t share it: anyone with it can post as you.
           </p>
-          <code className="link">{done.portalUrl}</code>
+          <code className="link">{portalLink}</code>
           <div className="row">
-            <button className="btn" type="button" onClick={() => navigator.clipboard.writeText(done.portalUrl)}>Copy link</button>
+            <button className="btn" type="button" onClick={() => navigator.clipboard.writeText(portalLink).then(() => setCopied(true)).catch(() => {})}>{copied ? 'Copied' : 'Copy link'}</button>
             <a className="btn primary" href={`/b/${slug}/portal`}>Report a bug or idea</a>
           </div>
         </div>

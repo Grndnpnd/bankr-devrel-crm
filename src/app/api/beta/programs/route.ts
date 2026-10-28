@@ -3,7 +3,7 @@ import type { Prisma } from '@prisma/client';
 import { getSession } from '@/lib/auth';
 import { can } from '@/lib/access';
 import { prisma } from '@/lib/prisma';
-import { cleanQuestions, joinUrl, token, uniqueSlug } from '@/lib/beta';
+import { checkProgramInput, cleanQuestions, joinUrl, token, uniqueSlug } from '@/lib/beta';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +38,8 @@ export async function POST(req: Request) {
   const b = await req.json().catch(() => ({}));
   const name = String(b?.name ?? '').trim().slice(0, 100);
   if (!name) return NextResponse.json({ error: 'name the program (e.g. “Wallet v2 beta”)' }, { status: 400 });
+  const bad = await checkProgramInput(b);
+  if (bad) return NextResponse.json({ error: bad }, { status: 400 });
   const p = await prisma.betaProgram.create({
     data: {
       name, slug: await uniqueSlug(b?.slug || name), joinToken: token(18),

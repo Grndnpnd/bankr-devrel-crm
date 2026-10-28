@@ -126,6 +126,10 @@ export async function updateTask(actor: Actor, id: string, input: TaskInput): Pr
   if (task.source === 'beta' && data.status === 'DONE' && before.status !== 'DONE') {
     await prisma.testerReport.updateMany({ where: { taskId: id, status: { in: ['new', 'triaged', 'in_progress'] } }, data: { status: 'fixed' } });
   }
+  // …and back out of Done (reopened on the board) → the tester sees it's being looked at again.
+  if (task.source === 'beta' && before.status === 'DONE' && data.status && data.status !== 'DONE') {
+    await prisma.testerReport.updateMany({ where: { taskId: id, status: 'fixed' }, data: { status: data.status === 'IN_PROGRESS' ? 'in_progress' : 'triaged' } });
+  }
   await announce(actor, before, task);
   return task;
 }

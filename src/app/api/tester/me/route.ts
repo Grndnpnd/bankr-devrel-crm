@@ -17,11 +17,14 @@ export async function GET(req: Request) {
     include: { replies: { where: { authorType: 'team' }, select: { createdAt: true } } },
   });
   const p = tester.program;
-  // Plain live chat, signed as this tester so the team sees who they're talking to.
+  // Plain live chat. A signature tells Plain the email is verified, so we only sign addresses the
+  // tester has proved they own; otherwise Plain's widget asks for the email and checks it with a code.
   const chat = plainChatConfigured() && p.plainEnabled ? {
     appId: process.env.PLAIN_CHAT_APP_ID,
-    customerDetails: { email: tester.email, fullName: tester.name, shortName: tester.name.split(' ')[0] },
-    customerDetailsSignature: chatSignature(tester.email),
+    ...(tester.emailVerifiedAt ? {
+      customerDetails: { email: tester.email, fullName: tester.name, shortName: tester.name.split(' ')[0] },
+      customerDetailsSignature: chatSignature(tester.email),
+    } : { requireAuthentication: true }),
     threadDetails: p.plainLabelTypeId ? { labelTypeIds: [p.plainLabelTypeId] } : undefined,
     title: p.name,
   } : null;

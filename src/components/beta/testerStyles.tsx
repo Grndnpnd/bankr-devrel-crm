@@ -34,6 +34,8 @@ export const TESTER_CSS = `
 .tp .dot{width:8px;height:8px;border-radius:4px;background:var(--accent);flex-shrink:0;margin-top:8px}
 .tp .bubble{border-radius:12px;padding:10px 12px;max-width:90%;white-space:pre-wrap;word-break:break-word}
 .tp .bubble.team{background:var(--info-bg);align-self:flex-start} .tp .bubble.tester{background:var(--bg);border:1px solid var(--line);align-self:flex-end}
+.tp .thumb{display:block;width:120px;height:84px;object-fit:cover;border-radius:10px;border:1px solid var(--line)}
+.tp .ok{color:var(--ok);background:var(--ok-bg);border-radius:10px;padding:10px 12px;font-size:14px}
 .tp code.link{display:block;font:13px ui-monospace,monospace;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;word-break:break-all}
 `;
 
