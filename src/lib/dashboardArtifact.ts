@@ -63,11 +63,11 @@ footer { color:var(--muted); font-size:12px; text-align:center; padding:0 16px 2
 (function () {
   var PANELS = JSON.parse(document.getElementById('panels').textContent);
   var COLORS = ['#e8590c', '#1971c2', '#2f9e44', '#9c36b5', '#c2255c', '#0c8599', '#e67700', '#5f3dc4', '#868e96', '#495057'];
-  var NOUN = { beta_reports: 'report', beta_testers: 'tester', beta_outreach: 'message', beta_payouts: 'payout', artifacts: 'artifact' };
+  var NOUN = { beta_reports: 'report', beta_testers: 'tester', beta_outreach: 'message', beta_payouts: 'payout', artifacts: 'artifact', artifact_data: 'row' };
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function svg(tag, attrs) { var e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (var k in attrs) e.setAttribute(k, attrs[k]); return e; }
-  function fmt(n) { return typeof n === 'number' ? n.toLocaleString() : String(n); }
-  function cell(v) { if (typeof v === 'boolean') return v ? 'Yes' : 'No'; if (typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}T/.test(v)) return v.slice(0, 10); return v == null || v === '' ? '—' : String(v); }
+  function fmt(n) { return typeof n !== 'number' ? String(n) : Number.isInteger(n) ? n.toLocaleString() : Number(n.toPrecision(6)).toLocaleString(undefined, { maximumFractionDigits: 10 }); }
+  function cell(v) { if (typeof v === 'boolean') return v ? 'Yes' : 'No'; if (typeof v === 'number') return fmt(v); if (typeof v === 'string' && /^\\d{4}-\\d{2}-\\d{2}T/.test(v)) return v.slice(0, 10); return v == null || v === '' ? '—' : String(v); }
   function matched(spec, n) { var w = NOUN[spec.source] || 'project'; return n + ' ' + w + (n === 1 ? '' : 's'); }
 
   var cards = PANELS.map(function (p) {

@@ -136,6 +136,11 @@ export const SOURCES: Record<string, SourceDef> = {
     ],
     defaultColumns: ['tester', 'amount', 'token', 'reason', 'sent_at'], defaultSort: 'sent_at',
   },
+  artifact_data: {
+    // Fields come from the table itself (lib/artifactTables), so they're filled in when a spec runs.
+    key: 'artifact_data', label: 'Artifact data', row: 'one row of a table inside an artifact: a data file it loads (JSON/CSV) or a collection in its data store',
+    fields: [], defaultColumns: [], defaultSort: '',
+  },
   artifacts: {
     key: 'artifacts', label: 'Artifacts', row: 'one artifact (page, dashboard, doc) the viewer can open',
     fields: [
@@ -191,6 +196,9 @@ export interface AnalyticsSpec {
   source?: string;
   /** Beta sources: the program's id (resolved from a name when the panel is built). Unset = every program the viewer can see. */
   program?: string;
+  /** artifact_data: the artifact's id (resolved from a title) and which of its tables. */
+  artifact?: string;
+  table?: string;
   // stat: metric over (optional) metricField. bar/pie/line: groupBy + metric. table: columns.
   metric?: Metric;
   metricField?: string;     // required for sum/avg/min/max
@@ -221,13 +229,16 @@ function optionLabel(f: FieldDef | undefined, v: unknown) {
   }).join(',');
 }
 
-/** Validate + normalize a spec coming from the LLM. Rejects anything off-vocabulary. */
-export function validateSpec(raw: any): SpecValidation {
+/**
+ * Validate + normalize a spec coming from the LLM. Rejects anything off-vocabulary.
+ * `table` gives the fields of a source whose fields live in the data (artifact_data).
+ */
+export function validateSpec(raw: any, table?: SourceDef): SpecValidation {
   const errors: string[] = [];
   if (!raw || typeof raw !== 'object') return { ok: false, errors: ['spec is not an object'] };
 
   if (raw.source !== undefined && raw.source !== null && !SOURCES[raw.source]) errors.push(`invalid source: ${raw.source} (use one of ${SOURCE_KEYS.join(', ')})`);
-  const src = SOURCES[raw.source] ?? SOURCES.submissions;
+  const src = table ?? SOURCES[raw.source] ?? SOURCES.submissions;
   const field = (k: unknown) => src.fields.find((f) => f.key === k);
   const groupable = keysOf(src, (f) => f.groupable);
   const numeric = keysOf(src, (f) => f.metric);
@@ -271,6 +282,7 @@ export function validateSpec(raw: any): SpecValidation {
       type, title, metric,
       ...(raw.source && raw.source !== 'submissions' ? { source: raw.source } : {}),
       ...(src.beta && typeof raw.program === 'string' && raw.program.trim() ? { program: raw.program.trim() } : {}),
+      ...(raw.source === 'artifact_data' ? { artifact: String(raw.artifact ?? '').trim(), table: String(raw.table ?? '').trim() } : {}),
       metricField: metric !== 'count' ? raw.metricField : undefined,
       groupBy: grouped ? raw.groupBy : undefined,
       ...(groupDef?.kind === 'date' ? { bucket: (['day', 'week', 'month'].includes(raw.bucket) ? raw.bucket : 'week') as Bucket } : {}),
@@ -417,8 +429,8 @@ export interface PanelResult {
 const PALETTE = ['#F5A623', '#3B82F6', '#10B981', '#8B5CF6', '#EC4899', '#14B8A6', '#EF4444', '#F59E0B', '#6B7280', '#64748B'];
 
 /** Execute a validated spec against the rows of its source, returning render-ready data. */
-export function executeSpec(spec: AnalyticsSpec, submissions: Submission[]): PanelResult {
-  const src = sourceOf(spec);
+export function executeSpec(spec: AnalyticsSpec, submissions: Submission[], table?: SourceDef): PanelResult {
+  const src = table ?? sourceOf(spec);
   const rows = applyFilters(submissions, spec.filters ?? [], src);
   const metricLabel = spec.metric === 'count' || !spec.metric ? 'count' : `${spec.metric} of ${spec.metricField}`;
 
@@ -435,7 +447,8 @@ export function executeSpec(spec: AnalyticsSpec, submissions: Submission[]): Pan
       const v = getField(s, by);
       return kind === 'date' ? timeOf(v) ?? -Infinity : typeof v === 'number' ? v : kind === 'numeric' ? -Infinity : String(v ?? '').toLowerCase();
     };
-    const sorted = [...rows].sort((a, b) => {
+    // No order to apply (a table inside an artifact, unsorted): keep the data's own order.
+    const sorted = !by ? rows : [...rows].sort((a, b) => {
       const x = key(a), y = key(b);
       return (x < y ? -1 : x > y ? 1 : 0) * dir;
     });
@@ -484,7 +497,8 @@ export function executeSpec(spec: AnalyticsSpec, submissions: Submission[]): Pan
     label, value: aggregate(group, spec.metric ?? 'count', spec.metricField),
   }));
   series.sort((a, b) => (spec.sort === 'asc' ? a.value - b.value : b.value - a.value));
-  if (spec.limit) series = series.slice(0, spec.limit);
+  // Hundreds of groups (every ticker, every strategy) can't be read as bars or slices: keep the top ones.
+  series = series.slice(0, spec.limit ?? (spec.type === 'pie' ? 12 : 30));
   return { type: spec.type, title: spec.title, series, metricLabel, matched: rows.length };
 }
 

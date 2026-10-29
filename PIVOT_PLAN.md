@@ -71,6 +71,8 @@ dashboard). This plan turns the DevRel pipeline into a community + support works
     (build_panel there saves the panel).
   - Dashboards are artifacts (lib/dashboardArtifact) that read live data through a new `crm` page capability
     (window.claude.use('crm').query(spec)), as whoever opens them; Claude can also publish its own HTML using it.
+  - An artifact's own data is a source too (artifact_data, lib/artifactTables): its JSON/CSV files and data-store
+    collections become tables with inferred fields (epoch timestamps → dates). inspect_artifact shows them to the agent.
 
 ## The shared building blocks
 

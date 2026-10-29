@@ -13,6 +13,7 @@ import { LABEL, effectiveSeverity, isOpen } from '@/lib/betaModel';
 import { describeSources, SOURCE_KEYS, sourceOf, type AnalyticsSpec } from '@/lib/analyticsSpec';
 import { DataError, loadRows, resolveProgram, runSpec, sourcesFor, visiblePrograms, canReadBeta, type DataViewer } from '@/lib/dataSources';
 import { dashboardHtml, DASHBOARD_CAPABILITIES, type DashboardPanel } from '@/lib/dashboardArtifact';
+import { artifactTables } from '@/lib/artifactTables';
 
 const APP_URL = () => (process.env.APP_URL || '').replace(/\/$/, '');
 const programUrl = (id: string) => `${APP_URL()}/beta/${id}`;
@@ -22,8 +23,10 @@ const err = (message: string): ToolExecResult => out({ error: message });
 
 /** The spec properties every data tool takes (one source at a time). */
 export const SPEC_PROPS = {
-  source: { type: 'string', enum: SOURCE_KEYS, description: 'which data: beta_reports, beta_testers, beta_outreach (messages to testers), beta_payouts, artifacts, or submissions (the pipeline). Call describe_data for each source\'s fields.' },
+  source: { type: 'string', enum: SOURCE_KEYS, description: 'which data: artifact_data (the data INSIDE one artifact: its data files or data store; needs artifact + table, see inspect_artifact), beta_reports, beta_testers, beta_outreach (messages to testers), beta_payouts, artifacts (the list of artifacts), or submissions (the pipeline). Call describe_data for the fixed sources\' fields.' },
   program: { type: 'string', description: 'beta sources: the program\'s name (e.g. "Texting"); leave out for every program the user can see' },
+  artifact: { type: 'string', description: 'artifact_data: the artifact\'s title or id' },
+  table: { type: 'string', description: 'artifact_data: which of its tables (a name from inspect_artifact, e.g. "positions.json" or "db:tasks")' },
   type: { type: 'string', enum: ['stat', 'bar', 'pie', 'line', 'table'], description: 'line = a time series (groupBy a date field)' },
   title: { type: 'string', description: 'short human title' },
   metric: { type: 'string', enum: ['count', 'sum', 'avg', 'min', 'max'] },
@@ -69,7 +72,7 @@ export const DATA_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'query_data',
-      description: 'Exact counts, breakdowns, time series and lists over beta programs (reports, testers, messages, payouts) or artifacts, computed by code. ALWAYS use this for beta numbers ("how many bugs this week", "reports by severity", "testers by stage", "payouts by token"); never count yourself. For the DevRel pipeline use query_pipeline instead.',
+      description: 'Exact counts, breakdowns, time series and lists over beta programs (reports, testers, messages, payouts), the data inside an artifact (source artifact_data), or the list of artifacts, computed by code. ALWAYS use this for beta numbers ("how many bugs this week", "reports by severity", "testers by stage", "payouts by token"); never count yourself. For the DevRel pipeline use query_pipeline instead.',
       parameters: { type: 'object', properties: SPEC_PROPS, required: ['source', 'type'] },
     },
   },
@@ -97,6 +100,14 @@ export const DATA_TOOLS: ToolDef[] = [
       name: 'get_beta_report',
       description: 'The full record of one beta report: description, steps, expected/actual, severity (tester\'s and the team\'s), status, who it waits on, next step, links, the conversation with the tester, and messages about it. Pass the id from search_beta_reports.',
       parameters: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'inspect_artifact',
+      description: 'Look inside one artifact: what the page shows (its headings) and the data it carries: each table from its data files (JSON/CSV it loads) and its data store, with row counts, every field\'s type, ranges or example values, and a few sample rows. Call this whenever the user wants numbers, panels or a dashboard FROM an artifact ("pull data from the Traktor dashboard", "chart what that artifact tracks"); then use query_data / build_panel / build_dashboard with source "artifact_data", artifact and table.',
+      parameters: { type: 'object', properties: { artifact: { type: 'string', description: 'its title (partial is fine) or id' } }, required: ['artifact'] },
     },
   },
   {
@@ -162,7 +173,7 @@ export async function runDataTool(name: string, args: any, ctx: ToolContext): Pr
   try {
     switch (name) {
       case 'describe_data':
-        return out({ sources: describeSources(sourcesFor(v)), note: 'Rows hold labels (e.g. kind "UX Feedback"); dates are ISO. Beta sources take an optional program.' });
+        return out({ sources: describeSources(sourcesFor(v)), note: 'Rows hold labels (e.g. kind "UX Feedback"); dates are ISO. Beta sources take an optional program. artifact_data has no fixed fields: inspect_artifact shows each table\'s.' });
 
       case 'list_beta_programs': {
         if (!canReadBeta(v)) return err('Beta programs need task-board access.');
@@ -199,8 +210,27 @@ export async function runDataTool(name: string, args: any, ctx: ToolContext): Pr
       }
 
       case 'query_data': {
-        const { spec, result, programName } = await runSpec(args, v);
-        return out({ ...(programName ? { program: programName } : {}), source: sourceOf(spec).key, ...result });
+        const { spec, result, programName, artifactTitle } = await runSpec(args, v);
+        return out({ ...(programName ? { program: programName } : {}), ...(artifactTitle ? { artifact: artifactTitle, table: spec.table } : {}), source: sourceOf(spec).key, ...result });
+      }
+
+      case 'inspect_artifact': {
+        const { artifact: a, tables } = await artifactTables(v, args?.artifact);
+        const plain = (h: string) => h.replace(/<[^>]+>/g, ' ').replace(/&mdash;/g, '—').replace(/&amp;/g, '&').replace(/&[a-z#0-9]+;/gi, ' ').replace(/\s+/g, ' ').trim();
+        const body = (a.html.match(/<body[^>]*>([\s\S]*)/i)?.[1] ?? a.html).replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ');
+        const headings = Array.from(a.html.matchAll(/<h[1-4][^>]*>([\s\S]*?)<\/h[1-4]>/gi)).map((m) => plain(m[1])).filter(Boolean).slice(0, 30);
+        const short = (row: Record<string, unknown>) => Object.fromEntries(Object.entries(row).map(([k, x]) => [k, typeof x === 'string' && x.length > 80 ? x.slice(0, 80) + '…' : x]));
+        return out({
+          id: a.id, title: a.title, kind: a.kind, description: a.description, url: artifactUrl(a.id),
+          page_headings: headings, page_text: plain(body).slice(0, 1200),
+          tables: tables.map((t) => ({
+            table: t.name, from: t.origin, rows: t.rows.length, fields: t.info,
+            ...(t.rows.length === 1 ? { values: short(t.rows[0]) } : { sample_rows: t.rows.slice(0, 3).map(short) }),
+          })),
+          ...(tables.length
+            ? { how: 'Chart a table with source "artifact_data", artifact (this title or id) and table; fields are the keys above. Dates are ISO (epoch timestamps were converted), so they group by day/week/month.' }
+            : { note: 'This artifact keeps no data files or stored data: its numbers are written into the page, so there is nothing live to chart from it.' }),
+        });
       }
 
       case 'search_beta_reports': {
@@ -264,11 +294,12 @@ export async function runDataTool(name: string, args: any, ctx: ToolContext): Pr
         if (!raw.length) return err('A dashboard needs at least one panel.');
         const panels: DashboardPanel[] = [];
         const problems: string[] = [];
-        let programName: string | undefined;
+        let programName: string | undefined, artifactTitle: string | undefined;
         for (const [i, p] of raw.entries()) {
           try {
             const run = await runSpec(withProgram(p, args?.program), v);
             programName ??= run.programName;
+            artifactTitle ??= run.artifactTitle;
             panels.push({ spec: run.spec as AnalyticsSpec, ...(p?.wide ? { wide: true } : {}) });
           } catch (e) {
             if (e instanceof DataError && e.code !== 'invalid') throw e;
@@ -277,7 +308,7 @@ export async function runDataTool(name: string, args: any, ctx: ToolContext): Pr
         }
         if (problems.length) return out({ error: 'Some panels are invalid — fix them and call build_dashboard again.', problems });
         const title = String(args?.title || 'Dashboard').trim().slice(0, 120);
-        const subtitle = String(args?.description ?? '').trim() || (programName ? `${programName} beta` : undefined);
+        const subtitle = String(args?.description ?? '').trim() || (programName ? `${programName} beta` : artifactTitle ? `From ${artifactTitle}` : undefined);
         const a = await createArtifact(v, {
           title, html: dashboardHtml(title, panels, subtitle), description: subtitle ?? null, kind: 'dashboard',
           tags: ['dashboard', ...(panels.some((p) => sourceOf(p.spec).beta) ? ['beta'] : [])],

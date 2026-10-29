@@ -14,13 +14,15 @@ function fmtValue(spec: AnalyticsSpec, n: number): string {
   if (spec.metric && spec.metric !== 'count' && spec.metricField && USD_FIELDS.has(spec.metricField)) {
     return formatUsd(n);
   }
-  return n.toLocaleString();
+  return num(n);
 }
 
 const ISO_TIME = /^\d{4}-\d{2}-\d{2}T/;
-const cell = (v: unknown) => (typeof v === 'boolean' ? (v ? 'Yes' : 'No') : typeof v === 'string' && ISO_TIME.test(v) ? v.slice(0, 10) : String(v ?? '—'));
+// Floats from data files arrive as 0.0010890000000000001: show 6 significant digits.
+const num = (n: number) => (Number.isInteger(n) ? n.toLocaleString() : Number(n.toPrecision(6)).toLocaleString(undefined, { maximumFractionDigits: 10 }));
+const cell = (v: unknown) => (typeof v === 'boolean' ? (v ? 'Yes' : 'No') : typeof v === 'number' ? num(v) : typeof v === 'string' && ISO_TIME.test(v) ? v.slice(0, 10) : String(v ?? '—'));
 const rowNoun = (spec: AnalyticsSpec, n: number) => {
-  const noun = { beta_reports: 'report', beta_testers: 'tester', beta_outreach: 'message', beta_payouts: 'payout', artifacts: 'artifact' }[spec.source ?? ''] ?? 'project';
+  const noun = { beta_reports: 'report', beta_testers: 'tester', beta_outreach: 'message', beta_payouts: 'payout', artifacts: 'artifact', artifact_data: 'row' }[spec.source ?? ''] ?? 'project';
   return `${n} ${noun}${n === 1 ? '' : 's'}`;
 };
 

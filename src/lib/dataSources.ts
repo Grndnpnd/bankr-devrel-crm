@@ -14,6 +14,7 @@ import { loadChatContext } from '@/lib/chatData';
 import { LABEL, effectiveSeverity, isOpen, OUTREACH_OPEN, values, BUG_OPEN } from '@/lib/betaModel';
 import { validateSpec, executeSpec, sourceOf, SOURCES, type AnalyticsSpec, type PanelResult } from '@/lib/analyticsSpec';
 import type { SessionUser } from '@/lib/auth';
+import { artifactTable } from '@/lib/artifactTables';
 
 export interface DataViewer { id: string; role: Role | string; email?: string; name?: string | null }
 
@@ -188,11 +189,22 @@ export async function loadRows(source: string, v: DataViewer, opts: { program?: 
       }));
     }
   }
+  // artifact_data runs through runSpec, which loads the artifact's table and its fields together.
   throw new DataError('invalid', `Unknown data source ${source}.`);
 }
 
-/** Validate a spec, resolve its program, and run it as this viewer. */
-export async function runSpec(raw: unknown, v: DataViewer): Promise<{ spec: AnalyticsSpec; result: PanelResult; programName?: string }> {
+/** Validate a spec, resolve its program (or artifact), and run it as this viewer. */
+export async function runSpec(raw: unknown, v: DataViewer): Promise<{ spec: AnalyticsSpec; result: PanelResult; programName?: string; artifactTitle?: string }> {
+  if ((raw as any)?.source === 'artifact_data') {
+    // An artifact's own table: its fields come from the data, so load it before validating.
+    const r = raw as any;
+    if (!r.artifact) throw new DataError('invalid', 'artifact_data needs `artifact` (its title or id) and `table` — call inspect_artifact to see its tables.');
+    const { artifact, table, source } = await artifactTable(v, r.artifact, r.table);
+    const check = validateSpec({ ...r, table: table.name }, source);
+    if (!check.ok) throw new DataError('invalid', check.errors.join('; '));
+    const spec = { ...check.spec!, artifact: artifact.id, table: table.name };
+    return { spec, result: executeSpec(spec, table.rows as any[], source), artifactTitle: artifact.title };
+  }
   const check = validateSpec(raw);
   if (!check.ok) throw new DataError('invalid', check.errors.join('; '));
   const spec = check.spec!;
@@ -209,5 +221,5 @@ export async function runSpec(raw: unknown, v: DataViewer): Promise<{ spec: Anal
 /** The sources this person can read. */
 export function sourcesFor(v: DataViewer) {
   return Object.keys(SOURCES).filter((k) =>
-    k === 'submissions' ? can(v.role, 'devrel.view') : k === 'artifacts' ? true : canReadBeta(v));
+    k === 'submissions' ? can(v.role, 'devrel.view') : k === 'artifacts' || k === 'artifact_data' ? true : canReadBeta(v));
 }
