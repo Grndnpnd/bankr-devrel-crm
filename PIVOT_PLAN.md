@@ -62,6 +62,15 @@ dashboard). This plan turns the DevRel pipeline into a community + support works
     field by field every 5 minutes (new reports right away). Shared boards (Outreach, Payouts) are scoped by their
     Program column. If both sides change the same field between syncs, Notion's edit wins.
   - Needs: NOTION_TOKEN (an internal Notion integration, shared with each board) on the web service and Cron Tick.
+- Beta and artifacts in the assistant, panels and dashboards (10-29):
+  - Panels read a source: the pipeline (as before) or beta reports, testers, messages, payouts, artifacts
+    (lib/analyticsSpec SOURCES). Non-pipeline panels run on the server as the viewer (POST /api/panels/run,
+    lib/dataSources), so a shared panel never shows a program they can't see. Line charts, date buckets, "7d" filters.
+  - Agent tools (lib/agentDataTools): list_beta_programs, get_beta_program, query_data, search_beta_reports,
+    get_beta_report, describe_data, find_artifacts, build_dashboard; build_panel takes a source. Same tools over MCP
+    (build_panel there saves the panel).
+  - Dashboards are artifacts (lib/dashboardArtifact) that read live data through a new `crm` page capability
+    (window.claude.use('crm').query(spec)), as whoever opens them; Claude can also publish its own HTML using it.
 
 ## The shared building blocks
 

@@ -43,6 +43,7 @@ async function handle(req: Request) {
   return NextResponse.json({
     answer: result.answer,
     panelSpec: result.panelSpec,
+    artifacts: result.artifacts,
     toolTrace: result.toolTrace,
     ...(result.capped ? { capped: true } : {}),
   });

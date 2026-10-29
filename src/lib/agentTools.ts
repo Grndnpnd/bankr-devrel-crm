@@ -19,6 +19,9 @@ import { REPORT_SECTION_KINDS, REPORT_COLUMNS, SORT_FIELDS, validateReportSpec }
 import { resolveUserWebhook } from '@/lib/slack';
 import { getWeights } from '@/lib/scoreConfig';
 import { validateSchedule, nextRunFrom, JOB_HANDLERS, SCHEDULE_PRESETS, CORE_TYPES } from '@/lib/scheduler';
+import { DATA_TOOLS, DATA_TOOL_NAMES, SPEC_PROPS, runDataTool } from '@/lib/agentDataTools';
+import { isServerSource } from '@/lib/analyticsSpec';
+import { runSpec, DataError } from '@/lib/dataSources';
 
 /**
  * Stage 1 agent tools — all READ-ONLY. The harness is built so write tools
@@ -39,10 +42,11 @@ export const AGENT_TOOLS: ToolDef[] = [
       parameters: {
         type: 'object',
         properties: {
-          type: { type: 'string', enum: ['stat', 'bar', 'pie', 'table'], description: 'stat=single number, bar/pie=grouped, table=rows' },
+          type: { type: 'string', enum: ['stat', 'bar', 'pie', 'line', 'table'], description: 'stat=single number, bar/pie=grouped, line=over time (groupBy submitted_at), table=rows' },
           metric: { type: 'string', enum: ['count', 'sum', 'avg', 'min', 'max'], description: 'default count' },
           metricField: { type: 'string', enum: [...NUMERIC_FIELDS], description: 'required unless metric=count' },
-          groupBy: { type: 'string', enum: [...GROUPABLE_FIELDS], description: 'required for bar/pie' },
+          groupBy: { type: 'string', enum: [...GROUPABLE_FIELDS], description: 'required for bar/pie/line' },
+          bucket: { type: 'string', enum: ['day', 'week', 'month'], description: 'when groupBy is a date' },
           columns: { type: 'array', items: { type: 'string', enum: [...TABLE_COLUMNS] }, description: 'for table' },
           filters: {
             type: 'array',
@@ -425,40 +429,21 @@ export const AGENT_TOOLS: ToolDef[] = [
     function: {
       name: 'build_panel',
       description:
-        'Create a saved analytics panel (chart/stat/table) the user can pin to their dashboard. Use when the user asks to "make a panel/chart" or "add this to my dashboard". Returns a validated spec the UI offers to save. Same shape as query_pipeline.',
+        'Create ONE saved analytics panel (chart/stat/table) the user can pin to their dashboard. Use when the user asks to "make a panel/chart" or "add this to my dashboard". Works on the pipeline (source omitted or "submissions"; fields as in query_pipeline) and on beta / artifact data (source + optional program, same shape as query_data). Returns a validated spec the UI offers to save. For several charts at once, use build_dashboard.',
       parameters: {
         type: 'object',
-        properties: {
-          type: { type: 'string', enum: ['stat', 'bar', 'pie', 'table'] },
-          title: { type: 'string', description: 'short human title for the panel' },
-          metric: { type: 'string', enum: ['count', 'sum', 'avg', 'min', 'max'] },
-          metricField: { type: 'string', enum: [...NUMERIC_FIELDS] },
-          groupBy: { type: 'string', enum: [...GROUPABLE_FIELDS] },
-          columns: { type: 'array', items: { type: 'string', enum: [...TABLE_COLUMNS] } },
-          filters: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                field: { type: 'string', enum: [...FILTERABLE_FIELDS] },
-                op: { type: 'string', enum: ['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'contains_any', 'has', 'is_empty', 'not_empty'] },
-                value: { description: 'for contains_any, a comma-separated list (e.g. "Singapore,Hong Kong,Japan") matching if the field contains ANY of them — useful for region/location filters' },
-              },
-              required: ['field', 'op'],
-            },
-          },
-          sort: { type: 'string', enum: ['asc', 'desc'] },
-          limit: { type: 'number' },
-        },
+        properties: { ...SPEC_PROPS, source: { ...SPEC_PROPS.source, description: 'omit for the pipeline; otherwise beta_reports, beta_testers, beta_outreach, beta_payouts or artifacts' } },
         required: ['type', 'title'],
       },
     },
   },
+  ...DATA_TOOLS,
 ];
 
 export interface ToolExecResult {
   result: string;          // JSON string fed back to the model
   panelSpec?: AnalyticsSpec; // surfaced to the client when build_panel is used
+  artifact?: { id: string; title: string; url: string }; // a dashboard build_dashboard made
 }
 
 const findProject = (submissions: Submission[], q: string): Submission | undefined => {
@@ -511,8 +496,9 @@ export async function runTool(name: string, args: any, submissions: Submission[]
   if (WRITE_TOOLS[name] && !can(ctx.role, WRITE_TOOLS[name])) {
     return { result: JSON.stringify({ error: `You don't have permission to ${name.replace('_', ' ')}.` }) };
   }
+  if (DATA_TOOL_NAMES.has(name)) return runDataTool(name, args, ctx);
   if (name === 'query_pipeline') {
-    const v = validateSpec(args);
+    const v = validateSpec({ ...args, source: undefined, program: undefined });
     if (!v.ok) return { result: JSON.stringify({ error: 'invalid query', details: v.errors }) };
     const out = executeSpec(v.spec!, submissions);
     return { result: JSON.stringify(out) };
@@ -725,6 +711,7 @@ export async function runTool(name: string, args: any, submissions: Submission[]
       const panels = rows.map((r: any) => ({
         title: r.title,
         type: r.spec?.type,
+        source: r.spec?.source ?? 'submissions',
         shows: r.spec?.groupBy ? `${r.spec?.metric || 'count'} by ${r.spec.groupBy}` : (r.spec?.metric || 'count'),
         mine: r.ownerId === ctx.userId,
         shared: r.isPublic,
@@ -1032,6 +1019,17 @@ export async function runTool(name: string, args: any, submissions: Submission[]
       changes: changes.map((c) => ({ field: c.field, op: c.op, to: c.value, from: (c as any).currentValue })),
       message: `This is a destructive edit, so it was queued (NOT applied). Show the user a clear before → after diff of each change on "${full.project}", then ask them to reply "approve" or "reject". If they approve, call resolve_proposal with this proposalId. It's also in the web Review inbox. DO NOT call more tools now — just show the diff and ask.`,
     }) };
+  }
+
+  if (name === 'build_panel' && isServerSource(args ?? {})) {
+    // Beta / artifact panels run on the server as the person viewing them; check it runs for this user now.
+    try {
+      const { spec, result, programName } = await runSpec(args, { id: ctx.userId, role: ctx.role ?? '', email: ctx.userEmail });
+      return { result: JSON.stringify({ ok: true, title: spec.title, ...(programName ? { program: programName } : {}), preview: result }), panelSpec: spec };
+    } catch (e) {
+      if (e instanceof DataError) return { result: JSON.stringify({ error: 'invalid panel', details: [e.message] }) };
+      throw e;
+    }
   }
 
   if (name === 'build_panel') {

@@ -1,12 +1,23 @@
 import { chatWithTools, type ToolMessage } from '@/lib/llm';
-import { AGENT_TOOLS, runTool } from '@/lib/agentTools';
+import { AGENT_TOOLS, runTool, type ToolExecResult } from '@/lib/agentTools';
 import type { AnalyticsSpec } from '@/lib/analyticsSpec';
 
 export const MAX_STEPS = 10;
 
-export const AGENT_SYSTEM = `You are the BANKRcrm assistant — a helpful analyst embedded in the DevRel pipeline of crypto project submissions. You help the team understand their pipeline and build dashboard panels.
+export const AGENT_SYSTEM = `You are the BANKRcrm assistant — a helpful analyst embedded in the team's CRM. It holds the DevRel pipeline of crypto project submissions, the beta programs (also called campaigns or betas: testers, their reports, messages to testers, payouts, calls) and the team's artifacts (pages, dashboards, docs). You help the team understand all of it and build dashboard panels and dashboards.
 
-You have tools:
+Beta programs and artifacts:
+- list_beta_programs: every program (campaign) this user can see with its headline numbers. Start here for "how are the betas going", "which campaign has the most open bugs".
+- get_beta_program: one program in depth (overview, coverage by test area, lead/sender, latest reports).
+- query_data: exact numbers over beta_reports / beta_testers / beta_outreach / beta_payouts / artifacts — counts, breakdowns, time series, tables. ALWAYS use it for beta figures; never count rows yourself. Pass program:"<name>" to scope to one program. Dates filter with "7d"-style values (created_at gte "7d" = the last 7 days). Call describe_data when unsure of a field.
+- search_beta_reports / get_beta_report: find what testers reported and read one report in full (with the conversation).
+- find_artifacts: the artifacts this user can open.
+- build_panel with source set: one beta/artifact panel for their dashboard.
+- build_dashboard: a live dashboard artifact with several panels (refreshes itself; each viewer sees only data they may see). When asked for "a dashboard" for a program, build 6–10 panels that tell its story (headline stats first, then trends and breakdowns, then the tables people act on) and give the link.
+- Beta data is limited to the programs this user may see (admins, the program's teams, its lead/sender/creator). If a tool says they don't have access, say so plainly and suggest asking someone on that program's team; never guess at numbers for it.
+- Report kinds are Bug, UX Feedback, Feature Request, Question, Praise. A bug's severity is the team's call when set, else the tester's. "Open" bugs are New, Triaged, Escalated, Fix In Review, Fix Live and Retest Needed.
+
+DevRel pipeline tools:
 - query_pipeline: exact aggregates/lists computed deterministically by code. ALWAYS use this for precise numbers ("how many", "average", "list top N"). Never compute numbers yourself.
 - get_pipeline_summary: a privacy-trimmed snapshot of all projects (incl. last contact + recent outreach). Use for judgment/cross-project questions ("who should I reach out to", "who's been contacted this week").
 - get_submission_detail: the full record for ONE project incl. narrative fields. Use to go deep on a specific project ("tell me about X", "summarize X's pitch").
@@ -44,8 +55,9 @@ Rules:
 - Be concise and scannable. You produce analysis and summaries, not audited reports.
 - CONVERSATIONAL FOLLOW-THROUGH: you are in a multi-turn conversation — use earlier messages as context. When you offered an action and the user confirms ("yeah", "do it", "update it", "go ahead", "approve"), CARRY OUT that action now using the details from earlier in the conversation — do NOT ask them to repeat information they already gave. Example: user says "create Acme with tagline X, raised $Y, needs GMT+partnerships" → you find it exists and offer to update → user says "yeah update it" → you immediately call propose_edit on Acme with tagline=X, funding=$Y, needs=[GMT, partnerships] from their FIRST message. Only ask a clarifying question if the needed detail genuinely was never provided.
 - When a propose_edit gets QUEUED (destructive), show the user a clear before → after diff and ask them to reply "approve" or "reject". If they approve, call resolve_proposal. Additive edits apply silently — no diff/confirm needed.
-- Your write capabilities are: creating new project cards (create_submission), editing existing cards (propose_edit), and creating scheduled jobs (create_scheduled_job). You still CANNOT send messages or contact anyone externally — that's a later phase. For edits: additive changes apply directly; anything destructive (replace/remove) is queued for human approval, never applied by you. For creation: check happens automatically for duplicates — never create over an existing project, edit it instead. Always confirm what you did.
-- Never reveal or request founder PII, wallets, or contract addresses (not available to you anyway).`;
+- Your write capabilities are: creating new project cards (create_submission), editing existing cards (propose_edit), creating scheduled jobs (create_scheduled_job), and creating dashboards (build_dashboard). Beta tools only read; changing a report or messaging a tester happens on the program's page. You still CANNOT send messages or contact anyone externally — that's a later phase. For edits: additive changes apply directly; anything destructive (replace/remove) is queued for human approval, never applied by you. For creation: check happens automatically for duplicates — never create over an existing project, edit it instead. Always confirm what you did.
+- Never reveal or request founder PII, wallets, or contract addresses (not available to you anyway). The same goes for testers' emails and wallet addresses.
+- When you created a dashboard, include its link in your answer.`;
 
 export interface AgentRunInput {
   /** Prior conversation turns (user/assistant), newest last. System prompt is added internally. */
@@ -61,6 +73,8 @@ export interface AgentRunInput {
 export interface AgentRunResult {
   answer: string;
   panelSpec: AnalyticsSpec | null;
+  /** Dashboards build_dashboard created in this run. */
+  artifacts: { id: string; title: string; url: string }[];
   toolTrace: { name: string; args: any }[];
   capped?: boolean;
   error?: string;
@@ -76,6 +90,7 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunResult> {
   const messages: ToolMessage[] = [{ role: 'system', content: AGENT_SYSTEM }, ...history.slice(-12)];
 
   let builtPanel: AnalyticsSpec | null = null;
+  const artifacts: AgentRunResult['artifacts'] = [];
   const toolTrace: { name: string; args: any }[] = [];
   const DEADLINE = Date.now() + (input.budgetMs ?? 170_000);
 
@@ -86,17 +101,17 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunResult> {
         answer: builtPanel
           ? "Here's the panel I built — I ran out of time to add more."
           : 'That took longer than expected — try a more specific request.',
-        panelSpec: builtPanel, toolTrace, capped: true,
+        panelSpec: builtPanel, artifacts, toolTrace, capped: true,
       };
     }
     const res = await chatWithTools(messages, AGENT_TOOLS, { timeoutMs: Math.min(remaining, 90_000) });
     if (!res.ok) {
-      return { answer: '', panelSpec: builtPanel, toolTrace, error: res.error ?? 'assistant unavailable' };
+      return { answer: '', panelSpec: builtPanel, artifacts, toolTrace, error: res.error ?? 'assistant unavailable' };
     }
 
     // No tool calls → final answer.
     if (!res.toolCalls || res.toolCalls.length === 0) {
-      return { answer: res.content ?? '', panelSpec: builtPanel, toolTrace };
+      return { answer: res.content ?? '', panelSpec: builtPanel, artifacts, toolTrace };
     }
 
     messages.push({ role: 'assistant', content: res.content ?? null, tool_calls: res.toolCalls });
@@ -104,13 +119,14 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunResult> {
       let args: any = {};
       try { args = JSON.parse(call.function.arguments || '{}'); } catch { /* keep {} */ }
       toolTrace.push({ name: call.function.name, args });
-      let exec: { result: string; panelSpec?: AnalyticsSpec | null };
+      let exec: ToolExecResult;
       try {
         exec = await runTool(call.function.name, args, submissions, ctx);
       } catch (e: any) {
         exec = { result: JSON.stringify({ error: e?.message ?? 'tool failed' }) };
       }
       if (exec.panelSpec) builtPanel = exec.panelSpec;
+      if (exec.artifact) artifacts.push(exec.artifact);
       messages.push({ role: 'tool', tool_call_id: call.id, name: call.function.name, content: exec.result });
     }
   }
@@ -129,7 +145,7 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunResult> {
       });
       const finalRes = await chatWithTools(messages, [], { timeoutMs: Math.min(remaining, 30_000) });
       if (finalRes.ok && finalRes.content) {
-        return { answer: finalRes.content, panelSpec: builtPanel, toolTrace, capped: true };
+        return { answer: finalRes.content, panelSpec: builtPanel, artifacts, toolTrace, capped: true };
       }
     }
   } catch { /* fall through to the canned message */ }
@@ -138,6 +154,6 @@ export async function agentRun(input: AgentRunInput): Promise<AgentRunResult> {
     answer: builtPanel
       ? "Here's the panel I built — I ran out of steps to add more."
       : "I gathered some data but ran out of steps to finish — try a narrower question.",
-    panelSpec: builtPanel, toolTrace, capped: true,
+    panelSpec: builtPanel, artifacts, toolTrace, capped: true,
   };
 }

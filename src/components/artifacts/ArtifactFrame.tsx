@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
 
-const READ_OPS = new Set(['init', 'db.get', 'db.query', 'user.profiles', 'user.search']);
+const READ_OPS = new Set(['init', 'db.get', 'db.query', 'user.profiles', 'user.search', 'crm.sources', 'crm.query']);
 
 interface Props {
   artifactId: string;

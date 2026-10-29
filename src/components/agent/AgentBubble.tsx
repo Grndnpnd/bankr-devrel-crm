@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { MessageSquare, X, Send, Loader2, Plus, Users, Sparkles } from 'lucide-react';
+import { MessageSquare, X, Send, Loader2, Plus, Users, Sparkles, LayoutDashboard } from 'lucide-react';
 import { toast } from 'sonner';
 import { useSubmissionStore } from '@/store/useSubmissionStore';
 import { toChatRows, capRows } from '@/lib/chatData';
@@ -11,14 +11,35 @@ interface Turn {
   role: 'user' | 'assistant';
   content: string;
   panelSpec?: AnalyticsSpec | null;
+  artifacts?: { id: string; title: string; url: string }[];
 }
 
 const SUGGESTIONS = [
+  'How are our beta programs going?',
+  'Which open beta bugs are urgent?',
+  'Build a dashboard for our beta program',
   'Which 5 projects should I reach out to today?',
   'How many projects are in each stage?',
-  'Build a chart of average score by owner',
-  'Who has been contacted this week?',
 ];
+
+/** The model writes light markdown: **bold**, [links](url) and "* " bullets. Links to this app stay in the tab. */
+const Rich: React.FC<{ text: string }> = ({ text }) => {
+  const parts = text.replace(/^(\s*)[*-] /gm, '$1• ').split(/(\*\*[^*\n]+\*\*|\[[^\]\n]+\]\((?:https?:\/\/|\/)[^)\s]+\))/g);
+  return (
+    <>
+      {parts.map((p, i) => {
+        if (/^\*\*[^*]+\*\*$/.test(p)) return <strong key={i} style={{ color: '#F0F0F0', fontWeight: 600 }}>{p.slice(2, -2)}</strong>;
+        const link = p.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+        if (link) {
+          const here = typeof window !== 'undefined' && link[2].startsWith(window.location.origin);
+          const href = here ? link[2].slice(window.location.origin.length) || '/' : link[2];
+          return <a key={i} href={href} {...(here || href.startsWith('/') ? {} : { target: '_blank', rel: 'noreferrer' })} style={{ color: '#a78bfa', textDecoration: 'underline' }}>{link[1]}</a>;
+        }
+        return <React.Fragment key={i}>{p}</React.Fragment>;
+      })}
+    </>
+  );
+};
 
 const AgentBubble: React.FC = () => {
   const subs = useSubmissionStore((st) => st.submissions);
@@ -54,7 +75,7 @@ const AgentBubble: React.FC = () => {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setError(data?.error || `Error ${res.status}`); return; }
-      setTurns((prev) => [...prev, { role: 'assistant', content: data.answer || '', panelSpec: data.panelSpec ?? null }]);
+      setTurns((prev) => [...prev, { role: 'assistant', content: data.answer || '', panelSpec: data.panelSpec ?? null, artifacts: data.artifacts ?? [] }]);
 
       // If the agent ran any write tool, refresh the relevant data so the UI
       // reflects the change without a manual page reload.
@@ -120,7 +141,7 @@ const AgentBubble: React.FC = () => {
               </div>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: '#F0F0F0', fontFamily: "'Manrope', sans-serif" }}>CRM Assistant</div>
-                <div style={{ fontSize: 11, color: '#525252' }}>Ask, analyze, build panels</div>
+                <div style={{ fontSize: 11, color: '#525252' }}>Ask, analyze, build panels &amp; dashboards</div>
               </div>
             </div>
             <button onClick={() => setOpen(false)} aria-label="Close" style={{ color: '#8A8A8A', display: 'flex' }}>
@@ -150,9 +171,19 @@ const AgentBubble: React.FC = () => {
                     border: t.role === 'user' ? '1px solid rgba(124,58,237,0.28)' : '1px solid rgba(255,255,255,0.07)',
                     color: t.role === 'user' ? '#F0F0F0' : '#C9C9C9',
                   }}>
-                    {t.content}
+                    {t.role === 'assistant' ? <Rich text={t.content} /> : t.content}
                   </div>
                 </div>
+                {t.artifacts?.map((a) => (
+                  <a key={a.id} href={`/artifacts/${a.id}`} className="flex items-center gap-2.5 rounded-xl mt-2"
+                    style={{ border: '1px solid rgba(124,58,237,0.35)', backgroundColor: 'rgba(124,58,237,0.10)', padding: '10px 12px', textDecoration: 'none' }}>
+                    <LayoutDashboard size={16} style={{ color: '#a78bfa', flexShrink: 0 }} />
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#F0F0F0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.title}</span>
+                      <span style={{ display: 'block', fontSize: 11.5, color: '#8A8A8A' }}>Open dashboard</span>
+                    </span>
+                  </a>
+                ))}
                 {t.panelSpec && (
                   <div className="rounded-xl mt-2" style={{ border: '1px solid rgba(255,255,255,0.08)', backgroundColor: '#1A1A1A', padding: 12 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: '#F0F0F0', marginBottom: 8 }}>{t.panelSpec.title}</div>
@@ -186,7 +217,7 @@ const AgentBubble: React.FC = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') send(); }}
-                placeholder="Ask about your pipeline…"
+                placeholder="Ask about the pipeline, betas, artifacts…"
                 className="flex-1 bg-transparent outline-none"
                 style={{ fontSize: 13, color: '#F0F0F0' }}
               />
@@ -196,7 +227,7 @@ const AgentBubble: React.FC = () => {
               </button>
             </div>
             <div style={{ fontSize: 10.5, color: '#525252', marginTop: 7, textAlign: 'center' }}>
-              Read-only · AI analysis on trimmed data, no founder PII or wallets sent
+              AI analysis on trimmed data · no founder PII, tester emails or wallets sent
             </div>
           </div>
         </div>

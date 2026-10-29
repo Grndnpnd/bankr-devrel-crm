@@ -282,13 +282,19 @@ const SHIM = String.raw`(function () {
   };
   sampleFn.limits = function () { return Promise.resolve({ images: false }); };
 
+  // ── crm (live CRM data, read as the viewer) ──
+  var crmNs = Object.freeze({
+    sources: function () { return call('crm.sources', {}); },
+    query: function (spec) { return call('crm.query', { spec: spec }); }
+  });
+
   function permissionsNs() {
     return Object.freeze({
       state: function (name) {
         return init().then(function (h) {
           var g = (h && h.granted) || [];
           if (name) return g.indexOf(name) >= 0 ? 'granted' : 'unavailable';
-          var out = {}; ['artifact', 'db', 'downloads', 'sample', 'user'].forEach(function (n) { out[n] = g.indexOf(n) >= 0 ? 'granted' : 'unavailable'; });
+          var out = {}; ['artifact', 'db', 'downloads', 'sample', 'user', 'crm'].forEach(function (n) { out[n] = g.indexOf(n) >= 0 ? 'granted' : 'unavailable'; });
           return out;
         });
       },
@@ -316,6 +322,7 @@ const SHIM = String.raw`(function () {
         case 'artifact': return artifactNs;
         case 'downloads': return downloadsNs;
         case 'sample': return Object.freeze(sampleFn);
+        case 'crm': return crmNs;
         default: return null;
       }
     });

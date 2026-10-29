@@ -7,12 +7,15 @@ import {
   type DbCtx,
 } from '@/lib/artifacts';
 import { chatMessages, extractJson, llmConfigured, type ChatMessage } from '@/lib/llm';
+import { can } from '@/lib/access';
+import { runSpec, sourcesFor, DataError } from '@/lib/dataSources';
+import { describeSources } from '@/lib/analyticsSpec';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 120;
 
-/** Capabilities the shim serves. */
-const SUPPORTED = ['artifact', 'db', 'downloads', 'sample', 'user'];
+/** Capabilities the shim serves. `crm` reads live CRM data (panels' specs) as the viewer. */
+const SUPPORTED = ['artifact', 'db', 'downloads', 'sample', 'user', 'crm'];
 
 function granted(capabilities: unknown): string[] {
   const declared = capabilities && typeof capabilities === 'object' ? Object.keys(capabilities as object) : null;
@@ -32,6 +35,16 @@ function sampleAllowed(userId: string) {
   const hits = (sampleHits.get(userId) ?? []).filter((t) => now - t < 60_000);
   if (hits.length >= 20) return false;
   hits.push(now); sampleHits.set(userId, hits);
+  return true;
+}
+
+// crm.query: a page refreshing a few panels a minute is fine; a loop isn't.
+const crmHits = new Map<string, number[]>();
+function crmAllowed(userId: string) {
+  const now = Date.now();
+  const hits = (crmHits.get(userId) ?? []).filter((t) => now - t < 60_000);
+  if (hits.length >= 120) return false;
+  hits.push(now); crmHits.set(userId, hits);
   return true;
 }
 
@@ -104,6 +117,22 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
         if (!/^\s*<!doctype html|^\s*<html/i.test(html)) return fail('invalid_content', 'publish needs a whole HTML document');
         const a = await updateArtifact(artifact.id, session, level, { html, note: 'Saved from the page' });
         return ok({ version: String(a.currentVersion) });
+      }
+
+      case 'crm.sources':
+        need('crm');
+        return ok(describeSources(sourcesFor(session)));
+
+      case 'crm.query': {
+        need('crm');
+        if (!can(session.role, 'analytics.use')) return fail('permission_denied', 'you can’t read CRM data');
+        if (!crmAllowed(session.id)) return fail('rate_limited', 'too many requests — wait a minute');
+        try {
+          return ok((await runSpec(args.spec, session)).result);
+        } catch (e) {
+          if (e instanceof DataError) return fail(e.code === 'invalid' ? 'invalid_argument' : 'permission_denied', e.message);
+          throw e;
+        }
       }
 
       case 'sample': {

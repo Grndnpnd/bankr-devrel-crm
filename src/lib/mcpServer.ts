@@ -29,10 +29,16 @@ Artifacts: HTML pages, dashboards and docs, each with version history, sharing a
 - Large pages: get_artifact returns metadata by default; ask for include_html only when you need the source.
 - Supporting files (images, JSON, video) a page loads by relative path are uploaded with PUT {hub}/api/artifacts/{id}/files?path=<relative path> (raw bytes, same Bearer token); get_artifact lists them.
 Tasks: my_tasks / list_tasks / create_task / update_task work the team's task board (create_task with no team or assignee assigns it to this user); my_notifications shows what needs them.
-CRM tools (query_pipeline, get_submission_detail, ...) read and change the pipeline as this user; destructive edits are queued for human review, never applied directly.`;
+CRM tools (query_pipeline, get_submission_detail, ...) read and change the pipeline as this user; destructive edits are queued for human review, never applied directly.
+Beta programs (campaigns): list_beta_programs, get_beta_program, query_data, search_beta_reports and get_beta_report read testers, reports, messages and payouts of the programs this user can see. query_data gives exact numbers — use it rather than counting.
+Dashboards: build_panel saves one panel to the user's CRM dashboard (share_with_team to share it); build_dashboard publishes a live dashboard artifact from several panel specs. For a custom-designed dashboard, publish your own HTML with capabilities {"crm":{}} and read live data in the page with:
+  const crm = await window.claude.use('crm');
+  const r = await crm.query({ source: 'beta_reports', program: 'Texting', type: 'bar', title: 'Bugs by severity', groupBy: 'severity', filters: [{ field: 'kind', op: 'eq', value: 'bug' }] });
+  // r: { type, title, value?, matched, series?: [{label, value}], columns?, rows? }
+crm.sources() (or describe_data here) lists each source's fields. Queries run as whoever opens the page, so viewers only see data they may see.`;
 
-// CRM tools that only make sense inside the web UI.
-const UI_ONLY = new Set(['build_panel']);
+// CRM tools that only make sense inside the web UI (find_artifacts: list_artifacts covers it here).
+const UI_ONLY = new Set(['find_artifacts']);
 
 const text = (value: unknown) => ({ content: [{ type: 'text' as const, text: typeof value === 'string' ? value : JSON.stringify(value, null, 2) }] });
 const failure = (message: string) => ({ content: [{ type: 'text' as const, text: message }], isError: true });
@@ -297,6 +303,11 @@ export function buildMcpServer(user: SessionUser) {
         description: t.function.description,
         inputSchema: { type: 'object', properties: {}, ...(t.function.parameters ?? {}) },
       }))
+      .map((t) => (t.name !== 'build_panel' ? t : {
+        ...t,
+        description: `${t.description} Here it saves the panel to the user's dashboard panels.`,
+        inputSchema: { ...t.inputSchema, properties: { ...(t.inputSchema as any).properties, share_with_team: { type: 'boolean', description: 'share the panel with the team' } } },
+      }))
     : [];
 
   const taskTools = can(user.role, 'tasks.use') ? TASK_TOOLS : [];
@@ -310,6 +321,14 @@ export function buildMcpServer(user: SessionUser) {
       if (TASK_TOOL_NAMES.has(name)) return taskTools.length ? await callTaskTool(user, name, args) : failure('Task tools need the tasks.use capability.');
       if (!crmAllowed || UI_ONLY.has(name) || !crmTools.some((t) => t.name === name)) return failure(`Unknown tool ${name}`);
       const exec = await runTool(name, args, (await chatRows()) as any, { userId: user.id, userEmail: user.email, role: user.role });
+      // In the app the person saves a built panel; here there's no UI, so save it to their dashboard.
+      if (name === 'build_panel' && exec.panelSpec) {
+        if (!can(user.role, 'panels.create')) return failure('You don’t have permission to create panels.');
+        const panel = await prisma.sharedPanel.create({
+          data: { title: exec.panelSpec.title, spec: exec.panelSpec as any, isPublic: !!args.share_with_team, ownerId: user.id },
+        });
+        return text({ ...JSON.parse(exec.result), saved: true, panel_id: panel.id, shared_with_team: panel.isPublic, dashboard: `${APP_URL()}/`, note: 'Saved to their panels; they add it to the dashboard from Edit → Add.' });
+      }
       return text(exec.result);
     } catch (e: any) {
       if (e instanceof DbError) return failure(`${e.code}: ${e.message}`);
